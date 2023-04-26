@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2023 Free Software Foundation, Inc.
+# Copyright (C) 2021-2022 Free Software Foundation, Inc.
 #
 #  This file is part of GNU Emacs.
 #
@@ -24,20 +24,19 @@
 # Maintainer: Ted Zlatanov <tzz@lifelogs.com>
 # URL: https://emba.gnu.org/emacs/emacs
 
-FROM debian:bullseye as emacs-base
+FROM debian:stretch as emacs-base
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends -o=Dpkg::Use-Pty=0 \
       libc-dev gcc g++ make autoconf automake libncurses-dev gnutls-dev \
-      libdbus-1-dev libacl1-dev acl git texinfo gdb \
+      libdbus-1-dev libacl1-dev acl git texinfo \
     && rm -rf /var/lib/apt/lists/*
 
 FROM emacs-base as emacs-inotify
 
-# We install clangd for Eglot tests.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends -o=Dpkg::Use-Pty=0 \
-      inotify-tools clangd \
+      inotify-tools \
     && rm -rf /var/lib/apt/lists/*
 
 COPY . /checkout
@@ -60,34 +59,11 @@ RUN ./autogen.sh autoconf
 RUN ./configure --with-file-notification=gfile
 RUN make bootstrap
 
-# Debian bullseye doesn't provide proper packages.  So we use Debian
-# sid for this.
-FROM debian:sid as emacs-eglot
-
-# This corresponds to emacs-base.
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends -o=Dpkg::Use-Pty=0 \
-      libc-dev gcc g++ make autoconf automake libncurses-dev gnutls-dev \
-      libdbus-1-dev libacl1-dev acl git texinfo gdb \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install clangd.
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends -o=Dpkg::Use-Pty=0 \
-      clangd \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY . /checkout
-WORKDIR /checkout
-RUN ./autogen.sh autoconf
-RUN ./configure
-RUN make bootstrap
-
 FROM emacs-base as emacs-gnustep
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends -o=Dpkg::Use-Pty=0 \
-      gnustep-devel zlib1g-dev \
+      gnustep-devel \
     && rm -rf /var/lib/apt/lists/*
 
 COPY . /checkout
@@ -96,15 +72,14 @@ RUN ./autogen.sh autoconf
 RUN ./configure --with-ns
 RUN make bootstrap
 
-FROM emacs-base as emacs-native-comp
+FROM emacs-base as emacs-native-comp-speed0
 
-# The libgccjit version must correspond to the gcc version.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends -o=Dpkg::Use-Pty=0 \
-      libgccjit-10-dev zlib1g-dev \
+      libgccjit-6-dev \
     && rm -rf /var/lib/apt/lists/*
 
-FROM emacs-native-comp as emacs-native-comp-speed0
+ARG make_bootstrap_params=""
 
 COPY . /checkout
 WORKDIR /checkout
@@ -112,19 +87,3 @@ RUN ./autogen.sh autoconf
 RUN ./configure --with-native-compilation
 RUN make bootstrap -j2 \
       NATIVE_FULL_AOT=1 BYTE_COMPILE_EXTRA_FLAGS='--eval "(setq comp-speed 0)"'
-
-FROM emacs-native-comp as emacs-native-comp-speed1
-
-COPY . /checkout
-WORKDIR /checkout
-RUN ./autogen.sh autoconf
-RUN ./configure --with-native-compilation
-RUN make bootstrap -j2 BYTE_COMPILE_EXTRA_FLAGS='--eval "(setq comp-speed 1)"'
-
-FROM emacs-native-comp as emacs-native-comp-speed2
-
-COPY . /checkout
-WORKDIR /checkout
-RUN ./autogen.sh autoconf
-RUN ./configure --with-native-compilation
-RUN make bootstrap -j2

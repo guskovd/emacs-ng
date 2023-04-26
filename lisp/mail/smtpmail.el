@@ -1,6 +1,6 @@
 ;;; smtpmail.el --- simple SMTP protocol (RFC 821) for sending mail  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1995-1996, 2001-2023 Free Software Foundation, Inc.
+;; Copyright (C) 1995-1996, 2001-2022 Free Software Foundation, Inc.
 
 ;; Author: Tomoji Kagatani <kagatani@rbc.ncl.omron.co.jp>
 ;; Maintainer: emacs-devel@gnu.org
@@ -171,7 +171,7 @@ attempt."
   "The number of times smtpmail will retry sending when getting transient errors.
 These are errors with a code of 4xx from the SMTP server, which
 mean \"try again\"."
-  :type 'natnum
+  :type 'integer
   :version "27.1")
 
 (defcustom smtpmail-store-queue-variables nil
@@ -342,6 +342,8 @@ for `smtpmail-try-auth-method'.")
 	    ;; Insert an extra newline if we need it to work around
 	    ;; Sun's bug that swallows newlines.
 	    (goto-char (1+ delimline))
+	    (if (eval mail-mailer-swallows-blank-line t)
+		(newline))
 	    ;; Find and handle any Fcc fields.
 	    (goto-char (point-min))
 	    (if (re-search-forward "^Fcc:" delimline t)
@@ -474,7 +476,7 @@ for `smtpmail-try-auth-method'.")
                        (smtpmail--sanitize-error-message result))))))
 	(delete-file file-data)
 	(delete-file file-elisp)
-        (delete-region (line-beginning-position) (line-beginning-position 2)))
+	(delete-region (point-at-bol) (point-at-bol 2)))
       (write-region (point-min) (point-max) qfile))))
 
 (defun smtpmail--sanitize-error-message (string)
@@ -550,10 +552,13 @@ for `smtpmail-try-auth-method'.")
 		      :require (and ask-for-password
 				    '(:user :secret))
 		      :create ask-for-password)))
+         (mech (or (plist-get auth-info :smtp-auth) (car mechs)))
          (user (plist-get auth-info :user))
-         (password (auth-info-password auth-info))
+         (password (plist-get auth-info :secret))
 	 (save-function (and ask-for-password
 			     (plist-get auth-info :save-function))))
+    (when (functionp password)
+      (setq password (funcall password)))
     (when (and user
 	       (not password))
       ;; The user has stored the user name, but not the password, so
@@ -568,27 +573,21 @@ for `smtpmail-try-auth-method'.")
 	      :user smtpmail-smtp-user
 	      :require '(:user :secret)
 	      :create t))
-	    password (auth-info-password auth-info)))
-    (let ((mechs (or (ensure-list (plist-get auth-info :smtp-auth))
-                     mechs))
-          (result ""))
-      (when (and mechs user password)
-        (while (and mechs
-                    (stringp result))
-          (setq result (catch 'done
-		         (smtpmail-try-auth-method
-                          process (intern-soft (pop mechs)) user password))))
-        ;; A string result is an error.
-        (if (stringp result)
-            (progn
-              ;; All methods failed.
-              ;; Forget the credentials.
-	      (auth-source-forget+ :host host :port port)
-              (throw 'done result))
-          ;; Success.
-	  (when save-function
-	    (funcall save-function))
-          result)))))
+	    password (plist-get auth-info :secret)))
+    (when (functionp password)
+      (setq password (funcall password)))
+    (let ((result (catch 'done
+                    (if (and mech user password)
+		        (smtpmail-try-auth-method process mech user password)
+                      ;; No mechanism, or no credentials.
+                      mech))))
+      (if (stringp result)
+	  (progn
+	    (auth-source-forget+ :host host :port port)
+	    (throw 'done result))
+	(when save-function
+	  (funcall save-function))
+	result))))
 
 (cl-defgeneric smtpmail-try-auth-method (_process mech _user _password)
   "Perform authentication of type MECH for USER with PASSWORD.
@@ -806,11 +805,7 @@ Returns an error if the server cannot be contacted."
 				(plist-get (cdr result) :capabilities)
 				"\r\n")))
 		  (let ((name
-                         ;; Use ASCII case-table to prevent I
-                         ;; downcasing to a dotless i under some
-                         ;; language environments.  See
-                         ;; https://lists.gnu.org/archive/html/emacs-devel/2007-03/msg01760.html.
-			 (with-case-table ascii-case-table
+			 (with-case-table ascii-case-table ;FIXME: Why?
 			   (mapcar (lambda (s) (intern (downcase s)))
 				   (split-string (substring line 4) "[ ]")))))
 		    (when (= (length name) 1)
@@ -1057,8 +1052,7 @@ Returns an error if the server cannot be contacted."
     (while data-continue
       (with-current-buffer buffer
         (progress-reporter-update pr (point))
-        (setq sending-data (buffer-substring (line-beginning-position)
-                                             (line-end-position)))
+        (setq sending-data (buffer-substring (point-at-bol) (point-at-eol)))
 	(end-of-line 2)
         (setq data-continue (not (eobp))))
       (smtpmail-send-data-1 process sending-data))
@@ -1068,51 +1062,52 @@ Returns an error if the server cannot be contacted."
 
 (defun smtpmail-deduce-address-list (smtpmail-text-buffer header-start header-end)
   "Get address list suitable for smtp RCPT TO: <address>."
-  (with-current-buffer smtpmail-address-buffer
-    (erase-buffer)
-    (let ((case-fold-search t)
-          (simple-address-list "")
-          this-line
-          this-line-end
-          addr-regexp)
-      (insert-buffer-substring smtpmail-text-buffer header-start header-end)
-      (goto-char (point-min))
-      ;; RESENT-* fields should stop processing of regular fields.
-      (save-excursion
-	(setq addr-regexp
-	      (if (re-search-forward "^Resent-\\(To\\|Cc\\|Bcc\\):"
-				     header-end t)
-		  "^Resent-\\(To\\|Cc\\|Bcc\\):"
-		"^\\(To:\\|Cc:\\|Bcc:\\)")))
+  (unwind-protect
+      (with-current-buffer smtpmail-address-buffer
+	(erase-buffer)
+	(let ((case-fold-search t)
+              (simple-address-list "")
+              this-line
+              this-line-end
+              addr-regexp)
+	  (insert-buffer-substring smtpmail-text-buffer header-start header-end)
+	  (goto-char (point-min))
+	  ;; RESENT-* fields should stop processing of regular fields.
+	  (save-excursion
+	    (setq addr-regexp
+		  (if (re-search-forward "^Resent-\\(To\\|Cc\\|Bcc\\):"
+					 header-end t)
+		      "^Resent-\\(To\\|Cc\\|Bcc\\):"
+		    "^\\(To:\\|Cc:\\|Bcc:\\)")))
 
-      (while (re-search-forward addr-regexp header-end t)
-	(replace-match "")
-	(setq this-line (match-beginning 0))
-	(forward-line 1)
-	;; get any continuation lines
-	(while (and (looking-at "^[ \t]+") (< (point) header-end))
-	  (forward-line 1))
-	(setq this-line-end (point-marker))
-	(setq simple-address-list
-	      (concat simple-address-list " "
-		      (mail-strip-quoted-names (buffer-substring this-line this-line-end)))))
-      (erase-buffer)
-      (insert " " simple-address-list "\n")
-      (subst-char-in-region (point-min) (point-max) 10 ?  t) ; newline --> blank
-      (subst-char-in-region (point-min) (point-max) ?, ?  t) ; comma   --> blank
-      (subst-char-in-region (point-min) (point-max)  9 ?  t) ; tab     --> blank
+	  (while (re-search-forward addr-regexp header-end t)
+	    (replace-match "")
+	    (setq this-line (match-beginning 0))
+	    (forward-line 1)
+	    ;; get any continuation lines
+	    (while (and (looking-at "^[ \t]+") (< (point) header-end))
+	      (forward-line 1))
+	    (setq this-line-end (point-marker))
+	    (setq simple-address-list
+		  (concat simple-address-list " "
+			  (mail-strip-quoted-names (buffer-substring this-line this-line-end)))))
+	  (erase-buffer)
+	  (insert " " simple-address-list "\n")
+	  (subst-char-in-region (point-min) (point-max) 10 ?  t) ; newline --> blank
+	  (subst-char-in-region (point-min) (point-max) ?, ?  t) ; comma   --> blank
+	  (subst-char-in-region (point-min) (point-max)  9 ?  t) ; tab     --> blank
 
-      (goto-char (point-min))
-      ;; tidiness in case hook is not robust when it looks at this
-      (while (re-search-forward "[ \t]+" header-end t) (replace-match " "))
+	  (goto-char (point-min))
+	  ;; tidiness in case hook is not robust when it looks at this
+	  (while (re-search-forward "[ \t]+" header-end t) (replace-match " "))
 
-      (goto-char (point-min))
-      (let (recipient-address-list)
-	(while (re-search-forward " \\([^ ]+\\) " (point-max) t)
-	  (backward-char 1)
-	  (setq recipient-address-list (cons (buffer-substring (match-beginning 1) (match-end 1))
-					     recipient-address-list)))
-	(setq smtpmail-recipient-address-list recipient-address-list)))))
+	  (goto-char (point-min))
+	  (let (recipient-address-list)
+	    (while (re-search-forward " \\([^ ]+\\) " (point-max) t)
+	      (backward-char 1)
+	      (setq recipient-address-list (cons (buffer-substring (match-beginning 1) (match-end 1))
+						 recipient-address-list)))
+	    (setq smtpmail-recipient-address-list recipient-address-list))))))
 
 (defun smtpmail-do-bcc (header-end)
   "Delete [Resent-]Bcc: and their continuation lines from the header area.

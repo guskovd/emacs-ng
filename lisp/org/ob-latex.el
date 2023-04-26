@@ -1,10 +1,10 @@
 ;;; ob-latex.el --- Babel Functions for LaTeX        -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2009-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2009-2022 Free Software Foundation, Inc.
 
 ;; Author: Eric Schulte
 ;; Keywords: literate programming, reproducible research
-;; URL: https://orgmode.org
+;; Homepage: https://orgmode.org
 
 ;; This file is part of GNU Emacs.
 
@@ -30,10 +30,6 @@
 ;; be created directly form the latex source code.
 
 ;;; Code:
-
-(require 'org-macs)
-(org-assert-version)
-
 (require 'ob)
 (require 'org-macs)
 
@@ -41,9 +37,6 @@
 (declare-function org-latex-compile "ox-latex" (texfile &optional snippet))
 (declare-function org-latex-guess-inputenc "ox-latex" (header))
 (declare-function org-splice-latex-header "org" (tpl def-pkg pkg snippets-p &optional extra))
-(declare-function org-at-heading-p "org" (&optional _))
-(declare-function org-back-to-heading "org" (&optional invisible-ok))
-(declare-function org-next-visible-heading "org" (arg))
 
 (defvar org-babel-tangle-lang-exts)
 (add-to-list 'org-babel-tangle-lang-exts '("latex" . "tex"))
@@ -68,6 +61,7 @@
     (pdfpng       . :any)
     (pdfwidth     . :any)
     (headers      . :any)
+    (packages     . :any)
     (buffer       . ((yes no))))
   "LaTeX-specific header arguments.")
 
@@ -110,17 +104,10 @@ exporting the literal LaTeX source."
   :type 'function)
 
 (defcustom org-babel-latex-pdf-svg-process
-  "inkscape \
---pdf-poppler \
---export-area-drawing \
---export-text-to-path \
---export-plain-svg \
---export-filename=%O \
-%f"
+  "inkscape --pdf-poppler %f -T -l -o %O"
   "Command to convert a PDF file to an SVG file."
   :group 'org-babel
-  :type 'string
-  :package-version '(Org . "9.6"))
+  :type 'string)
 
 (defcustom org-babel-latex-htlatex-packages
   '("[usenames]{color}" "{tikz}" "{color}" "{listings}" "{amsmath}")
@@ -141,7 +128,7 @@ exporting the literal LaTeX source."
   (org-trim body))
 
 (defun org-babel-execute:latex (body params)
-  "Execute a block of LaTeX code with Babel.
+  "Execute a block of Latex code with Babel.
 This function is called by `org-babel-execute-src-block'."
   (setq body (org-babel-expand-body:latex body params))
   (if (cdr (assq :file params))
@@ -180,7 +167,7 @@ This function is called by `org-babel-execute-src-block'."
 	                     tmp-pdf
                              (list org-babel-latex-pdf-svg-process)
                              extension err-msg log-buf)))
-              (rename-file img-out out-file t))))
+              (shell-command (format "mv %s %s" img-out out-file)))))
          ((string-suffix-p ".tikz" out-file)
 	  (when (file-exists-p out-file) (delete-file out-file))
 	  (with-temp-file out-file
@@ -218,14 +205,17 @@ This function is called by `org-babel-execute-src-block'."
 	    (if (string-suffix-p ".svg" out-file)
 		(progn
 		  (shell-command "pwd")
-                  (rename-file (concat (file-name-sans-extension tex-file) "-1.svg")
-                               out-file t))
+		  (shell-command (format "mv %s %s"
+					 (concat (file-name-sans-extension tex-file) "-1.svg")
+					 out-file)))
 	      (error "SVG file produced but HTML file requested")))
 	   ((file-exists-p (concat (file-name-sans-extension tex-file) ".html"))
 	    (if (string-suffix-p ".html" out-file)
-                (rename-file (concat (file-name-sans-extension tex-file) ".html")
-                             out-file t)
-              (error "HTML file produced but SVG file requested")))))
+		(shell-command "mv %s %s"
+			       (concat (file-name-sans-extension tex-file)
+				       ".html")
+			       out-file)
+	      (error "HTML file produced but SVG file requested")))))
 	 ((or (string= "pdf" extension) imagemagick)
 	  (with-temp-file tex-file
 	    (require 'ox-latex)

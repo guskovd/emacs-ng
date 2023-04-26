@@ -1,6 +1,6 @@
 ;;; memory-report.el --- Short function summaries  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2020-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2020-2022 Free Software Foundation, Inc.
 
 ;; Keywords: lisp, help
 
@@ -31,7 +31,7 @@
 (require 'subr-x)
 (require 'cl-lib)
 
-(defvar memory-report--type-size nil)
+(defvar memory-report--type-size (make-hash-table))
 
 ;;;###autoload
 (defun memory-report ()
@@ -75,7 +75,7 @@ by counted more than once."
 
 (defun memory-report-object-size (object)
   "Return the size of OBJECT in bytes."
-  (unless memory-report--type-size
+  (when (zerop (hash-table-count memory-report--type-size))
     (memory-report--garbage-collect))
   (memory-report--object-size (make-hash-table :test #'eq) object))
 
@@ -84,7 +84,6 @@ by counted more than once."
       (gethash 'object memory-report--type-size)))
 
 (defun memory-report--set-size (elems)
-  (setq memory-report--type-size (make-hash-table))
   (setf (gethash 'string memory-report--type-size)
         (cadr (assq 'strings elems)))
   (setf (gethash 'cons memory-report--type-size)
@@ -183,10 +182,6 @@ by counted more than once."
 (cl-defgeneric memory-report--object-size-1 (_counted _value)
   0)
 
-;; This shouldn't happen, but there's some leakage.
-(cl-defmethod memory-report--object-size-1 (_ (_value symbol-with-pos))
-  (memory-report--size 'symbol))
-
 (cl-defmethod memory-report--object-size-1 (_ (value symbol))
   ;; Don't count global symbols -- makes sizes of lists of symbols too
   ;; heavy.
@@ -262,7 +257,12 @@ by counted more than once."
                    (cl-struct-slot-info struct-type)))))
 
 (defun memory-report--format (bytes)
-  (format "%10s" (file-size-human-readable bytes 'iec " ")))
+  (setq bytes (/ bytes 1024.0))
+  (let ((units '("KiB" "MiB" "GiB" "TiB")))
+    (while (>= bytes 1024)
+      (setq bytes (/ bytes 1024.0))
+      (setq units (cdr units)))
+    (format "%6.1f %s" bytes (car units))))
 
 (defun memory-report--gc-elem (elems type)
   (* (nth 1 (assq type elems))
@@ -282,7 +282,7 @@ by counted more than once."
                                                       buffers)
                      do (insert (memory-report--format size)
                                 "  "
-                                (buttonize
+                                (button-buttonize
                                  (buffer-name buffer)
                                  #'memory-report--buffer-details buffer)
                                 "\n"))

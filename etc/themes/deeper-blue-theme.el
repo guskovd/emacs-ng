@@ -1,6 +1,6 @@
 ;;; deeper-blue-theme.el --- Custom theme for faces  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2011-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2011-2022 Free Software Foundation, Inc.
 
 ;; Author: Scott Frazer <frazer.scott@gmail.com>
 
@@ -21,11 +21,8 @@
 
 ;;; Code:
 
-;;;###theme-autoload
 (deftheme deeper-blue
-  "Face colors using a deep blue background."
-  :background-mode 'dark
-  :kind 'color-scheme)
+  "Face colors using a deep blue background.")
 
 (let ((class '((class color) (min-colors 89))))
   (custom-theme-set-faces
@@ -85,8 +82,6 @@
    `(ido-first-match ((,class (:weight normal :foreground "orange"))))
    `(ido-only-match ((,class (:foreground "green"))))
    `(ido-subdir ((,class (:foreground nil :inherit font-lock-keyword-face))))
-   `(image-dired-thumb-flagged ((,class (:background "Red1"))))
-   `(image-dired-thumb-mark ((,class (:background "dodgerblue3"))))
    `(info-header-node ((,class (:foreground "DeepSkyBlue1"))))
    `(info-header-xref ((,class (:foreground "SeaGreen2"))))
    `(info-menu-header ((,class (:family "helv" :weight bold))))

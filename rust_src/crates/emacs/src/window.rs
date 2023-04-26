@@ -30,32 +30,22 @@ impl LispWindowRef {
         self.frame.into()
     }
 
-    #[cfg(not(any(feature = "window-system-winit", feature = "window-system-pgtk")))]
+    #[cfg(not(feature = "window-system-webrender"))]
     pub fn is_menu_bar(self) -> bool {
         unimplemented!();
     }
 
-    #[cfg(all(feature = "window-system-pgtk", not(feature = "window-system-winit")))]
+    #[cfg(feature = "window-system-webrender")]
     pub fn is_menu_bar(self) -> bool {
         false
     }
 
-    #[cfg(feature = "window-system-winit")]
-    pub fn is_menu_bar(self) -> bool {
-        false
-    }
-
-    #[cfg(not(any(feature = "window-system-winit", feature = "window-system-pgtk")))]
+    #[cfg(not(feature = "window-system-webrender"))]
     pub fn is_tool_bar(self) -> bool {
         unimplemented!();
     }
 
-    #[cfg(all(feature = "window-system-pgtk", not(feature = "window-system-winit")))]
-    pub fn is_tool_bar(self) -> bool {
-        false
-    }
-
-    #[cfg(feature = "window-system-winit")]
+    #[cfg(feature = "window-system-webrender")]
     pub fn is_tool_bar(self) -> bool {
         false
     }

@@ -131,13 +131,17 @@
 ;; feedmail-send-it.  Hers's the best way to use the stuff in this
 ;; file:
 ;;
-;; Put the following lines in your init file:
+;; Save this file as feedmail.el somewhere on your elisp loadpath;
+;; byte-compile it.  Put the following lines in your init file:
 ;;
 ;;     (setq send-mail-function 'feedmail-send-it)
+;;     (autoload 'feedmail-send-it "feedmail")
 ;;
 ;; If you plan to use the queue stuff, also use this:
 ;;
 ;;     (setq feedmail-enable-queue t)
+;;     (autoload 'feedmail-run-the-queue "feedmail")
+;;     (autoload 'feedmail-run-the-queue-no-prompts "feedmail")
 ;;     (setq auto-mode-alist (cons '("\\.fqm$" . mail-mode) auto-mode-alist))
 ;;
 ;; though VM users might find it more comfortable to use this instead of
@@ -170,6 +174,11 @@
 ;; like to add the suffix ".fqm" to the list of non-saved things via the variable
 ;; desktop-files-not-to-save.
 ;;
+;; If you are planning to call feedmail-queue-reminder from your .emacs or
+;; something similar, you might need this:
+;;
+;;     (autoload 'feedmail-queue-reminder "feedmail")
+;;
 ;; If you ever use rmail-resend and queue messages, you should do this:
 ;;
 ;;     (setq feedmail-queue-alternative-mail-header-separator "")
@@ -201,6 +210,14 @@
 ;;     (setq cmail-use-feedmail t)
 ;;
 ;;;;;;;;
+;;
+;; I think the LCD is no longer being updated, but if it were, this
+;; would be a proper LCD record.  There is an old version of
+;; feedmail.el in the LCD archive.  It works but is missing a lot of
+;; features.
+;;
+;; LCD record:
+;; feedmail|WJCarpenter|bill-feedmail@carpenter.ORG|Outbound mail queue handling|01-??-??|11-beta-??|feedmail.el
 ;;
 ;; Change log:
 ;; original,      31 March 1991
@@ -605,12 +622,29 @@ to arrange for the message to get a From: line."
 
 
 (defcustom feedmail-sendmail-f-doesnt-sell-me-out nil
-  "If non-nil, call \"sendmail\" with \"-f\".
-See `message-sendmail-f-is-evil' for an explanation of what the
-\"-f\" parameter does."
+  "Whether sendmail should issue a warning header if called with \"-f\".
+The sendmail program has a useful feature to let you set the envelope FROM
+address via a command line option, \"-f\".  Unfortunately, it also has a widely
+disliked default behavior of selling you out if you do that by inserting
+an unattractive warning in the headers.  It looks something like this:
+
+  X-Authentication-Warning: u1.example.com: niceguy set
+      sender to niceguy@example.com using -f
+
+It is possible to configure sendmail to not do this, but such a
+reconfiguration is not an option for many users.  As this is the
+default behavior of most sendmail installations, one can mostly
+only wish it were otherwise.  If feedmail believes the sendmail
+program will sell you out this way, it won't use the \"-f\"
+option when calling sendmail.  If it doesn't think sendmail will
+sell you out, it will use the \"-f\" \(since it is a handy
+feature).  You control what feedmail thinks with this variable.
+The default is nil, meaning that feedmail will believe that
+sendmail will sell you out."
   :version "24.1"
   :group 'feedmail-headers
-  :type 'boolean)
+  :type 'boolean
+)
 
 
 (defcustom feedmail-deduce-envelope-from t
@@ -1283,7 +1317,7 @@ feedmail-queue-buffer-file-name is restored to nil.
 
 Example advice for mail-send:
 
-    (advice-add \\='mail-send :around #\\='my-feedmail-mail-send-advice)
+    (advice-add 'mail-send :around #'my-feedmail-mail-send-advice)
     (defun my-feedmail-mail-send-advice (orig-fun &rest args)
       (let ((feedmail-queue-buffer-file-name buffer-file-name)
              (buffer-file-name nil))
@@ -1585,8 +1619,7 @@ local gurus."
 		 (if (null mail-interactive) '("-oem" "-odb")))))
 
 (declare-function smtpmail-via-smtp "smtpmail"
-		  (recipient smtpmail-text-buffer &optional ask-for-password
-                             send-attempts))
+		  (recipient smtpmail-text-buffer &optional ask-for-password))
 (defvar smtpmail-smtp-server)
 
 ;; provided by jam@austin.asc.slb.com (James A. McLaughlin);
@@ -1709,7 +1742,7 @@ applied to a file after you've just read it from disk: for example, a
 feedmail FQM message file from a queue.  You could use something like
 this:
 
-    (add-to-list \\='auto-mode-alist \\='(\"\\\\.fqm\\\\\\='\" . feedmail-vm-mail-mode))"
+    (add-to-list 'auto-mode-alist \\='(\"\\\\.fqm\\\\\\='\" . feedmail-vm-mail-mode))"
   (feedmail-say-debug ">in-> feedmail-vm-mail-mode")
   (let ((the-buf (current-buffer)))
     (vm-mail)
@@ -2303,14 +2336,19 @@ mapped to mostly alphanumerics for safety."
 
 ;; from a similar function in mail-utils.el
 (defun feedmail-rfc822-time-zone (time)
-  (declare (obsolete format-time-string "29.1"))
   (feedmail-say-debug ">in-> feedmail-rfc822-time-zone %s" time)
-  (format-time-string "%z" time))
+  (let* ((sec (or (car (current-time-zone time)) 0))
+	 (absmin (/ (abs sec) 60)))
+    (format "%c%02d%02d" (if (< sec 0) ?- ?+) (/ absmin 60) (% absmin 60))))
 
 (defun feedmail-rfc822-date (arg-time)
   (feedmail-say-debug ">in-> feedmail-rfc822-date %s" arg-time)
-  (let ((system-time-locale "C"))
-    (format-time-string "%a, %e %b %Y %T %z" arg-time)))
+  (let ((time (or arg-time (current-time)))
+	(system-time-locale "C"))
+    (concat
+     (format-time-string "%a, %e %b %Y %T " time)
+     (feedmail-rfc822-time-zone time)
+     )))
 
 (defun feedmail-send-it-immediately-wrapper ()
   "Wrapper to catch skip-me-i."
@@ -2511,20 +2549,22 @@ mapped to mostly alphanumerics for safety."
 				    feedmail-force-binary-write)
 			       'no-conversion
 			     coding-system-for-write)))
-                      (insert fcc)
-                      (unless feedmail-nuke-bcc-in-fcc
-                        (if bcc-holder (insert bcc-holder))
-                        (if resent-bcc-holder
-                            (insert resent-bcc-holder)))
+                      (unwind-protect
+                          (progn
+                            (insert fcc)
+                            (unless feedmail-nuke-bcc-in-fcc
+                              (if bcc-holder (insert bcc-holder))
+                              (if resent-bcc-holder
+                                  (insert resent-bcc-holder)))
 
-                      (run-hooks 'feedmail-before-fcc-hook)
+                            (run-hooks 'feedmail-before-fcc-hook)
 
-                      (when feedmail-nuke-body-in-fcc
-                        (goto-char eoh-marker)
-                        (if (natnump feedmail-nuke-body-in-fcc)
-                            (forward-line feedmail-nuke-body-in-fcc))
-                        (delete-region (point) (point-max)))
-                      (mail-do-fcc eoh-marker))))
+                            (when feedmail-nuke-body-in-fcc
+                              (goto-char eoh-marker)
+                              (if (natnump feedmail-nuke-body-in-fcc)
+                                  (forward-line feedmail-nuke-body-in-fcc))
+                              (delete-region (point) (point-max)))
+                            (mail-do-fcc eoh-marker))))))
 	      ;; User bailed out of one-last-look.
 	      (if feedmail-queue-runner-is-active
 		  (throw 'skip-me-q 'skip-me-q)
@@ -2764,7 +2804,7 @@ return that value."
   (cond
    ;; nil means do nothing
    ((eq nil feedmail-date-generator) nil)
-   ;; t is the same as using the function feedmail-default-date-generator, so let it and recurse
+   ;; t is the same a using the function feedmail-default-date-generator, so let it and recurse
    ((eq t feedmail-date-generator)
     (let ((feedmail-date-generator (feedmail-default-date-generator maybe-file)))
       (feedmail-fiddle-date maybe-file)))
@@ -2807,9 +2847,10 @@ probably not appropriate for you."
     (if (and (not feedmail-queue-use-send-time-for-message-id) maybe-file)
 	(setq date-time (file-attribute-modification-time
 			 (file-attributes maybe-file))))
-    (format "<%d-%s%s>"
+    (format "<%d-%s%s%s>"
 	    (mod (random) 10000)
-	    (format-time-string "%a%d%b%Y%H%M%S%z" date-time)
+	    (format-time-string "%a%d%b%Y%H%M%S" date-time)
+	    (feedmail-rfc822-time-zone date-time)
 	    end-stuff))
   )
 
@@ -2820,7 +2861,7 @@ probably not appropriate for you."
   (cond
    ;; nil means do nothing
    ((eq nil feedmail-message-id-generator) nil)
-   ;; t is the same as using the function feedmail-default-message-id-generator, so let it and recurse
+   ;; t is the same a using the function feedmail-default-message-id-generator, so let it and recurse
    ((eq t feedmail-message-id-generator)
     (let ((feedmail-message-id-generator (feedmail-default-message-id-generator maybe-file)))
       (feedmail-fiddle-message-id maybe-file)))
@@ -2862,7 +2903,7 @@ probably not appropriate for you."
   (cond
    ;; nil means do nothing
    ((eq nil feedmail-x-mailer-line) nil)
-   ;; t is the same as using the function feedmail-default-x-mailer-generator, so let it and recurse
+   ;; t is the same a using the function feedmail-default-x-mailer-generator, so let it and recurse
    ((eq t feedmail-x-mailer-line)
     (let ((feedmail-x-mailer-line (feedmail-default-x-mailer-generator)))
       (feedmail-fiddle-x-mailer)))
@@ -3044,30 +3085,30 @@ been weeded out."
 	(address-blob)
 	(this-line)
 	(this-line-end))
-
-    (with-current-buffer (get-buffer-create " *FQM scratch*")
-      (erase-buffer)
-      (insert-buffer-substring message-buffer header-start header-end)
-      (goto-char (point-min))
-      (let ((case-fold-search t))
-	(while (re-search-forward addr-regexp (point-max) t)
-	  (replace-match "")
-	  (setq this-line (match-beginning 0))
-	  (forward-line 1)
-	  ;; get any continuation lines
-	  (while (and (looking-at "^[ \t]+") (< (point) (point-max)))
-	    (forward-line 1))
-	  (setq this-line-end (point-marker))
-	  ;; only keep if we don't have it already
-	  (setq address-blob
-		(mail-strip-quoted-names (buffer-substring-no-properties this-line this-line-end)))
-	  (while (string-match "\\([, \t\n\r]*\\)\\([^, \t\n\r]+\\)" address-blob)
-	    (setq simple-address (substring address-blob (match-beginning 2) (match-end 2)))
-	    (setq address-blob (replace-match "" t t address-blob))
-	    (if (not (member simple-address address-list))
-		(push simple-address address-list)))
-	  ))
-      (kill-buffer nil))
+    (unwind-protect
+	(with-current-buffer (get-buffer-create " *FQM scratch*")
+          (erase-buffer)
+	  (insert-buffer-substring message-buffer header-start header-end)
+	  (goto-char (point-min))
+	  (let ((case-fold-search t))
+	    (while (re-search-forward addr-regexp (point-max) t)
+	      (replace-match "")
+	      (setq this-line (match-beginning 0))
+	      (forward-line 1)
+	      ;; get any continuation lines
+	      (while (and (looking-at "^[ \t]+") (< (point) (point-max)))
+		(forward-line 1))
+	      (setq this-line-end (point-marker))
+	      ;; only keep if we don't have it already
+	      (setq address-blob
+		    (mail-strip-quoted-names (buffer-substring-no-properties this-line this-line-end)))
+	      (while (string-match "\\([, \t\n\r]*\\)\\([^, \t\n\r]+\\)" address-blob)
+		(setq simple-address (substring address-blob (match-beginning 2) (match-end 2)))
+		(setq address-blob (replace-match "" t t address-blob))
+		(if (not (member simple-address address-list))
+		    (push simple-address address-list)))
+	      ))
+	  (kill-buffer nil)))
     (identity address-list)))
 
 

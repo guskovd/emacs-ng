@@ -22,9 +22,10 @@ A new approach to Emacs
 ## Intro
 
 emacs-ng is based off of the `master` branch of emacs, and regularly
-merges using Github Actions(Runs at 00:00, only on Saturday).
+merges in the latest changes (this branch includes the native
+compilation feature from Andrea Corallo).
 
-The last merged commit is `65735cee71` (04 24 2023).
+The last merged commit is `6ebe8b03d8` (Aug 24 2021).
 
 ## Motivation
 
@@ -71,19 +72,12 @@ it as a new experimental graphic backend to leverage GPU hardware.
 
 ### Dynamic modules
 
-> **Warning**
-> **This feature is currently unmaintained**
-
 Allow dynamic modules to access *more of Emacs's internals*. Dynamic
 modules can be written to take advantage of these extra
 functionalities when they are available, while at the same time being
 *fully compatible* with vanilla Emacs.
 
 ### Deno/Javascript
-
-> **Note**
-> **This feature is currently outdated and been disabled. However there is**
-> **[this](https://github.com/emacs-ng/emacs-ng/pull/463) to bring it back.**
 
 One of emacs-ng's primary features is integrating the [Deno
 Runtime](https://deno.land/), which allows execution of JavaScript and
@@ -117,3 +111,15 @@ gains. Async I/O from Deno, WebWorkers, and WebAsm, gives you the
 tools to make Emacs a smoother and faster experience without having to
 install additional tools to launch as background processes or worry
 about shared library versions.
+
+### Package management
+
+use-package and straight are really great so we decided to make them
+built-in packages. But since we don't want to break configs, this is
+an [optional feature](https://emacs-ng.github.io/emacs-ng/package-management).
+
+Just put this line into your `~/.emacs.d/early-init.el`:
+
+```elisp
+(setq ng-straight-bootstrap-at-startup t)
+```

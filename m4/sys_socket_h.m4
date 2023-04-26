@@ -1,5 +1,5 @@
-# sys_socket_h.m4 serial 29
-dnl Copyright (C) 2005-2023 Free Software Foundation, Inc.
+# sys_socket_h.m4 serial 28
+dnl Copyright (C) 2005-2022 Free Software Foundation, Inc.
 dnl This file is free software; the Free Software Foundation
 dnl gives unlimited permission to copy and/or distribute it,
 dnl with or without modifications, as long as this notice is preserved.
@@ -22,7 +22,6 @@ AC_DEFUN_ONCE([gl_SYS_SOCKET_H],
       ;;
   esac
 
-  GL_GENERATE_SYS_SOCKET_H=false
   AC_CACHE_CHECK([whether <sys/socket.h> is self-contained],
     [gl_cv_header_sys_socket_h_selfcontained],
     [
@@ -45,7 +44,7 @@ AC_DEFUN_ONCE([gl_SYS_SOCKET_H],
             [gl_cv_header_sys_socket_h_shut=no])
         ])
       if test $gl_cv_header_sys_socket_h_shut = no; then
-        GL_GENERATE_SYS_SOCKET_H=true
+        SYS_SOCKET_H='sys/socket.h'
       fi
     fi
   fi
@@ -84,7 +83,7 @@ AC_DEFUN_ONCE([gl_SYS_SOCKET_H],
   fi
   if test $HAVE_STRUCT_SOCKADDR_STORAGE = 0 || test $HAVE_SA_FAMILY_T = 0 \
      || test $HAVE_STRUCT_SOCKADDR_STORAGE_SS_FAMILY = 0; then
-    GL_GENERATE_SYS_SOCKET_H=true
+    SYS_SOCKET_H='sys/socket.h'
   fi
   gl_PREREQ_SYS_H_WINSOCK2
 

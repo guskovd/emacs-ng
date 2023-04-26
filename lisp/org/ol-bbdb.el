@@ -1,11 +1,11 @@
 ;;; ol-bbdb.el --- Links to BBDB entries             -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2004-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2004-2022 Free Software Foundation, Inc.
 
 ;; Authors: Carsten Dominik <carsten.dominik@gmail.com>
 ;;       Thomas Baumann <thomas dot baumann at ch dot tum dot de>
 ;; Keywords: outlines, hypermedia, calendar, wp
-;; URL: https://orgmode.org
+;; Homepage: https://orgmode.org
 ;;
 ;; This file is part of GNU Emacs.
 ;;
@@ -93,9 +93,6 @@
 ;;
 ;;; Code:
 
-(require 'org-macs)
-(org-assert-version)
-
 (require 'cl-lib)
 (require 'org-compat)
 (require 'org-macs)
@@ -135,7 +132,7 @@
 
 (defgroup org-bbdb-anniversaries nil
   "Customizations for including anniversaries from BBDB into Agenda."
-  :group 'org-agenda)
+  :group 'org-bbdb)
 
 (defcustom org-bbdb-default-anniversary-format "birthday"
   "Default anniversary class."

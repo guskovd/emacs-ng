@@ -1,9 +1,10 @@
 ;;; derived.el --- allow inheritance of major modes  -*- lexical-binding: t; -*-
 ;; (formerly mode-clone.el)
 
-;; Copyright (C) 1993-2023 Free Software Foundation, Inc.
+;; Copyright (C) 1993-1994, 1999, 2001-2022 Free Software Foundation,
+;; Inc.
 
-;; Author: David Megginson <dmeggins@aix1.uottawa.ca>
+;; Author: David Megginson (dmeggins@aix1.uottawa.ca)
 ;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: extensions
 ;; Package: emacs
@@ -174,7 +175,12 @@ See Info node `(elisp)Derived Modes' for more details.
   (declare (debug (&define name symbolp sexp [&optional stringp]
 			   [&rest keywordp sexp] def-body))
 	   (doc-string 4)
-	   (indent defun))
+	   ;; Ask not what
+	   ;;(indent 3)
+	   ;; can do for you, ask what it can do to others. IOW, the
+	   ;; missing of indentation setting here is the indentation
+	   ;; setting and not an oversight.
+	   )
 
   (when (and docstring (not (stringp docstring)))
     ;; Some trickiness, since what appears to be the docstring may really be

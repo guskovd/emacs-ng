@@ -1,10 +1,17 @@
-use emacs::frame::Lisp_Frame;
-use image_::Rgba;
-use std::ffi::CStr;
 use webrender::api::ColorF;
-use webrender::api::ColorU;
 
 use emacs::bindings::Emacs_Color;
+
+mod colors {
+    use lazy_static::lazy_static;
+    use std::collections::HashMap;
+
+    include!(concat!(env!("OUT_DIR"), "/colors.rs"));
+
+    lazy_static! {
+        pub static ref COLOR_MAP: HashMap<&'static str, (u8, u8, u8)> = init_color();
+    }
+}
 
 pub fn pixel_to_color(pixel: u64) -> ColorF {
     let pixel_array: [u16; 4] = unsafe { std::mem::transmute(pixel) };
@@ -82,7 +89,7 @@ pub fn lookup_color_by_name_or_hex(color_string: &str) -> Option<ColorF> {
         }
     } else {
         // pre-defined color, `color_string` is the color name.
-        crate::colors::COLOR_MAP
+        self::colors::COLOR_MAP
             .get::<str>(&color_string.to_lowercase())
             .map(|(red, green, blue)| {
                 ColorF::new(
@@ -93,26 +100,4 @@ pub fn lookup_color_by_name_or_hex(color_string: &str) -> Option<ColorF> {
                 )
             })
     }
-}
-
-#[no_mangle]
-pub extern "C" fn wr_parse_color(
-    _f: *mut Lisp_Frame,
-    color_name: *const ::libc::c_char,
-    xcolor: *mut Emacs_Color,
-) -> ::libc::c_int {
-    let color_name: &CStr = unsafe { CStr::from_ptr(color_name) };
-    let color_name: &str = color_name.to_str().unwrap();
-    if let Some(color) = lookup_color_by_name_or_hex(&format!("{}", color_name.to_owned())) {
-        color_to_xcolor(color, xcolor);
-        1
-    } else {
-        0
-    }
-}
-
-pub fn color_to_rgba(color: ColorF) -> Rgba<u8> {
-    let color: ColorU = color.into();
-
-    Rgba([color.r, color.g, color.b, color.a])
 }

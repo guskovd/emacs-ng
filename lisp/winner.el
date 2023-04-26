@@ -1,6 +1,6 @@
 ;;; winner.el --- Restore old window configurations  -*- lexical-binding: t -*-
 
-;; Copyright (C) 1997-1998, 2001-2023 Free Software Foundation, Inc.
+;; Copyright (C) 1997-1998, 2001-2022 Free Software Foundation, Inc.
 
 ;; Author: Ivar Rummelhoff <ivarru@math.uio.no>
 ;; Created: 27 Feb 1997
@@ -50,7 +50,7 @@
 
 (defcustom winner-ring-size 200
   "Maximum number of stored window configurations per frame."
-  :type 'natnum)
+  :type 'integer)
 
 (defcustom winner-boring-buffers '("*Completions*")
   "List of buffer names whose windows `winner-undo' will not restore.
@@ -171,7 +171,8 @@ You may want to include buffer names such as *Help*, *Apropos*,
               (/= 0 (minibuffer-depth)))
     (push (selected-frame) winner-modified-list)))
 
-;; Used as `post-command-hook'.
+;; A `post-command-hook' for emacsen with
+;; `window-configuration-change-hook'.
 (defun winner-save-old-configurations ()
   (when (zerop (minibuffer-depth))
     (unless (eq this-command winner-last-command)
@@ -190,7 +191,8 @@ You may want to include buffer names such as *Help*, *Apropos*,
   (winner-insert-if-new (selected-frame))
   (winner-remember))
 
-;; Called by `winner-undo' before "undoing".
+;; A `post-command-hook' for other emacsen.
+;; Also called by `winner-undo' before "undoing".
 (defun winner-save-conditionally ()
   (when (zerop (minibuffer-depth))
     (winner-save-unconditionally)))
@@ -215,7 +217,8 @@ You may want to include buffer names such as *Help*, *Apropos*,
      ((window-minibuffer-p) (other-window 1)))
     (when (/= minisize (window-height miniwin))
       (with-selected-window miniwin
-        (enlarge-window (- minisize (window-height)))))))
+        (setf (window-height) minisize)))))
+
 
 
 (defvar winner-point-alist nil)
@@ -316,6 +319,9 @@ You may want to include buffer names such as *Help*, *Apropos*,
   "Functions to run whenever Winner mode is turned on or off."
   :type 'hook)
 
+(define-obsolete-variable-alias 'winner-mode-leave-hook
+  'winner-mode-off-hook "24.3")
+
 (defcustom winner-mode-off-hook nil
   "Functions to run whenever Winner mode is turned off."
   :type 'hook)
@@ -328,12 +334,6 @@ You may want to include buffer names such as *Help*, *Apropos*,
     map)
   "Keymap for Winner mode.")
 
-(defvar-keymap winner-repeat-map
-  :doc "Keymap to repeat winner key sequences.  Used in `repeat-mode'."
-  :repeat t
-  "<left>"  #'winner-undo
-  "<right>" #'winner-redo)
-
 
 ;;;###autoload
 (define-minor-mode winner-mode
@@ -343,8 +343,8 @@ Winner mode is a global minor mode that records the changes in
 the window configuration (i.e. how the frames are partitioned
 into windows) so that the changes can be \"undone\" using the
 command `winner-undo'.  By default this one is bound to the key
-sequence \\`C-c <left>'.  If you change your mind (while undoing),
-you can press \\`C-c <right>' (calling `winner-redo')."
+sequence `C-c <left>'.  If you change your mind (while undoing),
+you can press `C-c <right>' (calling `winner-redo')."
   :global t
   (if winner-mode
       (progn

@@ -1,8 +1,8 @@
 ;;; erc-services.el --- Identify to NickServ  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2002-2004, 2006-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2002-2004, 2006-2022 Free Software Foundation, Inc.
 
-;; Maintainer: Amin Bandali <bandali@gnu.org>, F. Jason Park <jp@neverwas.me>
+;; Maintainer: Amin Bandali <bandali@gnu.org>
 ;; URL: https://www.emacswiki.org/emacs/ErcNickserv
 
 ;; This file is part of GNU Emacs.
@@ -102,7 +102,6 @@ You can also use \\[erc-nickserv-identify-mode] to change modes."
 	 (when (featurep 'erc-services)
 	   (erc-nickserv-identify-mode val))))
 
-;;;###autoload(put 'nickserv 'erc--module 'services)
 ;;;###autoload(autoload 'erc-services-mode "erc-services" nil t)
 (define-erc-module services nickserv
   "This mode automates communication with services."
@@ -175,18 +174,6 @@ function `erc-nickserv-get-password'."
   :version "28.1"
   :type 'boolean)
 
-(defcustom erc-auth-source-services-function #'erc-auth-source-search
-  "Function to retrieve NickServ password from auth-source.
-Called with a subset of keyword parameters known to
-`auth-source-search' and relevant to authenticating to nickname
-services.  In return, ERC expects a string to send as the
-password, or nil, to fall through to the next method, such as
-prompting.  See Info node `(erc) auth-source' for details."
-  :package-version '(ERC . "5.5")
-  :type '(choice (function-item erc-auth-source-search)
-                 (const nil)
-                 function))
-
 (defcustom erc-nickserv-passwords nil
   "Passwords used when identifying to NickServ automatically.
 `erc-prompt-for-nickserv-password' must be nil for these
@@ -215,7 +202,7 @@ Example of use:
 			(const QuakeNet)
 			(const Rizon)
 			(const SlashNET)
-                        (symbol :tag "Network name or session ID"))
+			(symbol :tag "Network name"))
 		(repeat :tag "Nickname and password"
 			(cons :tag "Identity"
 			      (string :tag "Nick")
@@ -444,20 +431,34 @@ As soon as some source returns a password, the sequence of
 lookups stops and this function returns it (or returns nil if it
 is empty).  Otherwise, no corresponding password was found, and
 it returns nil."
-  (when-let*
-      ((nid (erc-networks--id-symbol erc-networks--id))
-       (ret (or (when erc-nickserv-passwords
-                  (assoc-default nick
-                                 (cadr (assq nid erc-nickserv-passwords))))
-                (when (and erc-use-auth-source-for-nickserv-password
-                           erc-auth-source-services-function)
-                  (funcall erc-auth-source-services-function :user nick))
-                (when erc-prompt-for-nickserv-password
-                  (read-passwd
-                   (format "NickServ password for %s on %s (RET to cancel): "
-                           nick nid)))))
-       ((not (string-empty-p (erc--unfun ret)))))
-    ret))
+  (let (network server port)
+    ;; Fill in local vars, switching to the server buffer once only
+    (erc-with-server-buffer
+     (setq network erc-network
+           server erc-session-server
+           port erc-session-port))
+    (let ((ret
+           (or
+            (when erc-nickserv-passwords
+              (cdr (assoc nick
+                          (cl-second (assoc network
+                                            erc-nickserv-passwords)))))
+            (when erc-use-auth-source-for-nickserv-password
+              (let ((secret (cl-first (auth-source-search
+                                       :max 1 :require '(:secret)
+                                       :host server
+                                       ;; Ensure a string for :port
+                                       :port (format "%s" port)
+                                       :user nick))))
+                (when secret
+                  (let ((passwd (plist-get secret :secret)))
+                    (if (functionp passwd) (funcall passwd) passwd)))))
+            (when erc-prompt-for-nickserv-password
+              (read-passwd
+               (format "NickServ password for %s on %s (RET to cancel): "
+                       nick network))))))
+      (when (and ret (not (string= ret "")))
+        ret))))
 
 (defvar erc-auto-discard-away)
 
@@ -478,8 +479,7 @@ Returns t if the message could be sent, nil otherwise."
          (msgtype (or (erc-nickserv-alist-ident-command nil nickserv-info)
                       "PRIVMSG")))
     (erc-message msgtype
-                 (concat nickserv " " identify-word " " nick
-                         (erc--unfun password)))))
+                 (concat nickserv " " identify-word " " nick password))))
 
 (defun erc-nickserv-call-identify-function (nickname)
   "Call `erc-nickserv-identify' with NICKNAME."

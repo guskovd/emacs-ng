@@ -1,6 +1,6 @@
 ;;; hangul.el --- Korean Hangul input method  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2008-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2008-2022 Free Software Foundation, Inc.
 
 ;; Author: Jihyun Cho <jihyun.jo@gmail.com>
 ;; Keywords: multilingual, input method, Korean, Hangul
@@ -103,10 +103,9 @@
   (make-vector 6 0))
 
 (defsubst notzerop (number)
-  (declare (obsolete "use `(not (zerop ...))'." "29.1"))
   (not (zerop number)))
 
-(defsubst hangul-alphabetp (char)
+(defsubst alphabetp (char)
   (or (and (>= char ?A) (<= char ?Z))
       (and (>= char ?a) (<= char ?z))))
 
@@ -192,10 +191,10 @@ and insert CHAR to new `hangul-queue'."
              (aset hangul-queue 0 char))
             ((and (zerop (aref hangul-queue 1))
                   (zerop (aref hangul-queue 2))
-                  (not (zerop (hangul-djamo 'cho (aref hangul-queue 0) char))))
+                  (notzerop (hangul-djamo 'cho (aref hangul-queue 0) char)))
              (aset hangul-queue 1 char))
             ((and (zerop (aref hangul-queue 4))
-                  (not (zerop (aref hangul-queue 2)))
+                  (notzerop (aref hangul-queue 2))
                   (/= char 8)
                   (/= char 19)
                   (/= char 25)
@@ -214,7 +213,7 @@ and insert CHAR to new `hangul-queue'."
                     char)))
              (aset hangul-queue 4 char))
             ((and (zerop (aref hangul-queue 5))
-                  (not (zerop (hangul-djamo 'jong (aref hangul-queue 4) char)))
+                  (notzerop (hangul-djamo 'jong (aref hangul-queue 4) char))
                   (numberp
                    (hangul-character
                     (+ (aref hangul-queue 0)
@@ -247,14 +246,14 @@ Other parts are the same as a `hangul2-input-method-jaum'."
              (aset hangul-queue 2 char))
             ((and (zerop (aref hangul-queue 3))
                   (zerop (aref hangul-queue 4))
-                  (not (zerop (hangul-djamo 'jung (aref hangul-queue 2) char))))
+                  (notzerop (hangul-djamo 'jung (aref hangul-queue 2) char)))
              (aset hangul-queue 3 char)))
       (hangul-insert-character hangul-queue)
     (let ((next-char (vector 0 0 char 0 0 0)))
-      (cond ((not (zerop (aref hangul-queue 5)))
+      (cond ((notzerop (aref hangul-queue 5))
 	     (aset next-char 0 (aref hangul-queue 5))
 	     (aset hangul-queue 5 0))
-            ((not (zerop (aref hangul-queue 4)))
+	    ((notzerop (aref hangul-queue 4))
 	     (aset next-char 0 (aref hangul-queue 4))
 	     (aset hangul-queue 4 0)))
       (hangul-insert-character hangul-queue
@@ -272,7 +271,7 @@ Other parts are the same as a `hangul2-input-method-jaum'."
              (aset hangul-queue 0 char))
             ((and (zerop (aref hangul-queue 1))
                   (zerop (aref hangul-queue 2))
-                  (not (zerop (hangul-djamo 'cho (aref hangul-queue 0) char))))
+                  (notzerop (hangul-djamo 'cho (aref hangul-queue 0) char)))
              (aset hangul-queue 1 char)))
       (hangul-insert-character hangul-queue)
     (hangul-insert-character hangul-queue
@@ -288,7 +287,7 @@ Other parts are the same as a `hangul3-input-method-cho'."
                   (zerop (aref hangul-queue 4)))
              (aset hangul-queue 2 char))
             ((and (zerop (aref hangul-queue 3))
-                  (not (zerop (hangul-djamo 'jung (aref hangul-queue 2) char))))
+                  (notzerop (hangul-djamo 'jung (aref hangul-queue 2) char)))
              (aset hangul-queue 3 char)))
       (hangul-insert-character hangul-queue)
     (hangul-insert-character hangul-queue
@@ -301,8 +300,8 @@ This function processes a Hangul 3-Bulsik Jongseong.
 The Jongseong can be located in a Jongseong position.
 Other parts are the same as a `hangul3-input-method-cho'."
   (if (cond ((and (zerop (aref hangul-queue 4))
-                  (not (zerop (aref hangul-queue 0)))
-                  (not (zerop (aref hangul-queue 2)))
+                  (notzerop (aref hangul-queue 0))
+                  (notzerop (aref hangul-queue 2))
                   (numberp
                    (hangul-character
                     (+ (aref hangul-queue 0)
@@ -318,7 +317,7 @@ Other parts are the same as a `hangul3-input-method-cho'."
                     char)))
              (aset hangul-queue 4 char))
             ((and (zerop (aref hangul-queue 5))
-                  (not (zerop (hangul-djamo 'jong (aref hangul-queue 4) char)))
+                  (notzerop (hangul-djamo 'jong (aref hangul-queue 4) char))
                   (numberp
                    (hangul-character
                     (+ (aref hangul-queue 0)
@@ -350,7 +349,7 @@ Other parts are the same as a `hangul3-input-method-cho'."
     (while (and (> i 0) (zerop (aref hangul-queue i)))
       (setq i (1- i)))
     (aset hangul-queue i 0))
-  (if (not (zerop (apply #'+ (append hangul-queue nil))))
+  (if (notzerop (apply #'+ (append hangul-queue nil)))
       (hangul-insert-character hangul-queue)
     (delete-char -1)))
 
@@ -389,7 +388,7 @@ When a Korean input method is off, convert the following hangul character."
 
 (defun hangul2-input-method (key)
   "2-Bulsik input method."
-  (if (or buffer-read-only (not (hangul-alphabetp key)))
+  (if (or buffer-read-only (not (alphabetp key)))
       (list key)
     (quail-setup-overlays nil)
     (let ((input-method-function nil)
@@ -406,7 +405,7 @@ When a Korean input method is off, convert the following hangul character."
 		(cond ((and (stringp seq)
 			    (= 1 (length seq))
 			    (setq key (aref seq 0))
-                            (hangul-alphabetp key))
+			    (alphabetp key))
 		       (hangul2-input-method-internal key))
 		      ((commandp cmd)
 		       (call-interactively cmd))
@@ -430,7 +429,7 @@ When a Korean input method is off, convert the following hangul character."
            (hangul3-input-method-jong char))
           (t
            (setq hangul-queue (make-vector 6 0))
-           (insert char)
+           (insert (decode-char 'ucs char))
            (move-overlay quail-overlay (point) (point))))))
 
 (defun hangul3-input-method (key)
@@ -477,7 +476,7 @@ When a Korean input method is off, convert the following hangul character."
            (hangul3-input-method-jong char))
           (t
            (setq hangul-queue (make-vector 6 0))
-           (insert char)
+           (insert (decode-char 'ucs char))
            (move-overlay quail-overlay (point) (point))))))
 
 (defun hangul390-input-method (key)
@@ -537,13 +536,15 @@ HELP-TEXT is a text set in `hangul-input-method-help-text'."
         (setq describe-current-input-method-function nil))
     (kill-local-variable 'input-method-function)))
 
+(define-obsolete-function-alias
+  'hangul-input-method-inactivate
+  #'hangul-input-method-deactivate "24.3")
+
 (defun hangul-input-method-help ()
   "Describe the current Hangul input method."
   (interactive)
   (with-output-to-temp-buffer "*Help*"
     (princ hangul-input-method-help-text)))
-
-(define-obsolete-function-alias 'alphabetp 'hangul-alphabetp "29.1")
 
 (provide 'hangul)
 

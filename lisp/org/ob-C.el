@@ -1,12 +1,12 @@
 ;;; ob-C.el --- Babel Functions for C and Similar Languages -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2010-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2010-2022 Free Software Foundation, Inc.
 
 ;; Author: Eric Schulte
 ;;      Thierry Banel
-;; Maintainer: Thierry Banel <tbanelwebmin@free.fr>
+;; Maintainer: Thierry Banel
 ;; Keywords: literate programming, reproducible research
-;; URL: https://orgmode.org
+;; Homepage: https://orgmode.org
 
 ;; This file is part of GNU Emacs.
 
@@ -32,9 +32,6 @@
 ;; - not much in the way of error feedback
 
 ;;; Code:
-
-(require 'org-macs)
-(org-assert-version)
 
 (require 'cc-mode)
 (require 'ob)
@@ -185,7 +182,7 @@ or `org-babel-execute:C++' or `org-babel-execute:D'."
 	(setq results (org-remove-indentation results))
 	(org-babel-reassemble-table
 	 (org-babel-result-cond (cdr (assq :result-params params))
-	   results
+	   (org-babel-read results t)
 	   (let ((tmp-file (org-babel-temp-file "c-")))
 	     (with-temp-file tmp-file (insert results))
 	     (org-babel-import-elisp-from-file tmp-file)))

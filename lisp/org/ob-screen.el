@@ -1,11 +1,11 @@
 ;;; ob-screen.el --- Babel Support for Interactive Terminal -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2009-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2009-2022 Free Software Foundation, Inc.
 
 ;; Author: Benjamin Andresen
-;; Maintainer: Ken Mankoff <mankoff@gmail.com>
+;; Maintainer: Ken Mankoff
 ;; Keywords: literate programming, interactive shell
-;; URL: https://orgmode.org
+;; Homepage: https://orgmode.org
 
 ;; This file is part of GNU Emacs.
 
@@ -34,10 +34,6 @@
 ;; M-x org-babel-screen-test RET
 
 ;;; Code:
-
-(require 'org-macs)
-(org-assert-version)
-
 (require 'ob)
 
 (defvar org-babel-screen-location "screen"

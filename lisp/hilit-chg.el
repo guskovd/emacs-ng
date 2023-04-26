@@ -1,6 +1,6 @@
 ;;; hilit-chg.el --- minor mode displaying buffer changes with special face  -*- lexical-binding: t -*-
 
-;; Copyright (C) 1998, 2000-2023 Free Software Foundation, Inc.
+;; Copyright (C) 1998, 2000-2022 Free Software Foundation, Inc.
 
 ;; Author: Richard Sharman <rsharman@pobox.com>
 ;; Keywords: faces
@@ -118,6 +118,7 @@
 ;;
 ;;     Other interactive functions (that could be bound if desired):
 ;; `highlight-changes-mode'
+;; `highlight-changes-toggle-visibility'
 ;; `highlight-changes-remove-highlight'
 ;; `highlight-compare-with-file'
 ;; `highlight-compare-buffers'
@@ -668,7 +669,7 @@ This removes all saved change information."
 
 ;;;###autoload
 (defun highlight-changes-rotate-faces ()
-  "\"Age\" changes if in Highlight Changes mode and the changes are visible.
+  "Rotate the faces if in Highlight Changes mode and the changes are visible.
 
 Current changes are displayed in the face described by the first element
 of `highlight-changes-face-list', one level older changes are shown in

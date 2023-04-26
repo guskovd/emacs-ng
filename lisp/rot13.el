@@ -1,6 +1,6 @@
 ;;; rot13.el --- display a buffer in ROT13  -*- lexical-binding: t -*-
 
-;; Copyright (C) 1988, 2001-2023 Free Software Foundation, Inc.
+;; Copyright (C) 1988, 2001-2022 Free Software Foundation, Inc.
 
 ;; Author: Howard Gayle
 ;;         Simon Josefsson
@@ -46,23 +46,29 @@
 
 ;;; Code:
 
-(defconst rot13-display-table
-  (let ((table (make-display-table)))
-    (dotimes (i 26)
+(defvar rot13-display-table
+  (let ((table (make-display-table))
+	(i 0))
+    (while (< i 26)
       (aset table (+ i ?a) (vector (+ (% (+ i 13) 26) ?a)))
-      (aset table (+ i ?A) (vector (+ (% (+ i 13) 26) ?A))))
+      (aset table (+ i ?A) (vector (+ (% (+ i 13) 26) ?A)))
+      (setq i (1+ i)))
     table)
   "Char table for ROT13 display.")
 
-(put 'plain-char-table 'char-table-extra-slots 0)
-
-(defconst rot13-translate-table
-  (let ((table (make-char-table 'translation-table)))
-    (dotimes (i 26)
-      (aset table (+ i ?a) (+ (% (+ i 13) 26) ?a))
-      (aset table (+ i ?A) (+ (% (+ i 13) 26) ?A)))
-    table)
-  "Char table for ROT13 translation.")
+(defvar rot13-translate-table
+  (let ((str (make-string 127 0))
+	(i 0))
+    (while (< i 127)
+      (aset str i i)
+      (setq i (1+ i)))
+    (setq i 0)
+    (while (< i 26)
+      (aset str (+ i ?a) (+ (% (+ i 13) 26) ?a))
+      (aset str (+ i ?A) (+ (% (+ i 13) 26) ?A))
+      (setq i (1+ i)))
+    str)
+  "String table for ROT13 translation.")
 
 ;;;###autoload
 (defun rot13 (object &optional start end)
@@ -85,16 +91,9 @@ and END, and return the encrypted string."
 
 ;;;###autoload
 (defun rot13-region (start end)
-  "ROT13 encrypt the region between START and END in current buffer.
-If invoked interactively and the buffer is read-only, a message
-will be printed instead."
+  "ROT13 encrypt the region between START and END in current buffer."
   (interactive "r")
-  (condition-case nil
-      (translate-region start end rot13-translate-table)
-    (buffer-read-only
-     (when (called-interactively-p 'interactive)
-       (let ((dec (rot13-string (buffer-substring start end))))
-         (message "Buffer is read-only:\n%s" (string-trim dec)))))))
+  (translate-region start end rot13-translate-table))
 
 ;;;###autoload
 (defun rot13-other-window ()

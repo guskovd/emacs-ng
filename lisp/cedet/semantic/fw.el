@@ -1,6 +1,6 @@
 ;;; semantic/fw.el --- Framework for Semantic  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 1999-2023 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2022 Free Software Foundation, Inc.
 
 ;; Author: Eric M. Ludlam <zappo@gnu.org>
 
@@ -66,6 +66,8 @@
 
 (defalias 'semantic-mode-line-update #'force-mode-line-update)
 
+;; Since Emacs 22 major mode functions should use `run-mode-hooks' to
+;; run major mode hooks.
 (define-obsolete-function-alias 'semantic-run-mode-hooks #'run-mode-hooks "28.1")
 
 ;; Fancy compat usage now handled in cedet-compat
@@ -191,20 +193,12 @@ will throw a warning when it encounters this symbol."
 	     (not (string-match "cedet" (macroexp-file-name)))
 	     )
     (make-obsolete-overload oldfnalias newfn when)
-    (if (fboundp 'byte-compile-warn-x)
-        (byte-compile-warn-x
-         newfn
-         "%s: `%s' obsoletes overload `%s'"
-         (macroexp-file-name)
-         newfn
-         (with-suppressed-warnings ((obsolete semantic-overload-symbol-from-function))
-           (semantic-overload-symbol-from-function oldfnalias)))
-      (byte-compile-warn
-       "%s: `%s' obsoletes overload `%s'"
-       (macroexp-file-name)
-       newfn
-       (with-suppressed-warnings ((obsolete semantic-overload-symbol-from-function))
-         (semantic-overload-symbol-from-function oldfnalias))))))
+    (byte-compile-warn
+     "%s: `%s' obsoletes overload `%s'"
+     (macroexp-file-name)
+     newfn
+     (with-suppressed-warnings ((obsolete semantic-overload-symbol-from-function))
+       (semantic-overload-symbol-from-function oldfnalias)))))
 
 (defun semantic-varalias-obsolete (oldvaralias newvar when)
   "Make OLDVARALIAS an alias for variable NEWVAR.
@@ -217,14 +211,10 @@ will throw a warning when it encounters this symbol."
     (error
      ;; Only throw this warning when byte compiling things.
      (when (macroexp-compiling-p)
-       (if (fboundp 'byte-compile-warn-x)
-           (byte-compile-warn-x
-            newvar
-            "variable `%s' obsoletes, but isn't alias of `%s'"
-            newvar oldvaralias)
-         (byte-compile-warn
-          "variable `%s' obsoletes, but isn't alias of `%s'"
-          newvar oldvaralias))))))
+       (byte-compile-warn
+        "variable `%s' obsoletes, but isn't alias of `%s'"
+        newvar oldvaralias)
+     ))))
 
 ;;; Help debugging
 ;;
@@ -287,8 +277,7 @@ later installation should be done in MODE hook."
           (cons (intern (format "semantic-%s" name)) (cdr e)))))
     overrides)
    (list 'constant-flag (not transient)
-         'override-flag t)
-   nil))
+         'override-flag t)))
 
 ;;; User Interrupt handling
 ;;
@@ -339,7 +328,7 @@ calling this one."
   "Call `find-file-noselect' with various features turned off.
 Use this when referencing a file that will be soon deleted.
 FILE, NOWARN, RAWFILE, and WILDCARDS are passed into `find-file-noselect'."
-  (let* ((recentf-exclude '(always))
+  (let* ((recentf-exclude #'always)
 	 ;; This is a brave statement.  Don't waste time loading in
 	 ;; lots of modes.  Especially decoration mode can waste a lot
 	 ;; of time for a buffer we intend to kill.

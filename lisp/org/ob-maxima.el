@@ -1,11 +1,11 @@
 ;;; ob-maxima.el --- Babel Functions for Maxima      -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2009-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2009-2022 Free Software Foundation, Inc.
 
 ;; Author: Eric S Fraga
 ;;	Eric Schulte
 ;; Keywords: literate programming, reproducible research, maxima
-;; URL: https://orgmode.org
+;; Homepage: https://orgmode.org
 
 ;; This file is part of GNU Emacs.
 
@@ -31,10 +31,6 @@
 ;; 2) we are adding the "cmdline" header argument
 
 ;;; Code:
-
-(require 'org-macs)
-(org-assert-version)
-
 (require 'ob)
 
 (defvar org-babel-tangle-lang-exts)
@@ -76,16 +72,13 @@
 (defun org-babel-execute:maxima (body params)
   "Execute a block of Maxima entries with org-babel.
 This function is called by `org-babel-execute-src-block'."
-  (message "Executing Maxima source code block")
+  (message "executing Maxima source code block")
   (let ((result-params (split-string (or (cdr (assq :results params)) "")))
 	(result
 	 (let* ((cmdline (or (cdr (assq :cmdline params)) ""))
 		(in-file (org-babel-temp-file "maxima-" ".max"))
-		(cmd (format "%s --very-quiet -r %s %s"
-			     org-babel-maxima-command
-                             (shell-quote-argument
-                              (format "batchload(%S)$" in-file))
-                             cmdline)))
+		(cmd (format "%s --very-quiet -r 'batchload(%S)$' %s"
+			     org-babel-maxima-command in-file cmdline)))
 	   (with-temp-file in-file (insert (org-babel-maxima-expand body params)))
 	   (message cmd)
            ;; " | grep -v batch | grep -v 'replaced' | sed '/^$/d' "

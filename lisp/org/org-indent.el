@@ -1,10 +1,10 @@
 ;;; org-indent.el --- Dynamic indentation for Org    -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2009-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2009-2022 Free Software Foundation, Inc.
 ;;
 ;; Author: Carsten Dominik <carsten.dominik@gmail.com>
 ;; Keywords: outlines, hypermedia, calendar, wp
-;; URL: https://orgmode.org
+;; Homepage: https://orgmode.org
 ;;
 ;; This file is part of GNU Emacs.
 ;;
@@ -35,9 +35,6 @@
 ;; idle time.
 ;;
 ;;; Code:
-
-(require 'org-macs)
-(org-assert-version)
 
 (require 'org-macs)
 (require 'org-compat)
@@ -333,7 +330,7 @@ stopped."
      (let* ((case-fold-search t)
 	    (limited-re (org-get-limited-outline-regexp))
 	    (level (or (org-current-level) 0))
-	    (time-limit (and delay (time-add nil delay))))
+	    (time-limit (and delay (org-time-add nil delay))))
        ;; For each line, set `line-prefix' and `wrap-prefix'
        ;; properties depending on the type of line (headline, inline
        ;; task, item or other).
@@ -346,7 +343,7 @@ stopped."
 	    ;; In asynchronous mode, take a break of
 	    ;; `org-indent-agent-resume-delay' every DELAY to avoid
 	    ;; blocking any other idle timer or process output.
-	    ((and delay (time-less-p time-limit nil))
+	    ((and delay (org-time-less-p time-limit nil))
 	     (setq org-indent-agent-resume-timer
 		   (run-with-idle-timer
 		    (time-add (current-idle-time) org-indent-agent-resume-delay)
@@ -412,13 +409,7 @@ This function is meant to be called by `after-change-functions'."
 		 (goto-char beg)
 		 (beginning-of-line)
 		 (re-search-forward
-		  (org-with-limited-levels org-outline-regexp-bol)
-                  (save-excursion
-                    (goto-char end)
-                    ;; Extend to headline if END is within its
-                    ;; headline stars.
-                    (line-end-position))
-                  t)))
+		  (org-with-limited-levels org-outline-regexp-bol) end t)))
 	   (let ((end (save-excursion
 			(goto-char end)
 			(org-with-limited-levels (outline-next-heading))

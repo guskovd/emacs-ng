@@ -1,6 +1,6 @@
 ;;; type-break.el --- encourage rests from typing at appropriate intervals  -*- lexical-binding: t -*-
 
-;; Copyright (C) 1994-1995, 1997, 2000-2023 Free Software Foundation,
+;; Copyright (C) 1994-1995, 1997, 2000-2022 Free Software Foundation,
 ;; Inc.
 
 ;; Author: Noah Friedman <friedman@splode.com>
@@ -46,6 +46,11 @@
 ;; in the mode line instead, do M-x type-break-mode-line-message-mode
 ;; or set the variable of the same name to t.
 
+;; This program can truly cons up a storm because of all the calls to
+;; `current-time' (which always returns fresh conses).  I'm dismayed by
+;; this, but I think the health of my hands is far more important than a
+;; few pages of virtual memory.
+
 ;; This package was inspired by Roland McGrath's hanoi-break.el.
 ;; Several people contributed feedback and ideas, including
 ;;      Roland McGrath <roland@gnu.org>
@@ -64,7 +69,7 @@
 
 (defcustom type-break-interval (* 60 60)
   "Number of seconds between scheduled typing breaks."
-  :type 'natnum
+  :type 'integer
   :group 'type-break)
 
 (defcustom type-break-good-rest-interval (/ type-break-interval 6)
@@ -77,7 +82,7 @@ rest from typing, then the next typing break is simply rescheduled for later.
 If a break is interrupted before this much time elapses, the user will be
 asked whether or not really to interrupt the break."
   :set-after '(type-break-interval)
-  :type 'natnum
+  :type 'integer
   :group 'type-break)
 
 (defcustom type-break-good-break-interval nil
@@ -143,7 +148,7 @@ To avoid being queried at all, set `type-break-query-mode' to nil."
   "Number of seconds between queries to take a break, if put off.
 The user will continue to be prompted at this interval until he or she
 finally submits to taking a typing break."
-  :type 'natnum
+  :type 'integer
   :group 'type-break)
 
 (defcustom type-break-time-warning-intervals '(300 120 60 30)
@@ -166,7 +171,7 @@ will occur."
   "Number of keystrokes for which warnings should be repeated.
 That is, for each of this many keystrokes the warning is redisplayed
 in the echo area to make sure it's really seen."
-  :type 'natnum
+  :type 'integer
   :group 'type-break)
 
 (defcustom type-break-time-stamp-format "[%H:%M] "
@@ -258,7 +263,7 @@ It will be either \"seconds\" or \"keystrokes\".")
 (defvar type-break-keystroke-count 0)
 (defvar type-break-time-last-break nil)
 (defvar type-break-time-next-break nil)
-(defvar type-break-time-last-command (time-convert nil 'integer))
+(defvar type-break-time-last-command (current-time))
 (defvar type-break-current-time-warning-interval nil)
 (defvar type-break-current-keystroke-warning-interval nil)
 (defvar type-break-time-warning-count 0)
@@ -357,7 +362,7 @@ problems."
 
     (setq type-break-time-last-break
           (or (type-break-get-previous-time)
-	      (time-convert nil 'integer)))
+              (current-time)))
 
     ;; Schedule according to break time from session file.
     (type-break-schedule
@@ -376,7 +381,7 @@ problems."
              (setq type-break-interval-start type-break-time-last-break)
              (- type-break-interval diff))
          ;; Schedule from now.
-	 (setq type-break-interval-start (time-convert nil 'integer))
+         (setq type-break-interval-start (current-time))
          (type-break-file-time type-break-interval-start)
          type-break-interval))
      type-break-interval-start
@@ -451,7 +456,7 @@ the variable of the same name."
 	      ;; file saving is left to auto-save
 	      ))))))
 
-(defun type-break-timep (time)
+(defun timep (time)
   "If TIME is a Lisp time value then return TIME, else return nil."
   (condition-case nil
       (and (float-time time) time)
@@ -475,7 +480,7 @@ the variable of the same name."
 Return nil if the file is missing or if the time is not a Lisp time value."
   (let ((file (type-break-choose-file)))
     (if file
-        (type-break-timep ;; returns expected format, else nil
+        (timep ;; returns expected format, else nil
          (with-current-buffer (find-file-noselect file 'nowarn)
 	   (condition-case nil
 	       (save-excursion
@@ -520,7 +525,7 @@ as per the function `type-break-schedule'."
   ;; remove any query scheduled during interactive invocation
   (remove-hook 'type-break-post-command-hook 'type-break-do-query)
   (let ((continue t)
-	(start-time (time-convert nil 'integer)))
+        (start-time (current-time)))
     (setq type-break-time-last-break start-time)
     (while continue
       (save-window-excursion
@@ -671,9 +676,9 @@ keystroke threshold has been exceeded."
                 (progn
                   (type-break-keystroke-reset)
                   (type-break-mode-line-countdown-or-break nil)
-		  (setq type-break-time-last-break (time-convert nil 'integer))
+                  (setq type-break-time-last-break (current-time))
                   (type-break-schedule)))
-	   (setq type-break-time-last-command (time-convert nil 'integer))))
+           (setq type-break-time-last-command (current-time))))
 
     (and type-break-keystroke-threshold
          (let ((keys (this-command-keys)))
@@ -938,13 +943,14 @@ FRAC should be the inverse of the fractional value; for example, a value of
 
 ;;; misc functions
 
-;; Compute the difference, in seconds, between a and b, two time values.
+;; Compute the difference, in seconds, between a and b, two structures
+;; similar to those returned by `current-time'.
 (defun type-break-time-difference (a b)
   (round (float-time (time-subtract b a))))
 
 ;; Return a time value that is the sum of the time-value arguments.
 (defun type-break-time-sum (&rest tmlist)
-  (let ((sum 0))
+  (let ((sum '(0 0)))
     (dolist (tem tmlist)
       (setq sum (time-add sum tem)))
     sum))
@@ -961,7 +967,7 @@ FRAC should be the inverse of the fractional value; for example, a value of
      (t (format "%d seconds" secs)))))
 
 (defun type-break-keystroke-reset ()
-  (setq type-break-interval-start (time-convert nil 'integer))
+  (setq type-break-interval-start (current-time)) ; not a keystroke
   (setq type-break-keystroke-count 0)
   (setq type-break-keystroke-warning-count 0)
   (setq type-break-current-keystroke-warning-interval
@@ -1142,8 +1148,6 @@ With optional non-nil ALL, force redisplay of all mode-lines."
       (quit
        (and (get-buffer buffer-name)
             (kill-buffer buffer-name))))))
-
-(define-obsolete-function-alias 'timep 'type-break-timep "29.1")
 
 
 (provide 'type-break)

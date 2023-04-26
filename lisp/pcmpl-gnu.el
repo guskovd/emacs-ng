@@ -1,6 +1,6 @@
 ;;; pcmpl-gnu.el --- completions for GNU project tools -*- lexical-binding: t -*-
 
-;; Copyright (C) 1999-2023 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2022 Free Software Foundation, Inc.
 
 ;; Package: pcomplete
 
@@ -134,7 +134,7 @@ Return the new list."
   "Add to TARGETS the list of target names in MAKEFILE and files it includes.
 Return the new list."
   (with-temp-buffer
-    (with-demoted-errors "Error inserting makefile: %S"
+    (with-demoted-errors			;Could be a directory or something.
         (insert-file-contents makefile))
 
     (let ((filenames (when pcmpl-gnu-makefile-includes (pcmpl-gnu-make-includes))))
@@ -184,86 +184,6 @@ Return the new list."
          (when (and (not ,exist) (buffer-live-p ,buf))
            (kill-buffer ,buf))))))
 
-(defvar pcmpl-gnu--tar-long-options
-  ;; FIXME: Extract this list from "tar --help".
-  '("--absolute-names"
-    "--after-date="
-    "--append"
-    "--atime-preserve"
-    "--backup"
-    "--block-number"
-    "--blocking-factor="
-    "--catenate"
-    "--checkpoint"
-    "--compare"
-    "--compress"
-    "--concatenate"
-    "--confirmation"
-    "--create"
-    "--delete"
-    "--dereference"
-    "--diff"
-    "--directory="
-    "--exclude="
-    "--exclude-from="
-    "--extract"
-    "--file="
-    "--files-from="
-    "--force-local"
-    "--get"
-    "--group="
-    "--gzip"
-    "--help"
-    "--ignore-failed-read"
-    "--ignore-zeros"
-    "--incremental"
-    "--info-script="
-    "--interactive"
-    "--keep-old-files"
-    "--label="
-    "--list"
-    "--listed-incremental"
-    "--mode="
-    "--modification-time"
-    "--multi-volume"
-    "--new-volume-script="
-    "--newer="
-    "--newer-mtime"
-    "--no-recursion"
-    "--null"
-    "--numeric-owner"
-    "--old-archive"
-    "--one-file-system"
-    "--owner="
-    "--portability"
-    "--posix"
-    "--preserve"
-    "--preserve-order"
-    "--preserve-permissions"
-    "--read-full-records"
-    "--record-size="
-    "--recursive-unlink"
-    "--remove-files"
-    "--rsh-command="
-    "--same-order"
-    "--same-owner"
-    "--same-permissions"
-    "--sparse"
-    "--starting-file="
-    "--suffix="
-    "--tape-length="
-    "--to-stdout"
-    "--totals"
-    "--uncompress"
-    "--ungzip"
-    "--unlink-first"
-    "--update"
-    "--use-compress-program="
-    "--verbose"
-    "--verify"
-    "--version"
-    "--volno-file="))
-
 ;;;###autoload
 (defun pcomplete/tar ()
   "Completion for the GNU tar utility."
@@ -272,53 +192,148 @@ Return the new list."
     (while (pcomplete-match "^-" 0)
       (setq saw-option t)
       (if (pcomplete-match "^--" 0)
-          (cond
-           ((pcomplete-match "^--\\([^= \t\n\f]*\\)\\'" 0)
-            (pcomplete-here* pcmpl-gnu--tar-long-options))
-           ((pcomplete-match "\\`--directory=\\(.*\\)" 0)
-            (pcomplete-here* (pcomplete-dirs)
-                             (pcomplete-match-string 1 0)))
-           ((pcomplete-match "\\`--exclude-from=\\(.*\\)" 0)
-            (pcomplete-here* (pcomplete-entries)
-                             (pcomplete-match-string 1 0)))
-           ((pcomplete-match "\\`--\\(extract\\|list\\)\\'" 0)
-            (setq complete-within t))
-           ((pcomplete-match "\\`--file=\\(.*\\)" 0)
-            (pcomplete-here* (pcomplete-dirs-or-entries
-                              pcmpl-gnu-tarfile-regexp)
-                             (pcomplete-match-string 1 0)))
-           ((pcomplete-match "\\`--files-from=\\(.*\\)" 0)
-            (pcomplete-here* (pcomplete-entries)
-                             (pcomplete-match-string 1 0)))
-           ((pcomplete-match "\\`--group=\\(.*\\)" 0)
-            (pcomplete-here* (pcmpl-unix-group-names)
-                             (pcomplete-match-string 1 0)))
-           ((pcomplete-match "\\`--info-script=\\(.*\\)" 0)
-            (pcomplete-here* (pcomplete-entries)
-                             (pcomplete-match-string 1 0)))
-           ((pcomplete-match "\\`--new-volume-script=\\(.*\\)" 0)
-            (pcomplete-here* (pcomplete-entries)
-                             (pcomplete-match-string 1 0)))
-           ((pcomplete-match "\\`--owner=\\(.*\\)" 0)
-            (pcomplete-here* (pcmpl-unix-user-names)
-                             (pcomplete-match-string 1 0)))
-           ((pcomplete-match "\\`--rsh-command=\\(.*\\)" 0)
-            (pcomplete-here* (funcall pcomplete-command-completion-function)
-                             (pcomplete-match-string 1 0)))
-           ((pcomplete-match "\\`--starting-file=\\(.*\\)" 0)
-            (pcomplete-here* (pcomplete-entries)
-                             (pcomplete-match-string 1 0)))
-           ((pcomplete-match "\\`--use-compress-program=\\(.*\\)" 0)
-            (pcomplete-here* (funcall pcomplete-command-completion-function)
-                             (pcomplete-match-string 1 0)))
-           ((pcomplete-match "\\`--volno-file=\\(.*\\)" 0)
-            (pcomplete-here* (pcomplete-entries)
-                             (pcomplete-match-string 1 0)))
-           (t
-            (pcomplete-here*)))
-        (pcomplete-opt "01234567ABCFGKLMNOPRSTUVWXZbcdfghiklmoprstuvwxz")
-        (when (pcomplete-match "\\`-\\'" 0)
-          (pcomplete-here*))))
+          (if (pcomplete-match "^--\\([^= \t\n\f]*\\)\\'" 0)
+              ;; FIXME: Extract this list from "tar --help".
+              (pcomplete-here*
+               '("--absolute-names"
+                 "--after-date="
+                 "--append"
+                 "--atime-preserve"
+                 "--backup"
+                 "--block-number"
+                 "--blocking-factor="
+                 "--catenate"
+                 "--checkpoint"
+                 "--compare"
+                 "--compress"
+                 "--concatenate"
+                 "--confirmation"
+                 "--create"
+                 "--delete"
+                 "--dereference"
+                 "--diff"
+                 "--directory="
+                 "--exclude="
+                 "--exclude-from="
+                 "--extract"
+                 "--file="
+                 "--files-from="
+                 "--force-local"
+                 "--get"
+                 "--group="
+                 "--gzip"
+                 "--help"
+                 "--ignore-failed-read"
+                 "--ignore-zeros"
+                 "--incremental"
+                 "--info-script="
+                 "--interactive"
+                 "--keep-old-files"
+                 "--label="
+                 "--list"
+                 "--listed-incremental"
+                 "--mode="
+                 "--modification-time"
+                 "--multi-volume"
+                 "--new-volume-script="
+                 "--newer="
+                 "--newer-mtime"
+                 "--no-recursion"
+                 "--null"
+                 "--numeric-owner"
+                 "--old-archive"
+                 "--one-file-system"
+                 "--owner="
+                 "--portability"
+                 "--posix"
+                 "--preserve"
+                 "--preserve-order"
+                 "--preserve-permissions"
+                 "--read-full-records"
+                 "--record-size="
+                 "--recursive-unlink"
+                 "--remove-files"
+                 "--rsh-command="
+                 "--same-order"
+                 "--same-owner"
+                 "--same-permissions"
+                 "--sparse"
+                 "--starting-file="
+                 "--suffix="
+                 "--tape-length="
+                 "--to-stdout"
+                 "--totals"
+                 "--uncompress"
+                 "--ungzip"
+                 "--unlink-first"
+                 "--update"
+                 "--use-compress-program="
+                 "--verbose"
+                 "--verify"
+                 "--version"
+                 "--volno-file=")))
+        (pcomplete-opt "01234567ABCFGKLMNOPRSTUVWXZbcdfghiklmoprstuvwxz"))
+      (cond
+       ((pcomplete-match "\\`-\\'" 0)
+        (pcomplete-here*))
+       ((pcomplete-match "\\`--after-date=" 0)
+        (pcomplete-here*))
+       ((pcomplete-match "\\`--backup=" 0)
+        (pcomplete-here*))
+       ((pcomplete-match "\\`--blocking-factor=" 0)
+        (pcomplete-here*))
+       ((pcomplete-match "\\`--directory=\\(.*\\)" 0)
+        (pcomplete-here* (pcomplete-dirs)
+                         (pcomplete-match-string 1 0)))
+       ((pcomplete-match "\\`--exclude-from=\\(.*\\)" 0)
+        (pcomplete-here* (pcomplete-entries)
+                         (pcomplete-match-string 1 0)))
+       ((pcomplete-match "\\`--exclude=" 0)
+        (pcomplete-here*))
+       ((pcomplete-match "\\`--\\(extract\\|list\\)\\'" 0)
+        (setq complete-within t))
+       ((pcomplete-match "\\`--file=\\(.*\\)" 0)
+        (pcomplete-here* (pcomplete-dirs-or-entries pcmpl-gnu-tarfile-regexp)
+                         (pcomplete-match-string 1 0)))
+       ((pcomplete-match "\\`--files-from=\\(.*\\)" 0)
+        (pcomplete-here* (pcomplete-entries)
+                         (pcomplete-match-string 1 0)))
+       ((pcomplete-match "\\`--group=\\(.*\\)" 0)
+        (pcomplete-here* (pcmpl-unix-group-names)
+                         (pcomplete-match-string 1 0)))
+       ((pcomplete-match "\\`--info-script=\\(.*\\)" 0)
+        (pcomplete-here* (pcomplete-entries)
+                         (pcomplete-match-string 1 0)))
+       ((pcomplete-match "\\`--label=" 0)
+        (pcomplete-here*))
+       ((pcomplete-match "\\`--mode=" 0)
+        (pcomplete-here*))
+       ((pcomplete-match "\\`--new-volume-script=\\(.*\\)" 0)
+        (pcomplete-here* (pcomplete-entries)
+                         (pcomplete-match-string 1 0)))
+       ((pcomplete-match "\\`--newer=" 0)
+        (pcomplete-here*))
+       ((pcomplete-match "\\`--owner=\\(.*\\)" 0)
+        (pcomplete-here* (pcmpl-unix-user-names)
+                         (pcomplete-match-string 1 0)))
+       ((pcomplete-match "\\`--record-size=" 0)
+        (pcomplete-here*))
+       ((pcomplete-match "\\`--rsh-command=\\(.*\\)" 0)
+        (pcomplete-here* (funcall pcomplete-command-completion-function)
+                         (pcomplete-match-string 1 0)))
+       ((pcomplete-match "\\`--starting-file=\\(.*\\)" 0)
+        (pcomplete-here* (pcomplete-entries)
+                         (pcomplete-match-string 1 0)))
+       ((pcomplete-match "\\`--suffix=" 0)
+        (pcomplete-here*))
+       ((pcomplete-match "\\`--tape-length=" 0)
+        (pcomplete-here*))
+       ((pcomplete-match "\\`--use-compress-program=\\(.*\\)" 0)
+        (pcomplete-here* (funcall pcomplete-command-completion-function)
+                         (pcomplete-match-string 1 0)))
+       ((pcomplete-match "\\`--volno-file=\\(.*\\)" 0)
+        (pcomplete-here* (pcomplete-entries)
+                         (pcomplete-match-string 1 0)))))
     (unless saw-option
       (pcomplete-here
        (mapcar #'char-to-string
@@ -379,40 +394,6 @@ Return the new list."
     (while (pcomplete-here (pcomplete-dirs) nil #'identity))))
 
 ;;;###autoload
-(defun pcomplete/awk ()
-  "Completion for the `awk' command."
-  (pcomplete-here-using-help "awk --help"
-                             :margin "\t"
-                             :separator "  +"
-                             :description "\0"
-                             :metavar "[=a-z]+"))
-
-;;;###autoload
-(defun pcomplete/gpg ()
-  "Completion for the `gpg` command."
-  (pcomplete-here-using-help "gpg --help" :narrow-end "^ -se"))
-
-;;;###autoload
-(defun pcomplete/gdb ()
-  "Completion for the `gdb' command."
-  (while
-      (cond
-       ((string= "--args" (pcomplete-arg 1))
-        (funcall pcomplete-command-completion-function)
-        (funcall (or (pcomplete-find-completion-function (pcomplete-arg 1))
-	             pcomplete-default-completion-function)))
-       ((string-prefix-p "-" (pcomplete-arg 0))
-        (pcomplete-here (pcomplete-from-help "gdb --help")))
-       (t (pcomplete-here (pcomplete-entries))))))
-
-;;;###autoload
-(defun pcomplete/emacs ()
-  "Completion for the `emacs' command."
-  (pcomplete-here-using-help "emacs --help" :margin "^\\(\\)-"))
-
-;;;###autoload
-(defun pcomplete/emacsclient ()
-  "Completion for the `emacsclient' command."
-  (pcomplete-here-using-help "emacsclient --help" :margin "^\\(\\)-"))
+(defalias 'pcomplete/gdb 'pcomplete/xargs)
 
 ;;; pcmpl-gnu.el ends here

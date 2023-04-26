@@ -1,6 +1,6 @@
 ;;; shadowfile-tests.el --- Tests of shadowfile  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2018-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2018-2022 Free Software Foundation, Inc.
 
 ;; Author: Michael Albinus <michael.albinus@gmx.de>
 
@@ -37,9 +37,37 @@
 
 ;;; Code:
 
-(require 'tramp)
-(require 'ert-x)
+(require 'ert)
 (require 'shadowfile)
+(require 'tramp)
+
+;; There is no default value on w32 systems, which could work out of the box.
+(defconst shadow-test-remote-temporary-file-directory
+  (cond
+   ((getenv "REMOTE_TEMPORARY_FILE_DIRECTORY"))
+   ((eq system-type 'windows-nt) null-device)
+   (t (add-to-list
+       'tramp-methods
+       '("mock"
+	 (tramp-login-program        "sh")
+	 (tramp-login-args           (("-i")))
+	 (tramp-remote-shell         "/bin/sh")
+	 (tramp-remote-shell-args    ("-c"))
+	 (tramp-connection-timeout   10)))
+      (add-to-list
+       'tramp-default-host-alist
+       `("\\`mock\\'" nil ,(system-name)))
+      ;; Emacs' Makefile sets $HOME to a nonexistent value.  Needed in
+      ;; batch mode only, therefore.  `shadow-homedir' cannot be
+      ;; `temporary-directory', because the tests with "~" would fail.
+      (unless (and (null noninteractive) (file-directory-p "~/"))
+        (setenv "HOME" (file-name-unquote temporary-file-directory))
+        (setq shadow-homedir invocation-directory)
+        (add-to-list
+         'tramp-connection-properties
+         `(,(file-remote-p "/mock::") "~" ,invocation-directory)))
+      (format "/mock::%s" temporary-file-directory)))
+  "Temporary directory for Tramp tests.")
 
 (setq auth-source-save-behavior nil
       password-cache-expiry nil
@@ -52,8 +80,13 @@
       tramp-verbose 0
       ;; On macOS, `temporary-file-directory' is a symlinked directory.
       temporary-file-directory (file-truename temporary-file-directory)
-      ert-remote-temporary-file-directory
-      (ignore-errors (file-truename ert-remote-temporary-file-directory)))
+      shadow-test-remote-temporary-file-directory
+      (ignore-errors
+        (file-truename shadow-test-remote-temporary-file-directory)))
+
+;; This should happen on hydra only.
+(when (getenv "EMACS_HYDRA_CI")
+  (add-to-list 'tramp-remote-path 'tramp-own-remote-path))
 
 (defconst shadow-test-info-file
   (expand-file-name "shadows_test" temporary-file-directory)
@@ -67,7 +100,7 @@
   "Reset all `shadowfile' internals."
   ;; Cleanup Tramp.
   (tramp-cleanup-connection
-   (tramp-dissect-file-name ert-remote-temporary-file-directory) t t)
+   (tramp-dissect-file-name shadow-test-remote-temporary-file-directory) t t)
   ;; Delete auto-saved files.
   (with-current-buffer (find-file-noselect shadow-info-file 'nowarn)
     (ignore-errors (delete-file (make-auto-save-file-name)))
@@ -102,7 +135,7 @@ a cluster (or site).  This is not tested here; it must be
 guaranteed by the originator of a cluster definition."
   :tags '(:expensive-test)
   (skip-unless (not (memq system-type '(windows-nt ms-dos))))
-  (skip-unless (file-remote-p ert-remote-temporary-file-directory))
+  (skip-unless (file-remote-p shadow-test-remote-temporary-file-directory))
 
   (let ((text-quoting-style 'grave) ;; We inspect the *Messages* buffer!
         (inhibit-message t)
@@ -189,7 +222,8 @@ guaranteed by the originator of a cluster definition."
 	    (shadow-cluster-regexp (shadow-get-cluster cluster)) regexp))
 
 	  ;; Redefine the cluster.
-	  (setq primary (file-remote-p ert-remote-temporary-file-directory)
+	  (setq primary
+		(file-remote-p shadow-test-remote-temporary-file-directory)
 		regexp (shadow-regexp-superquote primary)
 		mocked-input `(,cluster ,primary ,regexp))
 	  (call-interactively #'shadow-define-cluster)
@@ -220,7 +254,7 @@ Per definition, all files are identical on the different hosts of
 a cluster (or site).  This is not tested here; it must be
 guaranteed by the originator of a cluster definition."
   (skip-unless (not (memq system-type '(windows-nt ms-dos))))
-  (skip-unless (file-remote-p ert-remote-temporary-file-directory))
+  (skip-unless (file-remote-p shadow-test-remote-temporary-file-directory))
 
   (let ((shadow-info-file shadow-test-info-file)
 	(shadow-todo-file shadow-test-todo-file)
@@ -252,14 +286,14 @@ guaranteed by the originator of a cluster definition."
           (should (string-equal (system-name) (shadow-site-name primary1)))
           (should
            (string-equal
-            (file-remote-p ert-remote-temporary-file-directory)
+            (file-remote-p shadow-test-remote-temporary-file-directory)
             (shadow-name-site
-             (file-remote-p ert-remote-temporary-file-directory))))
+             (file-remote-p shadow-test-remote-temporary-file-directory))))
           (should
            (string-equal
-            (file-remote-p ert-remote-temporary-file-directory)
+            (file-remote-p shadow-test-remote-temporary-file-directory)
             (shadow-site-name
-             (file-remote-p ert-remote-temporary-file-directory))))
+             (file-remote-p shadow-test-remote-temporary-file-directory))))
 
           (should (equal (shadow-site-cluster cluster1)
 			 (shadow-get-cluster cluster1)))
@@ -290,7 +324,8 @@ guaranteed by the originator of a cluster definition."
 
 	  ;; Define a second cluster.
           (setq cluster2 "cluster2"
-		primary2 (file-remote-p ert-remote-temporary-file-directory)
+		primary2
+		(file-remote-p shadow-test-remote-temporary-file-directory)
 		regexp2 (format "^\\(%s\\|%s\\)$" shadow-system-name primary2))
 	  (shadow-set-cluster cluster2 primary2 regexp2)
 
@@ -321,7 +356,7 @@ guaranteed by the originator of a cluster definition."
 (ert-deftest shadow-test02-files ()
   "Check file manipulation functions."
   (skip-unless (not (memq system-type '(windows-nt ms-dos))))
-  (skip-unless (file-remote-p ert-remote-temporary-file-directory))
+  (skip-unless (file-remote-p shadow-test-remote-temporary-file-directory))
 
   (let ((shadow-info-file shadow-test-info-file)
 	(shadow-todo-file shadow-test-todo-file)
@@ -363,7 +398,8 @@ guaranteed by the originator of a cluster definition."
            (string-equal (shadow-local-file (concat primary file)) file))
 
 	  ;; Redefine the cluster.
-	  (setq primary (file-remote-p ert-remote-temporary-file-directory)
+	  (setq primary
+		(file-remote-p shadow-test-remote-temporary-file-directory)
 		regexp (shadow-regexp-superquote primary))
 	  (shadow-set-cluster cluster primary regexp)
 
@@ -392,7 +428,7 @@ guaranteed by the originator of a cluster definition."
 (ert-deftest shadow-test03-expand-cluster-in-file-name ()
   "Check canonical file name of a cluster or site."
   (skip-unless (not (memq system-type '(windows-nt ms-dos))))
-  (skip-unless (file-remote-p ert-remote-temporary-file-directory))
+  (skip-unless (file-remote-p shadow-test-remote-temporary-file-directory))
 
   (let ((shadow-info-file shadow-test-info-file)
 	(shadow-todo-file shadow-test-todo-file)
@@ -417,7 +453,8 @@ guaranteed by the originator of a cluster definition."
 		file2
 		(make-temp-name
 		 (expand-file-name
-                  "shadowfile-tests" ert-remote-temporary-file-directory)))
+		  "shadowfile-tests"
+		  shadow-test-remote-temporary-file-directory)))
 
           ;; A local file name is kept.
           (should
@@ -436,7 +473,8 @@ guaranteed by the originator of a cluster definition."
             (shadow-expand-cluster-in-file-name (concat primary file1)) file1))
 
 	  ;; Redefine the cluster.
-	  (setq primary (file-remote-p ert-remote-temporary-file-directory)
+	  (setq primary
+		(file-remote-p shadow-test-remote-temporary-file-directory)
 		regexp (shadow-regexp-superquote primary))
 	  (shadow-set-cluster cluster primary regexp)
 
@@ -457,7 +495,7 @@ guaranteed by the originator of a cluster definition."
 (ert-deftest shadow-test04-contract-file-name ()
   "Check canonical file name of a cluster or site."
   (skip-unless (not (memq system-type '(windows-nt ms-dos))))
-  (skip-unless (file-remote-p ert-remote-temporary-file-directory))
+  (skip-unless (file-remote-p shadow-test-remote-temporary-file-directory))
 
   (let ((shadow-info-file shadow-test-info-file)
 	(shadow-todo-file shadow-test-todo-file)
@@ -495,7 +533,8 @@ guaranteed by the originator of a cluster definition."
             (concat "/cluster:" file)))
 
 	  ;; Redefine the cluster.
-	  (setq primary (file-remote-p ert-remote-temporary-file-directory)
+	  (setq primary
+		(file-remote-p shadow-test-remote-temporary-file-directory)
 		regexp (shadow-regexp-superquote primary))
 	  (shadow-set-cluster cluster primary regexp)
 
@@ -503,7 +542,8 @@ guaranteed by the originator of a cluster definition."
           (should
            (string-equal
             (shadow-contract-file-name
-             (concat (file-remote-p ert-remote-temporary-file-directory) file))
+             (concat
+              (file-remote-p shadow-test-remote-temporary-file-directory) file))
             (concat "/cluster:" file))))
 
       ;; Cleanup.
@@ -512,7 +552,7 @@ guaranteed by the originator of a cluster definition."
 (ert-deftest shadow-test05-file-match ()
   "Check `shadow-same-site' and `shadow-file-match'."
   (skip-unless (not (memq system-type '(windows-nt ms-dos))))
-  (skip-unless (file-remote-p ert-remote-temporary-file-directory))
+  (skip-unless (file-remote-p shadow-test-remote-temporary-file-directory))
 
   (let ((shadow-info-file shadow-test-info-file)
 	(shadow-todo-file shadow-test-todo-file)
@@ -548,14 +588,17 @@ guaranteed by the originator of a cluster definition."
           (should (shadow-file-match (shadow-parse-name file) file))
 
 	  ;; Redefine the cluster.
-	  (setq primary (file-remote-p ert-remote-temporary-file-directory)
+	  (setq primary
+		(file-remote-p shadow-test-remote-temporary-file-directory)
 		regexp (shadow-regexp-superquote primary))
 	  (shadow-set-cluster cluster primary regexp)
 
           (should
 	   (shadow-file-match
 	    (shadow-parse-name
-	     (concat (file-remote-p ert-remote-temporary-file-directory) file))
+	     (concat
+	      (file-remote-p shadow-test-remote-temporary-file-directory)
+	      file))
 	    file)))
 
       ;; Cleanup.
@@ -564,7 +607,7 @@ guaranteed by the originator of a cluster definition."
 (ert-deftest shadow-test06-literal-groups ()
   "Check literal group definitions."
   (skip-unless (not (memq system-type '(windows-nt ms-dos))))
-  (skip-unless (file-remote-p ert-remote-temporary-file-directory))
+  (skip-unless (file-remote-p shadow-test-remote-temporary-file-directory))
 
   (let ((shadow-info-file shadow-test-info-file)
 	(shadow-todo-file shadow-test-todo-file)
@@ -589,7 +632,8 @@ guaranteed by the originator of a cluster definition."
 	  (shadow-set-cluster cluster1 primary regexp)
 
 	  (setq cluster2 "cluster2"
-		primary (file-remote-p ert-remote-temporary-file-directory)
+		primary
+		(file-remote-p shadow-test-remote-temporary-file-directory)
 		regexp (format "^\\(%s\\|%s\\)$" shadow-system-name primary))
 	  (shadow-set-cluster cluster2 primary regexp)
 
@@ -600,7 +644,8 @@ guaranteed by the originator of a cluster definition."
 		file2
 		(make-temp-name
 		 (expand-file-name
-		  "shadowfile-tests" ert-remote-temporary-file-directory))
+		  "shadowfile-tests"
+		  shadow-test-remote-temporary-file-directory))
 		mocked-input
                 `(,cluster1 ,file1 ,cluster2 ,file2
                   ,primary ,file1 ,(kbd "RET")))
@@ -649,7 +694,7 @@ guaranteed by the originator of a cluster definition."
 (ert-deftest shadow-test07-regexp-groups ()
   "Check regexp group definitions."
   (skip-unless (not (memq system-type '(windows-nt ms-dos))))
-  (skip-unless (file-remote-p ert-remote-temporary-file-directory))
+  (skip-unless (file-remote-p shadow-test-remote-temporary-file-directory))
 
   (let ((shadow-info-file shadow-test-info-file)
 	(shadow-todo-file shadow-test-todo-file)
@@ -674,7 +719,8 @@ guaranteed by the originator of a cluster definition."
 	  (shadow-set-cluster cluster1 primary regexp)
 
 	  (setq cluster2 "cluster2"
-		primary (file-remote-p ert-remote-temporary-file-directory)
+		primary
+		(file-remote-p shadow-test-remote-temporary-file-directory)
 		regexp (format "^\\(%s\\|%s\\)$" shadow-system-name primary))
 	  (shadow-set-cluster cluster2 primary regexp)
 
@@ -711,8 +757,8 @@ guaranteed by the originator of a cluster definition."
 (ert-deftest shadow-test08-shadow-todo ()
   "Check that needed shadows are added to todo."
   (skip-unless (not (memq system-type '(windows-nt ms-dos))))
-  (skip-unless (file-remote-p ert-remote-temporary-file-directory))
-  (skip-unless (file-writable-p ert-remote-temporary-file-directory))
+  (skip-unless (file-remote-p shadow-test-remote-temporary-file-directory))
+  (skip-unless (file-writable-p shadow-test-remote-temporary-file-directory))
 
   (let ((backup-inhibited t)
         create-lockfiles
@@ -732,7 +778,7 @@ guaranteed by the originator of a cluster definition."
             (message
              "%s %s %s %s %s"
              temporary-file-directory
-             ert-remote-temporary-file-directory
+             shadow-test-remote-temporary-file-directory
              shadow-homedir shadow-info-file shadow-todo-file))
 
           ;; Define clusters.
@@ -746,7 +792,8 @@ guaranteed by the originator of a cluster definition."
              cluster1 primary regexp shadow-clusters))
 
 	  (setq cluster2 "cluster2"
-		primary (file-remote-p ert-remote-temporary-file-directory)
+		primary
+		(file-remote-p shadow-test-remote-temporary-file-directory)
 		regexp (shadow-regexp-superquote primary))
 	  (shadow-set-cluster cluster2 primary regexp)
           (when shadow-debug
@@ -856,8 +903,8 @@ guaranteed by the originator of a cluster definition."
   "Check that needed shadow files are copied."
   :tags '(:expensive-test)
   (skip-unless (not (memq system-type '(windows-nt ms-dos))))
-  (skip-unless (file-remote-p ert-remote-temporary-file-directory))
-  (skip-unless (file-writable-p ert-remote-temporary-file-directory))
+  (skip-unless (file-remote-p shadow-test-remote-temporary-file-directory))
+  (skip-unless (file-writable-p shadow-test-remote-temporary-file-directory))
 
   (let ((backup-inhibited t)
         create-lockfiles
@@ -881,7 +928,8 @@ guaranteed by the originator of a cluster definition."
 	  (shadow-set-cluster cluster1 primary regexp)
 
 	  (setq cluster2 "cluster2"
-		primary (file-remote-p ert-remote-temporary-file-directory)
+		primary
+		(file-remote-p shadow-test-remote-temporary-file-directory)
 		regexp (shadow-regexp-superquote primary))
 	  (shadow-set-cluster cluster2 primary regexp)
 

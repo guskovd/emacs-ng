@@ -1,12 +1,12 @@
 ;;; ob-perl.el --- Babel Functions for Perl          -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2009-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2009-2022 Free Software Foundation, Inc.
 
 ;; Authors: Dan Davison
 ;;	 Eric Schulte
-;; Maintainer: Corwin Brust <corwin@bru.st>
+;; Maintainer: Corwin Brust
 ;; Keywords: literate programming, reproducible research
-;; URL: https://orgmode.org
+;; Homepage: https://orgmode.org
 
 ;; This file is part of GNU Emacs.
 
@@ -28,10 +28,6 @@
 ;; Org-Babel support for evaluating perl source code.
 
 ;;; Code:
-
-(require 'org-macs)
-(org-assert-version)
-
 (require 'ob)
 
 (defvar org-babel-tangle-lang-exts)

@@ -1,6 +1,6 @@
 ;;; gnus-icalendar.el --- reply to iCalendar meeting requests  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2013-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2013-2022 Free Software Foundation, Inc.
 
 ;; Author: Jan Tatarik <Jan.Tatarik@gmail.com>
 ;; Keywords: mail, icalendar, org
@@ -165,7 +165,7 @@
                        (icalendar--get-event-property-attributes
                         event field) zone-map))
          (dtdate-dec (icalendar--decode-isodatetime dtdate nil dtdate-zone)))
-    (when dtdate-dec (encode-time dtdate-dec))))
+    (encode-time dtdate-dec)))
 
 (defun gnus-icalendar-event--find-attendee (ical name-or-email)
   (let* ((event (car (icalendar--all-events ical)))
@@ -194,11 +194,7 @@
                           (caddr event))))
 
     (cl-labels
-	((attendee-role (prop)
-                        ;; RFC5546: default ROLE is REQ-PARTICIPANT
-                        (and prop
-                             (or (plist-get (cadr prop) 'ROLE)
-                                 "REQ-PARTICIPANT")))
+	((attendee-role (prop) (plist-get (cadr prop) 'ROLE))
 	 (attendee-name
 	  (prop)
 	  (or (plist-get (cadr prop) 'CN)
@@ -229,10 +225,7 @@
                      (gnus-icalendar-event--find-attendee
                       ical attendee-name-or-email)))
          (attendee-names (gnus-icalendar-event--get-attendee-names ical))
-         ;; RFC5546: default ROLE is REQ-PARTICIPANT
-         (role (and attendee
-                    (or (plist-get (cadr attendee) 'ROLE)
-                        "REQ-PARTICIPANT")))
+         (role (plist-get (cadr attendee) 'ROLE))
          (participation-type (pcase role
                                ("REQ-PARTICIPANT" 'required)
                                ("OPT-PARTICIPANT" 'optional)
@@ -352,16 +345,10 @@ status will be retrieved from the first matching attendee record."
 
       (mapc #'process-event-line (split-string ical-request "\n"))
 
-      ;; RFC5546 refers to uninvited attendees as "party crashers".
-      ;; This situation is common if the invitation is sent to a group
-      ;; of people via a mailing list.
       (unless (gnus-icalendar-find-if (lambda (x) (string-match "^ATTENDEE" x))
 				      reply-event-lines)
         (lwarn 'gnus-icalendar :warning
-               "Could not find an event attendee matching given identity")
-        (push (format "ATTENDEE;RSVP=TRUE;PARTSTAT=%s;CN=%s:MAILTO:%s"
-                      attendee-status user-full-name user-mail-address)
-              reply-event-lines))
+               "Could not find an event attendee matching given identity"))
 
       (mapconcat #'identity `("BEGIN:VEVENT"
                               ,@(nreverse reply-event-lines)
@@ -603,7 +590,7 @@ is searched."
     (when file
       (switch-to-buffer (find-file file))
       (goto-char (org-find-entry-with-id (gnus-icalendar-event:uid event)))
-      (org-fold-show-entry))))
+      (org-show-entry))))
 
 
 (defun gnus-icalendar--update-org-event (event reply-status &optional org-file)
@@ -830,12 +817,11 @@ These will be used to retrieve the RSVP information from ical events."
 (defmacro gnus-icalendar-with-decoded-handle (handle &rest body)
   "Execute BODY in buffer containing the decoded contents of HANDLE."
   (let ((charset (make-symbol "charset")))
-    `(let ((,charset (downcase
-		      (or (cdr (assoc 'charset (mm-handle-type ,handle)))
-			  "utf-8"))))
+    `(let ((,charset (cdr (assoc 'charset (mm-handle-type ,handle)))))
        (with-temp-buffer
          (mm-insert-part ,handle)
-         (decode-coding-region (point-min) (point-max) (intern ,charset))
+         (when (and ,charset (string= (downcase ,charset) "utf-8"))
+           (decode-coding-region (point-min) (point-max) 'utf-8))
          ,@body))))
 
 
@@ -861,14 +847,10 @@ These will be used to retrieve the RSVP information from ical events."
        button t
        gnus-data ,data))))
 
-(defun gnus-icalendar-send-buffer-by-mail (buffer-name subject organizer)
+(defun gnus-icalendar-send-buffer-by-mail (buffer-name subject)
   (let ((message-signature nil))
     (with-current-buffer gnus-summary-buffer
       (gnus-summary-reply)
-      ;; Reply to the organizer, not to whoever sent the invitation. person
-      ;; Some calendar systems use specific email address as organizer to
-      ;; receive these responses.
-      (message-replace-header "To" organizer)
       (message-goto-body)
       (mml-insert-multipart "alternative")
       (mml-insert-empty-tag 'part 'type "text/plain")
@@ -884,8 +866,7 @@ These will be used to retrieve the RSVP information from ical events."
          (event (caddr data))
          (reply (gnus-icalendar-with-decoded-handle handle
                   (gnus-icalendar-event-reply-from-buffer
-                   (current-buffer) status (gnus-icalendar-identities))))
-         (organizer (gnus-icalendar-event:organizer event)))
+                   (current-buffer) status (gnus-icalendar-identities)))))
 
     (when reply
       (cl-labels
@@ -902,7 +883,7 @@ These will be used to retrieve the RSVP information from ical events."
             (delete-region (point-min) (point-max))
             (insert reply)
             (fold-icalendar-buffer)
-            (gnus-icalendar-send-buffer-by-mail (buffer-name) subject organizer))
+            (gnus-icalendar-send-buffer-by-mail (buffer-name) subject))
 
           ;; Back in article buffer
           (setq-local gnus-icalendar-reply-status status)
@@ -916,16 +897,10 @@ These will be used to retrieve the RSVP information from ical events."
   (gnus-icalendar-event:sync-to-org event gnus-icalendar-reply-status))
 
 (cl-defmethod gnus-icalendar-event:inline-reply-buttons ((event gnus-icalendar-event) handle)
-  (let ((accept-btn "Accept")
-        (tentative-btn "Tentative")
-        (decline-btn "Decline"))
-    (unless (gnus-icalendar-event:rsvp event)
-      (setq accept-btn "Uninvited Accept"
-            tentative-btn "Uninvited Tentative"
-            decline-btn "Uninvited Decline"))
-    `((,accept-btn gnus-icalendar-reply (,handle accepted ,event))
-      (,tentative-btn gnus-icalendar-reply (,handle tentative ,event))
-      (,decline-btn gnus-icalendar-reply (,handle declined ,event)))))
+  (when (gnus-icalendar-event:rsvp event)
+    `(("Accept" gnus-icalendar-reply (,handle accepted ,event))
+      ("Tentative" gnus-icalendar-reply (,handle tentative ,event))
+      ("Decline" gnus-icalendar-reply (,handle declined ,event)))))
 
 (cl-defmethod gnus-icalendar-event:inline-reply-buttons ((_event gnus-icalendar-event-reply) _handle)
   "No buttons for REPLY events."
@@ -1063,14 +1038,13 @@ These will be used to retrieve the RSVP information from ical events."
   (add-to-list 'mm-automatic-display "text/calendar")
   (add-to-list 'mm-inline-media-tests '("text/calendar" gnus-icalendar-mm-inline identity))
 
-  (define-key gnus-summary-mode-map "i"
-    (define-keymap :prefix 'gnus-summary-calendar-map
-      "a" #'gnus-icalendar-reply-accept
-      "t" #'gnus-icalendar-reply-tentative
-      "d" #'gnus-icalendar-reply-decline
-      "c" #'gnus-icalendar-event-check-agenda
-      "e" #'gnus-icalendar-event-export
-      "s" #'gnus-icalendar-event-show))
+  (gnus-define-keys (gnus-summary-calendar-map "i" gnus-summary-mode-map)
+    "a" gnus-icalendar-reply-accept
+    "t" gnus-icalendar-reply-tentative
+    "d" gnus-icalendar-reply-decline
+    "c" gnus-icalendar-event-check-agenda
+    "e" gnus-icalendar-event-export
+    "s" gnus-icalendar-event-show)
 
   (require 'gnus-art)
   (add-to-list 'gnus-mime-action-alist

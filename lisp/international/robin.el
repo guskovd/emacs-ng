@@ -393,6 +393,8 @@ A nil value means no package is selected.")
   (interactive)
   (robin-activate -1))
 
+(define-obsolete-function-alias 'robin-inactivate 'robin-deactivate "24.3")
+
 (defun robin-activate (&optional arg)
   "Activate robin input method.
 
@@ -420,6 +422,10 @@ While this input method is active, the variable
     (run-hooks 'input-method-activate-hook
 	       'robin-activate-hook)
     (setq-local input-method-function 'robin-input-method)))
+
+(define-obsolete-variable-alias
+  'robin-inactivate-hook
+  'robin-deactivate-hook "24.3")
 
 (defun robin-exit-from-minibuffer ()
   (deactivate-input-method)
@@ -523,10 +529,10 @@ Use the longest match method to select a rule."
       (insert (cadr tree))
       (delete-char (- end begin)))))
 
-(define-obsolete-function-alias 'robin-transliterate-region
-  #'robin-convert-region "29.1")
-(define-obsolete-function-alias 'robin-transliterate-buffer
-  #'robin-convert-buffer "29.1")
+;; for backward compatibility
+
+(fset 'robin-transliterate-region 'robin-convert-region)
+(fset 'robin-transliterate-buffer 'robin-convert-buffer)
 
 ;;; Reverse conversion
 

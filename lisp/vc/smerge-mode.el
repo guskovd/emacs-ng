@@ -1,6 +1,6 @@
 ;;; smerge-mode.el --- Minor mode to resolve diff3 conflicts -*- lexical-binding: t -*-
 
-;; Copyright (C) 1999-2023 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2022 Free Software Foundation, Inc.
 
 ;; Author: Stefan Monnier <monnier@iro.umontreal.ca>
 ;; Keywords: vc, tools, revision control, merge, diff3, cvs, conflict
@@ -23,10 +23,11 @@
 ;;; Commentary:
 
 ;; Provides a lightweight alternative to emerge/ediff.
+;; To use it, simply add to your .emacs the following lines:
 ;;
-;; To use it, simply type `M-x smerge-mode'.
+;;   (autoload 'smerge-mode "smerge-mode" nil t)
 ;;
-;; You can even have it turned on automatically with the following
+;; you can even have it turned on automatically with the following
 ;; piece of code in your .emacs:
 ;;
 ;;   (defun sm-try-smerge ()
@@ -46,7 +47,6 @@
 (require 'diff)				;For diff-check-labels.
 (require 'diff-mode)                    ;For diff-refine.
 (require 'newcomment)
-(require 'easy-mmode)
 
 ;;; The real definition comes later.
 (defvar smerge-mode)
@@ -142,34 +142,36 @@ Used in `smerge-diff-base-upper' and related functions."
   "Face used for added characters shown by `smerge-refine'."
   :version "24.3")
 
-(defvar-keymap smerge-basic-map
-  "n" #'smerge-next
-  "p" #'smerge-prev
-  "r" #'smerge-resolve
-  "a" #'smerge-keep-all
-  "b" #'smerge-keep-base
-  "o" #'smerge-keep-lower               ; for the obsolete keep-other
-  "l" #'smerge-keep-lower
-  "m" #'smerge-keep-upper               ; for the obsolete keep-mine
-  "u" #'smerge-keep-upper
-  "E" #'smerge-ediff
-  "C" #'smerge-combine-with-next
-  "R" #'smerge-refine
-  "C-m" #'smerge-keep-current
-  "=" (define-keymap :name "Diff"
-        "<" (cons "base-upper" #'smerge-diff-base-upper)
-        ">" (cons "base-lower" #'smerge-diff-base-lower)
-        "=" (cons "upper-lower" #'smerge-diff-upper-lower)))
+(easy-mmode-defmap smerge-basic-map
+  `(("n" . smerge-next)
+    ("p" . smerge-prev)
+    ("r" . smerge-resolve)
+    ("a" . smerge-keep-all)
+    ("b" . smerge-keep-base)
+    ("o" . smerge-keep-lower)           ; for the obsolete keep-other
+    ("l" . smerge-keep-lower)
+    ("m" . smerge-keep-upper)           ; for the obsolete keep-mine
+    ("u" . smerge-keep-upper)
+    ("E" . smerge-ediff)
+    ("C" . smerge-combine-with-next)
+    ("R" . smerge-refine)
+    ("\C-m" . smerge-keep-current)
+    ("=" . ,(make-sparse-keymap "Diff"))
+    ("=<" "base-upper" . smerge-diff-base-upper)
+    ("=>" "base-lower" . smerge-diff-base-lower)
+    ("==" "upper-lower" . smerge-diff-upper-lower))
+  "The base keymap for `smerge-mode'.")
 
 (defcustom smerge-command-prefix "\C-c^"
   "Prefix for `smerge-mode' commands."
   :type '(choice (const :tag "ESC"   "\e")
-		 (const :tag "C-c ^" "\C-c^")
+		 (const :tag "C-c ^" "\C-c^" )
 		 (const :tag "none"  "")
 		 string))
 
-(defvar-keymap smerge-mode-map
-  (key-description smerge-command-prefix) smerge-basic-map)
+(easy-mmode-defmap smerge-mode-map
+  `((,smerge-command-prefix . ,smerge-basic-map))
+  "Keymap for `smerge-mode'.")
 
 (defvar-local smerge-check-cache nil)
 (defun smerge-check (n)
@@ -924,11 +926,8 @@ Its behavior has mainly two restrictions:
   to `smerge-refine-regions'.
   This only matters if `smerge-refine-weight-hack' is nil.")
 
-(defcustom smerge-refine-ignore-whitespace t
-  "If non-nil, `smerge-refine' should try to ignore change in whitespace."
-  :type 'boolean
-  :version "29.1"
-  :group 'diff)
+(defvar smerge-refine-ignore-whitespace t
+  "If non-nil, `smerge-refine' should try to ignore change in whitespace.")
 
 (defvar smerge-refine-weight-hack t
   "If non-nil, pass to diff as many lines as there are chars in the region.

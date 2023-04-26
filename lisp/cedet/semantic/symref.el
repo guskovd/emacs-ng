@@ -1,6 +1,6 @@
 ;;; semantic/symref.el --- Symbol Reference API  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2008-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2008-2022 Free Software Foundation, Inc.
 
 ;; Author: Eric M. Ludlam <zappo@gnu.org>
 
@@ -101,7 +101,7 @@ Where PREDICATE is a function that takes a directory name for the
 root of a project, and returns non-nil if the tool represented by KEY
 is supported.
 
-If no tools are supported, then `grep' is assumed.")
+If no tools are supported, then 'grep is assumed.")
 
 (defun semantic-symref-calculate-rootdir ()
   "Calculate the root directory for a symref search.
@@ -388,8 +388,7 @@ Each element is a cons cell of the form (LINE . FILENAME).")
 	     :type list
 	     :documentation
 	     "The list of tags with hits in them.
-Use the `semantic-symref-hit-to-tag-via-buffer' method to get
-this list.")
+Use the `semantic-symref-hit-tags' method to get this list.")
    )
   "The results from a symbol reference search.")
 
@@ -476,7 +475,7 @@ already."
 Return the Semantic tag associated with HIT.
 SEARCHTXT is the text that is being searched for.
 Used to narrow the in-buffer search.
-SEARCHTYPE is the type of search (such as `symbol' or `tagname').
+SEARCHTYPE is the type of search (such as 'symbol or 'tagname).
 If there is no database, or if the searchtype is wrong, return nil."
   ;; Allowed search types for this mechanism:
   ;; tagname, tagregexp, tagcompletions
@@ -507,7 +506,7 @@ If there is no database, or if the searchtype is wrong, return nil."
 Return the Semantic tag associated with HIT.
 SEARCHTXT is the text that is being searched for.
 Used to narrow the in-buffer search.
-SEARCHTYPE is the type of search (such as `symbol' or `tagname').
+SEARCHTYPE is the type of search (such as 'symbol or 'tagname).
 Optional OPEN-BUFFERS, when nil will use a faster version of
 `find-file' when a file needs to be opened.  If non-nil, then
 normal buffer initialization will be used.
@@ -556,7 +555,7 @@ deleting the buffers that were opened."
     (when (re-search-forward (if (memq searchtype '(regexp tagregexp))
                                  searchtxt
                                (regexp-quote searchtxt))
-                             (line-end-position)
+			     (point-at-eol)
 			     t)
       (goto-char (match-beginning 0))
       )

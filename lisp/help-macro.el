@@ -1,6 +1,6 @@
 ;;; help-macro.el --- makes command line help such as help-for-help  -*- lexical-binding: t -*-
 
-;; Copyright (C) 1993-1994, 2001-2023 Free Software Foundation, Inc.
+;; Copyright (C) 1993-1994, 2001-2022 Free Software Foundation, Inc.
 
 ;; Author: Lynn Slater <lrs@indetech.com>
 ;; Maintainer: emacs-devel@gnu.org
@@ -93,8 +93,7 @@ and then returns."
      "Help command."
      (interactive)
      (let ((line-prompt
-            (substitute-command-keys ,help-line))
-           (help-buffer-under-preparation t))
+            (substitute-command-keys ,help-line)))
        (when three-step-help
          (message "%s" line-prompt))
        (let* ((help-screen ,help-text)
@@ -141,22 +140,21 @@ and then returns."
                    (insert (substitute-command-keys help-screen)))
                  (let ((minor-mode-map-alist new-minor-mode-map-alist))
                    (help-mode)
-                   (variable-pitch-mode)
                    (setq new-minor-mode-map-alist minor-mode-map-alist))
                  (goto-char (point-min))
                  (while (or (memq char (append help-event-list
                                                (cons help-char '( ?? ?\C-v ?\s ?\177 ?\M-v ?\S-\s
                                                                   deletechar backspace vertical-scroll-bar
-                                                                  home end next prior up down))))
+                                                                  next prior up down))))
                             (eq (car-safe char) 'switch-frame)
                             (equal key "\M-v"))
                    (condition-case nil
                        (cond
                         ((eq (car-safe char) 'switch-frame)
                          (handle-switch-frame char))
-                        ((memq char '(?\C-v ?\s next end))
+                        ((memq char '(?\C-v ?\s next))
                          (scroll-up))
-                        ((or (memq char '(?\177 ?\M-v ?\S-\s deletechar backspace prior home))
+                        ((or (memq char '(?\177 ?\M-v ?\S-\s deletechar backspace prior))
                              (equal key "\M-v"))
                          (scroll-down))
                         ((memq char '(down))
@@ -210,11 +208,7 @@ and then returns."
                            (unless (eq new-frame (selected-frame))
                              (iconify-frame new-frame))
                            (setq new-frame nil)))
-                     (unless (equal (key-description key) "C-g")
-                       (message (substitute-command-keys
-                                (format "No help command is bound to `\\`%s''"
-                                        (key-description key))))
-                       (ding))))))
+                     (ding)))))
            (when config
              (set-window-configuration config))
            (when new-frame

@@ -1,6 +1,6 @@
 ;;; advice.el --- An overloading mechanism for Emacs Lisp functions  -*- lexical-binding: t -*-
 
-;; Copyright (C) 1993-2023 Free Software Foundation, Inc.
+;; Copyright (C) 1993-1994, 2000-2022 Free Software Foundation, Inc.
 
 ;; Author: Hans Chalupsky <hans@cs.buffalo.edu>
 ;; Maintainer: emacs-devel@gnu.org
@@ -22,6 +22,12 @@
 
 ;; You should have received a copy of the GNU General Public License
 ;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
+
+;; LCD Archive Entry:
+;; advice|Hans Chalupsky|hans@cs.buffalo.edu|
+;; Overloading mechanism for Emacs Lisp functions|
+;; 1994/08/05 03:42:04|2.14|~/packages/advice.el.Z|
+
 
 ;;; Commentary:
 
@@ -1054,9 +1060,9 @@
 ;;   (print "Let's clean up now!"))
 ;; foo
 ;;
-;; Now `foo's advice is compiled:
+;; Now `foo's advice is byte-compiled:
 ;;
-;; (compiled-function-p 'ad-Advice-foo)
+;; (byte-code-function-p 'ad-Advice-foo)
 ;; t
 ;;
 ;; (foo 3)
@@ -1298,7 +1304,7 @@
 ;; constructed during preactivation was used, even though we did not specify
 ;; the `compile' flag:
 ;;
-;; (compiled-function-p 'ad-Advice-fum)
+;; (byte-code-function-p 'ad-Advice-fum)
 ;; t
 ;;
 ;; (fum 2)
@@ -1329,7 +1335,7 @@
 ;;
 ;; A new uncompiled advised definition got constructed:
 ;;
-;; (compiled-function-p 'ad-Advice-fum)
+;; (byte-code-function-p 'ad-Advice-fum)
 ;; nil
 ;;
 ;; (fum 2)
@@ -1580,6 +1586,8 @@
   :link '(custom-manual "(elisp)Advising Functions")
   :group 'lisp)
 
+(defconst ad-version "2.14")
+
 ;;;###autoload
 (defcustom ad-redefinition-action 'warn
   "Defines what to do with redefinitions during Advice de/activation.
@@ -1806,7 +1814,8 @@ Redefining advices affect the construction of an advised definition."
   (if (symbolp function)
       (setq function (if (fboundp function)
                          (advice--strip-macro (symbol-function function)))))
-  (advice--cd*r function))
+  (while (advice--p function) (setq function (advice--cdr function)))
+  function)
 
 (defun ad-clear-advicefunname-definition (function)
   (let ((advicefunname (ad-get-advice-info-field function 'advicefunname)))
@@ -1850,7 +1859,7 @@ function at point for which PREDICATE returns non-nil)."
 	   ad-advised-functions
 	   (if predicate
                (lambda (function)
-                 (funcall predicate (intern function))))
+                 (funcall predicate (intern (car function)))))
 	   t)))
     (if (equal function "")
 	(if (ad-is-advised default)
@@ -2116,9 +2125,9 @@ the cache-id will clear the cache."
 
 (defsubst ad-compiled-p (definition)
   "Return non-nil if DEFINITION is a compiled byte-code object."
-  (or (compiled-function-p definition)
-      (and (macrop definition)
-           (compiled-function-p (ad-lambdafy definition)))))
+  (or (byte-code-function-p definition)
+       (and (macrop definition)
+            (byte-code-function-p (ad-lambdafy definition)))))
 
 (defsubst ad-compiled-code (compiled-definition)
   "Return the byte-code object of a COMPILED-DEFINITION."
@@ -3247,9 +3256,6 @@ Use only in REAL emergencies."
   (ad-do-advised-functions (function)
     (message "Oops! Left over advised function %S" function)
     (ad-pop-advised-function function)))
-
-(defconst ad-version "2.14")
-(make-obsolete-variable 'ad-version 'emacs-version "29.1")
 
 (provide 'advice)
 

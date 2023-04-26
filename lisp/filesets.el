@@ -1,6 +1,6 @@
 ;;; filesets.el --- handle group of files  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2002-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2002-2022 Free Software Foundation, Inc.
 
 ;; Author: Thomas Link <sanobast-emacs@yahoo.de>
 ;; Maintainer: emacs-devel@gnu.org
@@ -146,16 +146,29 @@ is loaded before user customizations.  Thus, if (require \\='filesets)
 precedes the `custom-set-variables' command or, for XEmacs, if init.el
 is loaded before custom.el, set this variable to t.")
 
+
+;;; utils
 (defun filesets-filter-list (lst cond-fn)
   "Remove all elements not conforming to COND-FN from list LST.
 COND-FN takes one argument: the current element."
-  (declare (obsolete seq-filter "29.1"))
-  (seq-filter cond-fn lst))
+;  (cl-remove 'dummy lst :test (lambda (dummy elt)
+;			      (not (funcall cond-fn elt)))))
+  (let ((rv nil))
+    (dolist (elt lst)
+      (when (funcall cond-fn elt)
+	(push elt rv)))
+    (nreverse rv)))
 
 (defun filesets-ormap (fsom-pred lst)
   "Return the tail of LST for the head of which FSOM-PRED is non-nil."
-  (declare (obsolete seq-drop-while "29.1"))
-  (seq-drop-while (lambda (x) (not (funcall fsom-pred x))) lst))
+  (let ((fsom-lst lst)
+	(fsom-rv nil))
+    (while (and fsom-lst
+		(null fsom-rv))
+      (if (funcall fsom-pred (car fsom-lst))
+	  (setq fsom-rv fsom-lst)
+	(setq fsom-lst (cdr fsom-lst))))
+    fsom-rv))
 
 (define-obsolete-function-alias 'filesets-some #'cl-some "28.1")
 (define-obsolete-function-alias 'filesets-member #'cl-member "28.1")
@@ -195,7 +208,7 @@ COND-FN takes one argument: the current element."
 (defun filesets-reset-fileset (&optional fileset no-cache)
   "Reset the cached values for one or all filesets."
   (setq filesets-submenus (if fileset
-                              (plist-put filesets-submenus fileset nil #'equal)
+                              (lax-plist-put filesets-submenus fileset nil)
                             nil))
   (setq filesets-has-changed-flag t)
   (setq filesets-update-cache-file-flag (or filesets-update-cache-file-flag
@@ -244,13 +257,13 @@ SYM to VAL and return t.  If INIT-FLAG is non-nil, set with
       (setq filesets-menu-use-cached-flag nil)
     (when (default-boundp 'filesets-data)
       (let ((modified-filesets
-             (seq-filter (lambda (x)
-                           (let ((name (car x))
-                                 (data (cdr x)))
-                             (let ((elt (assoc name filesets-data)))
-                               (or (not elt)
-                                   (not (equal data (cdr elt)))))))
-                         val)))
+	     (filesets-filter-list val
+				   (lambda (x)
+				     (let ((name (car x))
+					   (data (cdr x)))
+				       (let ((elt (assoc name filesets-data)))
+					 (or (not elt)
+					     (not (equal data (cdr elt))))))))))
 	(dolist (x modified-filesets)
 	  (filesets-reset-fileset (car x))))))
   (filesets-set-default sym val))
@@ -313,8 +326,8 @@ See `easy-menu-add-item' for documentation."
 Set this to \"\", to disable caching of menus.
 Don't forget to check out `filesets-menu-ensure-use-cached'."
   :set #'filesets-set-default
-  :type 'file
-  :risky t)
+  :type 'file)
+(put 'filesets-menu-cache-file 'risky-local-variable t)
 
 (defcustom filesets-menu-cache-contents
   '(filesets-be-docile-flag
@@ -358,6 +371,8 @@ Don't forget to check out `filesets-menu-ensure-use-cached'."
 			 :value filesets-be-docile-flag)
 		  (sexp :tag "Other" :value nil))))
 
+(define-obsolete-variable-alias 'filesets-cache-fill-content-hooks
+  'filesets-cache-fill-content-hook "24.3")
 (defcustom filesets-cache-fill-content-hook nil
   "Hook run when writing the contents of filesets' cache file.
 
@@ -399,12 +414,12 @@ time to time or if the fileset cache causes troubles."
 Set this value to 0 to turn menu splitting off.  BTW, parts of submenus
 will not be rewrapped if their length exceeds this value."
   :set #'filesets-set-default
-  :type 'natnum)
+  :type 'integer)
 
 (defcustom filesets-max-entry-length 50
   "Truncate names of split submenus to this length."
   :set #'filesets-set-default
-  :type 'natnum)
+  :type 'integer)
 
 (defcustom filesets-browse-dir-function #'dired
   "A function or command used for browsing directories.
@@ -503,7 +518,7 @@ i.e. how deep the menu should be.  Try something like
 and it should become clear what this option is about.  In any case,
 including directory trees to the menu can take a lot of memory."
   :set #'filesets-set-default
-  :type 'natnum)
+  :type 'integer)
 
 (defcustom filesets-commands
   '(("Isearch"
@@ -531,7 +546,6 @@ function that returns one) to be run on a filesets' files.
 The argument <file-name> or <<file-name>> (quoted) will be replaced with
 the filename."
   :set #'filesets-set-default+
-  :risky t
   :type '(repeat :tag "Commands"
 		 (list :tag "Definition" :value ("")
 		       (string "Name")
@@ -547,7 +561,8 @@ the filename."
 				       (string :tag "Quoted File Name"
 					       :value "<<file-name>>")
 				       (function :tag "Function"
-                                                 :value nil))))))
+						 :value nil))))))
+(put 'filesets-commands 'risky-local-variable t)
 
 (defcustom filesets-external-viewers
   (let
@@ -636,7 +651,6 @@ In order to view pdf or rtf files in an Emacs buffer, you could use these:
 			(and (filesets-which-command-p \"rtf2htm\")
 			     (filesets-which-command-p \"w3m\"))))))"
   :set #'filesets-set-default
-  :risky t
   :type '(repeat :tag "Viewer"
 		 (list :tag "Definition"
 		       :value ("^.+\\.suffix$" "")
@@ -693,6 +707,7 @@ In order to view pdf or rtf files in an Emacs buffer, you could use these:
 				      (const  :format ""
 					      :value :capture-output)
 				      (boolean :tag "Boolean")))))))
+(put 'filesets-external-viewers 'risky-local-variable t)
 
 (defcustom filesets-ingroup-patterns
   '(("^.+\\.tex$" t
@@ -833,7 +848,6 @@ With duplicates removed, it would be:
     M + A - X
         B"
   :set #'filesets-set-default
-  :risky t
   :type '(repeat
 	  :tag "Include"
 	  (list
@@ -880,6 +894,7 @@ With duplicates removed, it would be:
 				  :value (:preprocess)
 				  (const :format "" :value :preprocess)
 				  (function :tag "Function"))))))))
+(put 'filesets-ingroup-patterns 'risky-local-variable t)
 
 (defcustom filesets-data nil
   "Fileset definitions.
@@ -950,7 +965,6 @@ is used.
 Before using :ingroup, make sure that the file type is already
 defined in `filesets-ingroup-patterns'."
   :set #'filesets-data-set-default
-  :risky t
   :type '(repeat
 	  (cons :tag "Fileset"
 		(string :tag "Name" :value "")
@@ -1007,23 +1021,24 @@ defined in `filesets-ingroup-patterns'."
 			       :value (:open)
 			       (const :format "" :value :open)
 			       (function :tag "Function")))))))
+(put 'filesets-data 'risky-local-variable t)
 
 
 (defcustom filesets-query-user-limit 15
   "Query the user before opening a fileset with that many files."
   :set #'filesets-set-default
-  :type 'natnum)
+  :type 'integer)
 
 
 (defun filesets-filter-dir-names (lst &optional negative)
   "Remove non-directory names from a list of strings.
 If NEGATIVE is non-nil, remove all directory names."
-  (seq-filter (lambda (x)
-                (and (not (string-match-p "^\\.+/$" x))
-                     (if negative
-                         (not (string-match-p "[:/\\]$" x))
-                       (string-match-p "[:/\\]$" x))))
-              lst))
+  (filesets-filter-list lst
+			(lambda (x)
+			  (and (not (string-match-p "^\\.+/$" x))
+			       (if negative
+				   (not (string-match-p "[:/\\]$" x))
+				 (string-match-p "[:/\\]$" x))))))
 
 (defun filesets-conditional-sort (lst &optional access-fn)
   "Return a sorted copy of LST, LST being a list of strings.
@@ -1668,9 +1683,9 @@ Assume MODE (see `filesets-entry-mode'), if provided."
 			(filesets-directory-files dir patt ':files t))
 		    ;; (message "Filesets: malformed entry: %s" entry)))))))
                     (error "Filesets: malformed entry: %s" entry)))))))
-    (seq-filter (lambda (file)
-                  (not (filesets-filetype-property file event)))
-                fl)))
+    (filesets-filter-list fl
+			  (lambda (file)
+			    (not (filesets-filetype-property file event))))))
 
 (defun filesets-files-under (level depth entry dir patt &optional relativep)
   "Files under DIR that match PATT.
@@ -1984,7 +1999,7 @@ LOOKUP-NAME is used as lookup name for retrieving fileset specific settings."
 
 (defun filesets-ingroup-cache-get (master)
   "Access to `filesets-ingroup-cache'."
-  (plist-get filesets-ingroup-cache master #'equal))
+  (lax-plist-get filesets-ingroup-cache master))
 
 (defun filesets-ingroup-cache-put (master file)
   "Access to `filesets-ingroup-cache'."
@@ -1993,7 +2008,7 @@ LOOKUP-NAME is used as lookup name for retrieving fileset specific settings."
 		      (cons file (filesets-ingroup-cache-get emaster))
 		    nil)))
     (setq filesets-ingroup-cache
-	  (plist-put filesets-ingroup-cache emaster this #'equal))))
+	  (lax-plist-put filesets-ingroup-cache emaster this))))
 
 (defun filesets-ingroup-collect-files (fs &optional remdupl-flag master depth)
   "Helper function for `filesets-ingroup-collect'.  Collect file names."
@@ -2290,12 +2305,12 @@ bottom up, set `filesets-submenus' to nil, first.)"
 	((null data))
       (let* ((this    (car data))
 	     (name    (filesets-data-get-name this))
-	     (cached  (plist-get filesets-submenus name #'equal))
+	     (cached  (lax-plist-get filesets-submenus name))
 	     (submenu (or cached
 			  (filesets-build-submenu count name this))))
 	(unless cached
 	  (setq filesets-submenus
-		(plist-put filesets-submenus name submenu #'equal)))
+		(lax-plist-put filesets-submenus name submenu)))
 	(unless (filesets-entry-get-dormant-flag this)
 	  (setq filesets-menu-cache
 		(append filesets-menu-cache (list submenu))))))
@@ -2390,7 +2405,6 @@ fileset thinks this is necessary or not."
   (filesets-menu-cache-file-load))
 
 (defun filesets-update-pre010505 ()
-  (declare (obsolete nil "29.1"))
   (let ((msg (format-message
 "Filesets: manual editing of user data required!
 
@@ -2436,8 +2450,7 @@ We apologize for the inconvenience.")))
    ((or (not cached-version)
 	(string< cached-version "1.5.5")
 	(boundp 'filesets-subdocument-patterns))
-    (with-suppressed-warnings ((obsolete filesets-update-pre010505))
-      (filesets-update-pre010505))))
+    (filesets-update-pre010505)))
   (filesets-update-cleanup))
 
 (defun filesets-menu-cache-file-load ()
@@ -2485,5 +2498,9 @@ Set up hooks, load the cache file -- if existing -- and build the menu."
   (error "%s" (mapconcat #'identity args " ")))
 
 (provide 'filesets)
+
+;; Local Variables:
+;; sentence-end-double-space:t
+;; End:
 
 ;;; filesets.el ends here

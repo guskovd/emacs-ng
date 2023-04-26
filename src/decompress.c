@@ -1,5 +1,5 @@
 /* Interface to zlib.
-   Copyright (C) 2013-2023 Free Software Foundation, Inc.
+   Copyright (C) 2013-2022 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -67,9 +67,8 @@ init_zlib_functions (void)
 #endif	/* WINDOWSNT */
 
 
-#ifdef HAVE_NATIVE_COMP
 
-# define MD5_BLOCKSIZE 32768 /* From md5.c  */
+#define MD5_BLOCKSIZE 32768 /* From md5.c  */
 
 static char acc_buff[2 * MD5_BLOCKSIZE];
 static size_t acc_size;
@@ -107,7 +106,7 @@ md5_gz_stream (FILE *source, void *resblock)
   unsigned char in[MD5_BLOCKSIZE];
   unsigned char out[MD5_BLOCKSIZE];
 
-# ifdef WINDOWSNT
+#ifdef WINDOWSNT
   if (!zlib_initialized)
     zlib_initialized = init_zlib_functions ();
   if (!zlib_initialized)
@@ -115,7 +114,7 @@ md5_gz_stream (FILE *source, void *resblock)
       message1 ("zlib library not found");
       return -1;
     }
-# endif
+#endif
 
   eassert (!acc_size);
 
@@ -165,8 +164,7 @@ md5_gz_stream (FILE *source, void *resblock)
 
   return 0;
 }
-# undef MD5_BLOCKSIZE
-#endif
+#undef MD5_BLOCKSIZE
 
 
 
@@ -241,7 +239,7 @@ This function can be called only in unibyte buffers.  */)
   z_stream stream;
   int inflate_status;
   struct decompress_unwind_data unwind_data;
-  specpdl_ref count = SPECPDL_INDEX ();
+  ptrdiff_t count = SPECPDL_INDEX ();
 
   validate_region (&start, &end);
 

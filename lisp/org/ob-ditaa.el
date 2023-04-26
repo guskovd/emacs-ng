@@ -1,10 +1,10 @@
 ;;; ob-ditaa.el --- Babel Functions for ditaa        -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2009-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2009-2022 Free Software Foundation, Inc.
 
 ;; Author: Eric Schulte
 ;; Keywords: literate programming, reproducible research
-;; URL: https://orgmode.org
+;; Homepage: https://orgmode.org
 
 ;; This file is part of GNU Emacs.
 
@@ -36,10 +36,6 @@
 ;; 4) there are no variables (at least for now)
 
 ;;; Code:
-
-(require 'org-macs)
-(org-assert-version)
-
 (require 'ob)
 (require 'org-compat)
 

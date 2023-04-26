@@ -1,8 +1,8 @@
-\input texinfo   @c -*- mode: texinfo; coding: utf-8 -*-
+\input texinfo   @c -*-texinfo; coding: utf-8 -*-
 @comment %**start of header
 @setfilename ../../info/flymake.info
-@set VERSION 1.3.4
-@set UPDATED April 2023
+@set VERSION 1.2
+@set UPDATED September 2021
 @settitle GNU Flymake @value{VERSION}
 @include docstyle.texi
 @syncodeindex pg cp
@@ -13,7 +13,7 @@
 @copying
 This manual is for GNU Flymake (version @value{VERSION}, @value{UPDATED}).
 
-Copyright @copyright{} 2004--2023 Free Software Foundation, Inc.
+Copyright @copyright{} 2004--2022 Free Software Foundation, Inc.
 
 @quotation
 Permission is granted to copy, distribute and/or modify this document
@@ -142,12 +142,6 @@ highlighted regions to learn what the specific problem
 is.  Alternatively, place point on the highlighted regions and use the
 commands @code{eldoc} or @code{display-local-help}.
 
-Another easy way to get instant access to the diagnostic text is to
-set @code{flymake-show-diagnostics-at-end-of-line} to a non-@code{nil}
-value.  This makes the diagnostic messages appear at the end of the
-line where the regular annotation is located (@pxref{Customizable
-variables})
-
 @cindex next and previous diagnostic
 If the diagnostics are outside the visible region of the buffer,
 @code{flymake-goto-next-error} and @code{flymake-goto-prev-error} are
@@ -271,9 +265,6 @@ This section summarizes customization variables used for the
 configuration of the Flymake user interface.
 
 @vtable @code
-@item flymake-mode-line-lighter
-The name of the mode.  Defaults to @samp{Flymake}.
-
 @item flymake-mode-line-format
 Format to use for the Flymake mode line indicator.
 
@@ -318,24 +309,8 @@ been reported.
 Which fringe (if any) should show the warning/error bitmaps.
 
 @item flymake-wrap-around
-If non-@code{nil}, moving to errors with @code{flymake-goto-next-error} and
+If non-nil, moving to errors with @code{flymake-goto-next-error} and
 @code{flymake-goto-prev-error} wraps around buffer boundaries.
-
-@item flymake-show-diagnostics-at-end-of-line
-If non-@code{nil}, show summarized descriptions of diagnostics at the
-end of the line.  Depending on your preference, this can either be
-distracting and easily confused with actual code, or a significant
-early aid that relieves you from moving around or reaching for the
-mouse to consult an error message.
-
-@item flymake-error-eol
-A custom face for summarizing diagnostic error messages.
-
-@item flymake-warning-eol
-A custom face for summarizing diagnostic warning messages.
-
-@item flymake-note-eol
-A custom face for summarizing diagnostic notes.
 @end vtable
 
 @node Extending Flymake
@@ -416,7 +391,7 @@ its @code{flymake-overlay-control} property:
 
 @item
 @cindex severity of diagnostic
-@code{severity} is a non-negative integer specifying the
+@code{flymake-severity} is a non-negative integer specifying the
 diagnostic's severity.  The higher the value, the more serious is the
 error.  If the overlay property @code{priority} is not specified in
 @code{flymake-overlay-control}, @code{flymake-severity} is used to set
@@ -431,17 +406,6 @@ type, in case the name of the symbol associated with it is very long.
 @vindex flymake-category
 @code{flymake-category} is a symbol whose property list is considered
 the default for missing values of any other properties.
-
-@item
-@cindex mode-line appearance of a diagnostic
-@code{mode-line-face} is a face specifier controlling the appearance
-of the indicator of this type of diagnostic in the mode line.
-
-@item
-@cindex summarized appearance of a diagnostic
-@code{echo-face} is a face specifier controlling the appearance of the
-summarized description of this diagnostic when reading diagnostic
-messages (@pxref{Finding diagnostics}).
 @end itemize
 
 @cindex predefined diagnostic types
@@ -648,7 +612,7 @@ delimited by @var{beg} and @var{end}.  @var{type} is a diagnostic
 symbol (@pxref{Flymake error types}), and @var{text} is a description
 of the problem detected in this region.  Most commonly @var{locus} is
 the buffer object designating for the current buffer being
-syntax-checked.  However, it may be a string naming a file relative
+syntax-checked.  However, it may be a string nameing a file relative
 to the current working directory.  @xref{Foreign and list-only
 diagnostics}, for when this may be useful.  Depending on the type of
 @var{locus}, @var{beg} and @var{end} are both either buffer positions
@@ -834,7 +798,6 @@ Binding,,, elisp, The Emacs Lisp Reference Manual}) to be active.
                        for type = (if (string-match "^warning" msg)
                                       :warning
                                     :error)
-                       when (and beg end)
                        collect (flymake-make-diagnostic source
                                                         beg
                                                         end
@@ -877,10 +840,10 @@ Binding,,, elisp, The Emacs Lisp Reference Manual}) to be active.
 * Interaction with other modes::
 @end menu
 
-@findex flymake-proc-legacy-flymake
-The backend @code{flymake-proc-legacy-flymake} was originally designed
+@findex flymake-proc-legacy-backend
+The backend @code{flymake-proc-legacy-backend} was originally designed
 to be extended for supporting new syntax check tools and error message
-patterns.  It is also controlled by its own set of customization variables.
+patterns.  It is also controlled by its own set of customization variables
 
 @node Proc customization variables
 @section Customization variables for the Proc backend
@@ -911,7 +874,7 @@ line-idx col-idx err-text-idx)}.  @xref{Parsing the output}.
 @item flymake-proc-diagnostic-type-pred
 A function to classify a diagnostic text as particular type of error.
 Should be a function taking an error text and returning a diagnostic
-symbol (@pxref{Flymake error types}).  If non-@code{nil} is returned but
+symbol (@pxref{Flymake error types}).  If non-nil is returned but
 there is no such symbol in that table, a warning is assumed.  If nil
 is returned, an error is assumed.  Can also be a regular expression
 that should match only warnings.  This variable replaces the old
@@ -1086,7 +1049,7 @@ check-syntax:
 @cindex syntax check models
 @cindex master file
 
-@code{flymake-proc-legacy-flymake} saves a copy of the buffer in a
+@code{flymake-proc-legacy-backend} saves a copy of the buffer in a
 temporary file in the buffer's directory (or in the system temporary
 directory, for Java files), creates a syntax check command and
 launches a process with this command.  The output is parsed using a
@@ -1182,7 +1145,7 @@ file are parsed.
 For @file{file.h}, the include directives to look for are
 @code{#include "file.h"}, @code{#include "../file.h"}, etc.  Each
 include is checked against a list of include directories
-(@pxref{Getting the include directories}) to be sure it points to the
+(see @ref{Getting the include directories}) to be sure it points to the
 correct @file{file.h}.
 
 First matching master file found stops the search.  The master file is then

@@ -1,6 +1,6 @@
 ;;; mail-utils.el --- utility functions used both by rmail and rnews  -*- lexical-binding: t -*-
 
-;; Copyright (C) 1985, 2001-2023 Free Software Foundation, Inc.
+;; Copyright (C) 1985, 2001-2022 Free Software Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: mail, news
@@ -59,7 +59,7 @@ also the To field, unless this would leave an empty To field."
 (defun mail-string-delete (string start end)
   "Return a string containing all of STRING except the part
 from START (inclusive) to END (exclusive)."
-  (declare (obsolete substring "29.1"))
+  ;; FIXME: This is not used anywhere.  Make obsolete?
   (if (null end) (substring string 0 start)
     (concat (substring string 0 start)
 	    (substring string end nil))))
@@ -239,8 +239,12 @@ comma-separated list, and return the pruned list."
   ;; Or just set the default directly in the defcustom.
   (if (null mail-dont-reply-to-names)
       (setq mail-dont-reply-to-names
-            (if (> (length user-mail-address) 0)
-                (concat "\\`" (regexp-quote user-mail-address) "\\'"))))
+	     ;; `rmail-default-dont-reply-to-names' is obsolete.
+	    (let ((a (bound-and-true-p rmail-default-dont-reply-to-names))
+		  (b (if (> (length user-mail-address) 0)
+			 (concat "\\`" (regexp-quote user-mail-address) "\\'"))))
+	      (cond ((and a b) (concat a "\\|" b))
+		    ((or a b))))))
   ;; Split up DESTINATIONS and match each element separately.
   (let ((start-pos 0) (cur-pos 0)
 	(case-fold-search t))
@@ -277,6 +281,9 @@ comma-separated list, and return the pruned list."
       (substring destinations (match-end 0))
     destinations))
 
+;; Legacy name
+(define-obsolete-function-alias 'rmail-dont-reply-to #'mail-dont-reply-to "24.1")
+
 
 ;;;###autoload
 (defun mail-fetch-field (field-name &optional last all list delete)
@@ -310,7 +317,7 @@ matches may be returned from the message body."
 				      (buffer-substring-no-properties
 				       opoint (point)))))
                 (if delete
-                    (delete-region (line-beginning-position) (point)))))
+                    (delete-region (point-at-bol) (point)))))
 	    (if list
 		value
 	      (and (not (string= value "")) value)))
@@ -326,8 +333,7 @@ matches may be returned from the message body."
                 (prog1
                     (buffer-substring-no-properties opoint (point))
                   (if delete
-                      (delete-region (line-beginning-position)
-                                     (1+ (point))))))))))))
+                      (delete-region (point-at-bol) (1+ (point))))))))))))
 
 ;; Parse a list of tokens separated by commas.
 ;; It runs from point to the end of the visible part of the buffer.
@@ -362,12 +368,19 @@ matches may be returned from the message body."
   labels)
 
 (defun mail-rfc822-time-zone (time)
-  (declare (obsolete format-time-string "29.1"))
-  (format-time-string "%z" time))
+  (let* ((sec (or (car (current-time-zone time)) 0))
+	 (absmin (/ (abs sec) 60)))
+    (format "%c%02d%02d" (if (< sec 0) ?- ?+) (/ absmin 60) (% absmin 60))))
 
 (defun mail-rfc822-date ()
-  (let ((system-time-locale "C"))
-    (format-time-string "%-d %b %Y %T %z")))
+  (let* ((time (current-time))
+	 (s (current-time-string time)))
+    (string-match "[^ ]+ +\\([^ ]+\\) +\\([^ ]+\\) \\([^ ]+\\) \\([^ ]+\\)" s)
+    (concat (substring s (match-beginning 2) (match-end 2)) " "
+	    (substring s (match-beginning 1) (match-end 1)) " "
+	    (substring s (match-beginning 4) (match-end 4)) " "
+	    (substring s (match-beginning 3) (match-end 3)) " "
+	    (mail-rfc822-time-zone time))))
 
 (defun mail-mbox-from ()
   "Return an mbox \"From \" line for the current message.

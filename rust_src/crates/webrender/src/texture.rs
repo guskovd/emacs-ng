@@ -169,7 +169,12 @@ struct ExternalHandler {
 }
 
 impl ExternalImageHandler for ExternalHandler {
-    fn lock(&mut self, key: ExternalImageId, _channel_index: u8) -> ExternalImage {
+    fn lock(
+        &mut self,
+        key: ExternalImageId,
+        _channel_index: u8,
+        _rendering: ImageRendering,
+    ) -> ExternalImage {
         let texture_id = key.0;
 
         let textures = self.texture.borrow();

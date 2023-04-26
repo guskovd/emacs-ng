@@ -1,10 +1,10 @@
 ;;; ob-lua.el --- Org Babel functions for Lua evaluation -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2014, 2016-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2014, 2016-2022 Free Software Foundation, Inc.
 
 ;; Authors: Dieter Schoen
 ;; Keywords: literate programming, reproducible research
-;; URL: https://orgmode.org
+;; Homepage: https://orgmode.org
 
 ;; This file is part of GNU Emacs.
 
@@ -35,10 +35,6 @@
 ;; However, sessions are not yet working.
 
 ;;; Code:
-
-(require 'org-macs)
-(org-assert-version)
-
 (require 'ob)
 (require 'org-macs)
 (require 'cl-lib)
@@ -399,7 +395,7 @@ fd:close()"
         (org-babel-lua-table-or-string results)))))
 
 (defun org-babel-lua-read-string (string)
-  "Strip single quotes from around Lua string."
+  "Strip 's from around Lua string."
   (org-unbracket-string "'" "'" string))
 
 (provide 'ob-lua)

@@ -60,10 +60,6 @@
 #endif
 #include "window.h"
 #include "xgselect.h"
-#ifdef HAVE_WINIT
+#ifdef USE_WEBRENDER
 # include "wrterm.h"
-#endif
-#ifdef HAVE_PGTK
-# include "pgtkterm.h"
-# include "gtkutil.h"
 #endif

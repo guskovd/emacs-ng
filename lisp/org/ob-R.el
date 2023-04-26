@@ -1,12 +1,12 @@
 ;;; ob-R.el --- Babel Functions for R                -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2009-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2009-2022 Free Software Foundation, Inc.
 
 ;; Author: Eric Schulte
 ;;	Dan Davison
-;; Maintainer: Jeremie Juste <jeremiejuste@gmail.com>
+;; Maintainer: Jeremie Juste
 ;; Keywords: literate programming, reproducible research, R, statistics
-;; URL: https://orgmode.org
+;; Homepage: https://orgmode.org
 
 ;; This file is part of GNU Emacs.
 
@@ -29,9 +29,6 @@
 
 ;;; Code:
 
-(require 'org-macs)
-(org-assert-version)
-
 (require 'cl-lib)
 (require 'ob)
 
@@ -42,6 +39,13 @@
 (declare-function ess-eval-buffer "ext:ess-inf" (vis))
 (declare-function ess-wait-for-process "ext:ess-inf"
 		  (&optional proc sec-prompt wait force-redisplay))
+
+;; FIXME: Temporary declaration to silence the byte-compiler
+(defvar user-inject-src-param)
+(defvar ess-eval-visibly-tmp)
+(defvar ess-eval-visibly)
+(defvar ess-inject-source)
+(defvar user-inject-src-param)
 
 (defconst org-babel-header-args:R
   '((width		 . :any)
@@ -241,11 +245,11 @@ This function is called by `org-babel-execute-src-block'."
 (defun org-babel-R-assign-elisp (name value colnames-p rownames-p)
   "Construct R code assigning the elisp VALUE to a variable named NAME."
   (if (listp value)
-      (let* ((lengths (mapcar 'length (cl-remove-if-not 'listp value)))
+      (let* ((lengths (mapcar 'length (cl-remove-if-not 'sequencep value)))
 	     (max (if lengths (apply 'max lengths) 0))
 	     (min (if lengths (apply 'min lengths) 0)))
         ;; Ensure VALUE has an orgtbl structure (depth of at least 2).
-        (unless (listp (car value)) (setq value (mapcar 'list value)))
+        (unless (listp (car value)) (setq value (list value)))
 	(let ((file (orgtbl-to-tsv value '(:fmt org-babel-R-quote-tsv-field)))
 	      (header (if (or (eq (nth 1 value) 'hline) colnames-p)
 			  "TRUE" "FALSE"))
@@ -381,7 +385,7 @@ Has four %s escapes to be filled in:
   (if session
       (if async
           (ob-session-async-org-babel-R-evaluate-session
-           session body result-type column-names-p row-names-p)
+           session body result-type result-params column-names-p row-names-p)
         (org-babel-R-evaluate-session
          session body result-type result-params column-names-p row-names-p))
     (org-babel-R-evaluate-external-process
@@ -482,7 +486,7 @@ Insert hline if column names in output have been requested."
 (defconst ob-session-async-R-indicator "'ob_comint_async_R_%s_%s'")
 
 (defun ob-session-async-org-babel-R-evaluate-session
-    (session body result-type column-names-p row-names-p)
+    (session body result-type _ column-names-p row-names-p)
   "Asynchronously evaluate BODY in SESSION.
 Returns a placeholder string for insertion, to later be replaced
 by `org-babel-comint-async-filter'."
@@ -521,8 +525,7 @@ by `org-babel-comint-async-filter'."
     (output
      (let ((uuid (md5 (number-to-string (random 100000000))))
            (ess-local-process-name
-            (process-name (get-buffer-process session)))
-           (ess-eval-visibly-p nil))
+            (process-name (get-buffer-process session))))
        (with-temp-buffer
          (insert (format ob-session-async-R-indicator
 			 "start" uuid))
@@ -531,12 +534,18 @@ by `org-babel-comint-async-filter'."
          (insert "\n")
          (insert (format ob-session-async-R-indicator
 			 "end" uuid))
-         (ess-eval-buffer nil ))
+         (setq ess-eval-visibly-tmp ess-eval-visibly)
+         (setq user-inject-src-param ess-inject-source)
+         (setq ess-eval-visibly nil)
+         (setq ess-inject-source 'function-and-buffer)
+         (ess-eval-buffer nil))
+       (setq ess-eval-visibly ess-eval-visibly-tmp)
+       (setq ess-inject-source user-inject-src-param)
        uuid))))
 
 (defun ob-session-async-R-value-callback (params tmp-file)
   "Callback for async value results.
-Assigned locally to `org-babel-comint-async-file-callback' in R
+Assigned locally to `ob-session-async-file-callback' in R
 comint buffers used for asynchronous Babel evaluation."
   (let* ((graphics-file (and (member "graphics" (assq :result-params params))
 			     (org-babel-graphical-output-file params)))

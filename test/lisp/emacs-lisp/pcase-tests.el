@@ -1,6 +1,6 @@
 ;;; pcase-tests.el --- Test suite for pcase macro.  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2012-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2012-2022 Free Software Foundation, Inc.
 
 ;; This file is part of GNU Emacs.
 
@@ -107,11 +107,8 @@
   (should (equal (pcase 1
                    ((cl-type (integer 0 2)) 'integer-0<=n<=2))
                  'integer-0<=n<=2))
-  (should-error
-   ;; Avoid error at compile time due to compiler macro.
-   (eval '(pcase 1
-            ((cl-type notatype) 'integer))
-         t)))
+  (should-error (pcase 1
+                  ((cl-type notatype) 'integer))))
 
 (ert-deftest pcase-tests-setq ()
   (should (equal (let (a b)

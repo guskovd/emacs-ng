@@ -1,6 +1,6 @@
 ;;; ethio-util.el --- utilities for Ethiopic	-*- coding: utf-8-emacs; lexical-binding: t; -*-
 
-;; Copyright (C) 1997-1998, 2002-2023 Free Software Foundation, Inc.
+;; Copyright (C) 1997-1998, 2002-2022 Free Software Foundation, Inc.
 ;; Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005,
 ;;   2006, 2007, 2008, 2009, 2010, 2011
 ;;   National Institute of Advanced Industrial Science and Technology (AIST)
@@ -29,13 +29,6 @@
 ;; Author: TAKAHASHI Naoto <ntakahas@m17n.org>
 
 ;;; Commentary:
-
-;; Note: This file includes several codepoints outside of the Unicode
-;; 0..#x10FFFF range, which are characters that were not unified into
-;; Unicode.  Therefore, this file is encoded in utf-8-emacs, because
-;; UTF-8 cannot encode such codepoints.  We include these codepoints
-;; literally in the file to have them displayed by suitable fonts,
-;; which makes maintenance easier.
 
 ;;; Code:
 
@@ -112,8 +105,6 @@
 
 (defcustom ethio-primary-language 'tigrigna
   "Symbol that defines the primary language in SERA --> FIDEL conversion.
-FIDEL is the Amharic alphabet; SERA (System for Ethiopic Representation
-in ASCII) is the Latin representation of Ethiopic script.
 The value should be one of: `tigrigna', `amharic' or `english'."
   :version "28.1"
   :type '(choice (const :tag "Tigrigna" tigrigna)
@@ -122,8 +113,6 @@ The value should be one of: `tigrigna', `amharic' or `english'."
 
 (defcustom ethio-secondary-language 'english
   "Symbol that defines the secondary language in SERA --> FIDEL conversion.
-FIDEL is the Amharic alphabet; SERA (System for Ethiopic Representation
-in ASCII) is the Latin representation of Ethiopic script.
 The value should be one of: `tigrigna', `amharic' or `english'."
   :version "28.1"
   :type '(choice (const :tag "Tigrigna" tigrigna)
@@ -134,9 +123,7 @@ The value should be one of: `tigrigna', `amharic' or `english'."
   "Non-nil means associate ASCII colon with Ethiopic colon.
 If nil, associate ASCII colon with Ethiopic word separator, i.e., two
 vertically stacked dots.  All SERA <--> FIDEL converters refer this
-variable.
-FIDEL is the Amharic alphabet; SERA (System for Ethiopic Representation
-in ASCII) is the Latin representation of Ethiopic script."
+variable."
   :version "28.1"
   :type 'boolean)
 
@@ -144,9 +131,7 @@ in ASCII) is the Latin representation of Ethiopic script."
   "If non-nil, associate ASCII question mark with Ethiopic question mark.
 The Ethiopic old style question mark is three vertically stacked dots.
 If nil, associate ASCII question mark with Ethiopic stylized question
-mark.  All SERA <--> FIDEL converters refer this variable.
-FIDEL is the Amharic alphabet; SERA (System for Ethiopic Representation
-in ASCII) is the Latin representation of Ethiopic script."
+mark.  All SERA <--> FIDEL converters refer this variable."
   :version "28.1"
   :type 'boolean)
 
@@ -155,17 +140,13 @@ in ASCII) is the Latin representation of Ethiopic script."
 This happens in FIDEL --> SERA conversions.  Isolated vowels at
 word beginning do not get an apostrophe put before them.
 If nil, put an apostrophe only between a 6th-form consonant and an
-isolated vowel.
-FIDEL is the Amharic alphabet; SERA (System for Ethiopic Representation
-in ASCII) is the Latin representation of Ethiopic script."
+isolated vowel."
   :version "28.1"
   :type 'boolean)
 
 (defcustom ethio-W-sixth-always nil
   "Non-nil means convert the Wu-form of a 12-form consonant to \"W'\".
-This is instead of \"Wu\" in FIDEL --> SERA conversion.
-FIDEL is the Amharic alphabet; SERA (System for Ethiopic Representation
-in ASCII) is the Latin representation of Ethiopic script."
+This is instead of \"Wu\" in FIDEL --> SERA conversion."
   :version "28.1"
   :type 'boolean)
 
@@ -235,8 +216,6 @@ If nil, use uppercases."
 (defun ethio-sera-to-fidel-buffer (&optional secondary force)
   "Convert the current buffer from SERA to FIDEL.
 
-FIDEL is the Amharic alphabet; SERA (System for Ethiopic Representation
-in ASCII) is the Latin representation of Ethiopic script.
 The variable `ethio-primary-language' specifies the primary
 language and `ethio-secondary-language' specifies the secondary.
 
@@ -262,8 +241,6 @@ See also the descriptions of the variables
 (defun ethio-sera-to-fidel-region (begin end &optional secondary force)
   "Convert the characters in region from SERA to FIDEL.
 
-FIDEL is the Amharic alphabet; SERA (System for Ethiopic Representation
-in ASCII) is the Latin representation of Ethiopic script.
 The variable `ethio-primary-language' specifies the primary
 language and `ethio-secondary-language' specifies the secondary.
 
@@ -519,9 +496,7 @@ changing anything."
 
 ;;;###autoload
 (defun ethio-sera-to-fidel-marker (&optional force)
-  "Convert regions surrounded by \"<sera>\" and \"</sera>\" from SERA to FIDEL.
-FIDEL is the Amharic alphabet; SERA (System for Ethiopic Representation
-in ASCII) is the Latin representation of Ethiopic script.
+  "Convert the regions surrounded by \"<sera>\" and \"</sera>\" from SERA to FIDEL.
 Assume that each region begins with `ethio-primary-language'.
 The markers \"<sera>\" and \"</sera>\" themselves are not deleted."
   (interactive "P")
@@ -553,9 +528,7 @@ The markers \"<sera>\" and \"</sera>\" themselves are not deleted."
 
 ;;;###autoload
 (defun ethio-fidel-to-sera-buffer (&optional secondary force)
-  "Convert all the FIDEL characters in the current buffer to the SERA format.
-FIDEL is the Amharic alphabet; SERA (System for Ethiopic Representation
-in ASCII) is the Latin representation of Ethiopic script.
+  "Replace all the FIDEL characters in the current buffer to the SERA format.
 The variable `ethio-primary-language' specifies the primary
 language and `ethio-secondary-language' specifies the secondary.
 
@@ -575,10 +548,8 @@ See also the descriptions of the variables
 
 ;;;###autoload
 (defun ethio-fidel-to-sera-region (begin end &optional secondary force)
-  "Convert all the FIDEL characters in the region to the SERA format.
+  "Replace all the FIDEL characters in the region to the SERA format.
 
-FIDEL is the Amharic alphabet; SERA (System for Ethiopic Representation
-in ASCII) is the Latin representation of Ethiopic script.
 The variable `ethio-primary-language' specifies the primary
 language and `ethio-secondary-language' specifies the secondary.
 
@@ -696,8 +667,6 @@ See also the descriptions of the variables
 ;;;###autoload
 (defun ethio-fidel-to-sera-marker (&optional force)
   "Convert the regions surrounded by \"<sera>\" and \"</sera>\" from FIDEL to SERA.
-FIDEL is the Amharic alphabet; SERA (System for Ethiopic Representation
-in ASCII) is the Latin representation of Ethiopic script.
 The markers \"<sera>\" and \"</sera>\" themselves are not deleted."
 
   (interactive "P")
@@ -722,8 +691,7 @@ The markers \"<sera>\" and \"</sera>\" themselves are not deleted."
 
 ;;;###autoload
 (defun ethio-modify-vowel nil
-  "Modify the vowel of the FIDEL that is under the cursor.
-FIDEL is the Amharic/Ethiopic alphabet."
+  "Modify the vowel of the FIDEL that is under the cursor."
   (interactive)
   (ethio-adjust-robin)
   (let ((consonant (ethio-get-consonant (following-char)))
@@ -740,9 +708,7 @@ FIDEL is the Amharic/Ethiopic alphabet."
 	  (robin-convert-region (point-min) (point-max) "ethiopic-sera"))))))
 
 (defun ethio-get-consonant (ch)
-  "Return the consonant part of CH's SERA spelling in ethiopic-sera.
-SERA (System for Ethiopic Representation in ASCII) is the Latin
-representation of Ethiopic script."
+  "Return the consonant part of CH's SERA spelling in ethiopic-sera."
   (let ((sera (get-char-code-property ch 'ethiopic-sera)))
     (cond
      ((null sera) nil)
@@ -828,15 +794,15 @@ The 2nd and 3rd arguments BEGIN and END specify the region."
   "This function is deprecated."
   (interactive "*cInput number: 1.ö ‡  2.ö ‡‚  3.ö ‡ƒ  4.ö ‡„  5.ö ‡€")
   (cond
-   ((eq arg ?1)
+   ((= arg ?1)
     (insert "ö ‡"))
-   ((eq arg ?2)
+   ((= arg ?2)
     (insert "ö ‡‚"))
-   ((eq arg ?3)
+   ((= arg ?3)
     (insert "ö ‡ƒ"))
-   ((eq arg ?4)
+   ((= arg ?4)
     (insert "ö ‡„"))
-   ((eq arg ?5)
+   ((= arg ?5)
     (insert "ö ‡€"))
    (t
     (error ""))))
@@ -847,11 +813,10 @@ The 2nd and 3rd arguments BEGIN and END specify the region."
 
 ;;;###autoload
 (defun ethio-fidel-to-tex-buffer nil
-  "Convert each FIDEL characters in the current buffer into a fidel-tex command.
-FIDEL is the Amharic/Ethiopic alphabet."
+  "Convert each fidel characters in the current buffer into a fidel-tex command."
   (interactive)
   (let ((buffer-read-only nil)
-	comp)
+	comp ch)
 
     ;; Special treatment for geminated characters.
     ;; Geminated characters la", etc. change into \geminateG{\laG}, etc.
@@ -870,22 +835,21 @@ FIDEL is the Amharic/Ethiopic alphabet."
     ;; Special Ethiopic punctuation.
     (goto-char (point-min))
     (while (re-search-forward "\\ce[Â».?]\\|Â«\\ce" nil t)
-      (let ((ch (preceding-char)))
-        (cond
-         ((eq ch ?\Â»)
-	  (delete-char -1)
-	  (insert "\\rquoteG"))
-         ((eq ch ?.)
-	  (delete-char -1)
-	  (insert "\\dotG"))
-         ((eq ch ??)
-	  (delete-char -1)
-	  (insert "\\qmarkG"))
-         (t
-	  (forward-char -1)
-	  (delete-char -1)
-	  (insert "\\lquoteG")
-	  (forward-char 1)))))
+      (cond
+       ((= (setq ch (preceding-char)) ?\Â»)
+	(delete-char -1)
+	(insert "\\rquoteG"))
+       ((= ch ?.)
+	(delete-char -1)
+	(insert "\\dotG"))
+       ((= ch ??)
+	(delete-char -1)
+	(insert "\\qmarkG"))
+       (t
+	(forward-char -1)
+	(delete-char -1)
+	(insert "\\lquoteG")
+	(forward-char 1))))
 
     ;; Ethiopic characters to TeX macros
     (robin-invert-region (point-min) (point-max) "ethiopic-tex")
@@ -895,8 +859,7 @@ FIDEL is the Amharic/Ethiopic alphabet."
 
 ;;;###autoload
 (defun ethio-tex-to-fidel-buffer ()
-  "Convert fidel-tex commands in the current buffer into FIDEL chars.
-FIDEL is the Amharic/Ethiopic alphabet."
+  "Convert fidel-tex commands in the current buffer into fidel chars."
   (interactive)
   (let ((inhibit-read-only t)
 	;; (p) (ch)
@@ -924,7 +887,7 @@ FIDEL is the Amharic/Ethiopic alphabet."
 
 ;;;###autoload
 (defun ethio-fidel-to-java-buffer nil
-  "Convert Ethiopic characters in the buffer into the Java escape sequences.
+  "Convert Ethiopic characters into the Java escape sequences.
 
 Each escape sequence is of the form \\uXXXX, where XXXX is the
 character's codepoint (in hex) in Unicode.
@@ -943,7 +906,7 @@ Otherwise, [0-9A-F]."
 
 ;;;###autoload
 (defun ethio-java-to-fidel-buffer nil
-  "Convert the Java escape sequences in the buffer into Ethiopic characters."
+  "Convert the Java escape sequences into corresponding Ethiopic characters."
   (let ((case-fold-search t)
 	(ucode))
     (goto-char (point-min))
@@ -958,17 +921,7 @@ Otherwise, [0-9A-F]."
 
 ;;;###autoload
 (defun ethio-find-file nil
-  "Transliterate file content into Ethiopic depending on filename suffix.
-If the file-name extension is \".sera\", convert from SERA to FIDEL.
-If the file-name extension is \".html\", convert regions enclosed
-by \"<sera>..</sera>\" from SERA to FIDEL.
-If the file-name extension is \".tex\", convert fidel-tex commands
-to FIDEL characters.
-If the file-name extension is \".java\", convert Java escape sequences
-to FIDEL characters.
-
-FIDEL is the Amharic alphabet; SERA (System for Ethiopic Representation
-in ASCII) is the Latin representation of Ethiopic script."
+  "Transliterate file content into Ethiopic depending on filename suffix."
   (cond
 
    ((string-match "\\.sera$" (buffer-file-name))
@@ -1002,17 +955,7 @@ in ASCII) is the Latin representation of Ethiopic script."
 
 ;;;###autoload
 (defun ethio-write-file nil
-  "Transliterate Ethiopic characters to ASCII depending on the file extension.
-If the file-name extension is \".sera\", convert from FIDEL to SERA.
-If the file-name extension is \".html\", convert FIDEL characters to
-SERA regions enclosed by \"<sera>..</sera>\".
-If the file-name extension is \".tex\", convert FIDEL characters
-to fidel-tex commands.
-If the file-name extension is \".java\", convert FIDEL characters to
-Java escape sequences.
-
-FIDEL is the Amharic alphabet; SERA (System for Ethiopic Representation
-in ASCII) is the Latin representation of Ethiopic script."
+  "Transliterate Ethiopic characters in ASCII depending on the file extension."
   (cond
 
    ((string-match "\\.sera$" (buffer-file-name))
@@ -1118,7 +1061,7 @@ With ARG, insert that many delimiters."
 
 ;; This function is not used any more.
 (defun ethio-gemination nil
-  "Compose the character before point with the Ethiopic gemination mark.
+  "Compose the character before the point with the Ethiopic gemination mark.
 If the character is already composed, decompose it and remove the gemination
 mark."
   (interactive "*")
@@ -1137,9 +1080,7 @@ mark."
 ;;;
 
 (robin-define-package "ethiopic-sera"
- "SERA transliteration system for Ethiopic.
-SERA (System for Ethiopic Representation in ASCII) is the Latin
-representation of Ethiopic script."
+ "SERA transliteration system for Ethiopic."
 
  ("he" ?áˆ€)
  ("hu" ?áˆ)

@@ -1,6 +1,7 @@
 ;;; emacsbug.el --- command to report Emacs bugs to appropriate mailing list  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 1985-2023 Free Software Foundation, Inc.
+;; Copyright (C) 1985, 1994, 1997-1998, 2000-2022 Free Software
+;; Foundation, Inc.
 
 ;; Author: K. Shane Hartman
 ;; Maintainer: emacs-devel@gnu.org
@@ -29,9 +30,6 @@
 ;; to complete the process.  Alternatively, compose the bug report in
 ;; Emacs then paste it into your normal mail client.
 
-;; `M-x submit-emacs-patch' can be used to send a patch to the Emacs
-;; maintainers.
-
 ;;; Code:
 
 (require 'sendmail)
@@ -41,6 +39,9 @@
   "Sending Emacs bug reports."
   :group 'maint
   :group 'mail)
+
+(define-obsolete-variable-alias 'report-emacs-bug-pretest-address
+  'report-emacs-bug-address "24.1")
 
 (defcustom report-emacs-bug-no-confirmation nil
   "If non-nil, suppress the confirmations asked for the sake of novice users."
@@ -300,7 +301,7 @@ usually do not have translators for other languages.\n\n")))
     (let ((txt (delete-and-extract-region (1+ user-point) (point))))
       (insert (propertize "\n" 'display txt)))
 
-    (emacs-build-description)
+    (emacs-bug--system-description)
     (insert "Configured features:\n" system-configuration-features "\n\n")
     (fill-region (line-beginning-position -1) (point))
     (when (and (featurep 'native-compile)
@@ -347,10 +348,10 @@ usually do not have translators for other languages.\n\n")))
 
     ;; This is so the user has to type something in order to send easily.
     (use-local-map (nconc (make-sparse-keymap) (current-local-map)))
-    (keymap-set (current-local-map) "C-c C-i" #'info-emacs-bug)
+    (define-key (current-local-map) "\C-c\C-i" #'info-emacs-bug)
     (if can-insert-mail
-        (keymap-set (current-local-map) "C-c M-i"
-                    #'report-emacs-bug-insert-to-mailer))
+	(define-key (current-local-map) "\C-c\M-i"
+	  #'report-emacs-bug-insert-to-mailer))
     (setq report-emacs-bug-send-command (get mail-user-agent 'sendfunc)
 	  report-emacs-bug-send-hook (get mail-user-agent 'hookvar))
     (if report-emacs-bug-send-command
@@ -359,23 +360,20 @@ usually do not have translators for other languages.\n\n")))
     (unless report-emacs-bug-no-explanations
       (with-output-to-temp-buffer "*Bug Help*"
 	(princ "While in the mail buffer:\n\n")
-        (let ((help
-               (substitute-command-keys
-                (format "%s%s%s%s"
-                        (if report-emacs-bug-send-command
-                            (format "  Type \\[%s] to send the bug report.\n"
-                                    report-emacs-bug-send-command)
-                          "")
-                        "  Type \\[kill-buffer] \\`RET' to cancel (don't send it).\n"
-                        (if can-insert-mail
-                            "  Type \\[report-emacs-bug-insert-to-mailer] to \
-copy text to your preferred mail program.\n"
-                          "")
-                        "  Type \\[info-emacs-bug] to visit in Info the Emacs Manual section
+        (if report-emacs-bug-send-command
+            (princ (substitute-command-keys
+                    (format "  Type \\[%s] to send the bug report.\n"
+                            report-emacs-bug-send-command))))
+	(princ (substitute-command-keys
+		"  Type \\[kill-buffer] RET to cancel (don't send it).\n"))
+	(if can-insert-mail
+	    (princ (substitute-command-keys
+		    "  Type \\[report-emacs-bug-insert-to-mailer] to copy text to your preferred mail program.\n")))
+	(terpri)
+	(princ (substitute-command-keys
+		"  Type \\[info-emacs-bug] to visit in Info the Emacs Manual section
     about when and how to write a bug report, and what
-    information you should include to help fix the bug."))))
-          (with-current-buffer "*Bug Help*"
-            (insert help))))
+    information you should include to help fix the bug.")))
       (shrink-window-if-larger-than-buffer (get-buffer-window "*Bug Help*")))
     ;; Make it less likely people will send empty messages.
     (if report-emacs-bug-send-hook
@@ -386,16 +384,11 @@ copy text to your preferred mail program.\n"
                 (buffer-substring-no-properties (point-min) (point)))
     (goto-char user-point)))
 
-;;;###autoload
-(defun emacs-build-description ()
-  "Insert a description of the current Emacs build in the current buffer."
-  (interactive)
-  (let ((start (point)))
-    (insert "\nIn " (emacs-version))
-    (if emacs-build-system
-        (insert " built on " emacs-build-system))
-    (insert "\n")
-    (fill-region-as-paragraph start (point)))
+(defun emacs-bug--system-description ()
+  (insert "\nIn " (emacs-version))
+  (if emacs-build-system
+      (insert " built on " emacs-build-system))
+  (insert "\n")
 
   (if (stringp emacs-repository-version)
       (insert "Repository revision: " emacs-repository-version "\n"))
@@ -416,6 +409,8 @@ copy text to your preferred mail program.\n"
     (insert "Configured using:\n 'configure "
 	    system-configuration-options "'\n\n")
     (fill-region (line-beginning-position -1) (point))))
+
+(define-obsolete-function-alias 'report-emacs-bug-info #'info-emacs-bug "24.3")
 
 (defun report-emacs-bug-hook ()
   "Do some checking before sending a bug report."
@@ -493,23 +488,15 @@ and send the mail again%s."
 Interactively, you will be prompted for SUBJECT and a patch FILE
 name (which will be attached to the mail).  You will end up in a
 Message buffer where you can explain more about the patch."
-  (interactive
-   (let* ((file (read-file-name "Patch file name: "))
-          (guess (with-temp-buffer
-                   (insert-file-contents file)
-                   (mail-fetch-field "Subject"))))
-     (list (read-string (format-prompt "This patch is about" guess)
-                        nil nil guess)
-           file)))
+  (interactive "sThis patch is about: \nfPatch file name: ")
   (switch-to-buffer "*Patch Help*")
   (let ((inhibit-read-only t))
     (erase-buffer)
     (insert "Thank you for considering submitting a patch to the Emacs project.\n\n"
             "Please describe what the patch fixes (or, if it's a new feature, what it\n"
-            "implements) in the mail buffer below.  When done, use the "
-            (substitute-command-keys "\\<message-mode-map>\\[message-send-and-exit] command\n")
+            "implements) in the mail buffer below.  When done, use the `C-c C-c' command\n"
             "to send the patch as an email to the Emacs issue tracker.\n\n"
-            "If this is the first time you're submitting an Emacs patch, please\n"
+            "If this is the first time you've submitted an Emacs patch, please\n"
             "read the ")
     (insert-text-button
      "CONTRIBUTE"
@@ -521,14 +508,12 @@ Message buffer where you can explain more about the patch."
     (goto-char (point-min))
     (view-mode 1)
     (button-mode 1))
-  (compose-mail-other-window report-emacs-bug-address subject)
-  (message-goto-body)
+  (message-mail-other-window report-emacs-bug-address subject)
   (insert "\n\n\n")
-  (emacs-build-description)
+  (emacs-bug--system-description)
   (mml-attach-file file "text/patch" nil "attachment")
   (message-goto-body)
-  (message "Write a description of the patch and use %s to send it"
-           (substitute-command-keys "\\[message-send-and-exit]"))
+  (message "Write a description of the patch and use `C-c C-c' to send it")
   (add-hook 'message-send-hook
             (lambda ()
               (message-goto-body)

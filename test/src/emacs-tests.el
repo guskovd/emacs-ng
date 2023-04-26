@@ -1,6 +1,6 @@
 ;;; emacs-tests.el --- unit tests for emacs.c -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2020-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2020-2022 Free Software Foundation, Inc.
 
 ;; This file is part of GNU Emacs.
 
@@ -25,7 +25,6 @@
 
 (require 'cl-lib)
 (require 'ert)
-(require 'ert-x) ; ert-with-temp-file
 (require 'rx)
 (require 'subr-x)
 
@@ -47,6 +46,22 @@
                         "--seccomp=/does-not-exist.bpf")
           0))))
 
+(cl-defmacro emacs-tests--with-temp-file
+    (var (prefix &optional suffix text) &rest body)
+  "Evaluate BODY while a new temporary file exists.
+Bind VAR to the name of the file.  Pass PREFIX, SUFFIX, and TEXT
+to `make-temp-file', which see."
+  (declare (indent 2) (debug (symbolp (form form form) body)))
+  (cl-check-type var symbol)
+  ;; Use an uninterned symbol so that the code still works if BODY
+  ;; changes VAR.
+  (let ((filename (make-symbol "filename")))
+    `(let ((,filename (make-temp-file ,prefix nil ,suffix ,text)))
+       (unwind-protect
+           (let ((,var ,filename))
+             ,@body)
+         (delete-file ,filename)))))
+
 (ert-deftest emacs-tests/seccomp/empty-file ()
   (skip-unless (string-match-p (rx bow "SECCOMP" eow)
                                system-configuration-features))
@@ -54,8 +69,7 @@
          (expand-file-name invocation-name invocation-directory))
         (process-environment nil))
     (skip-unless (file-executable-p emacs))
-    (ert-with-temp-file filter
-      :prefix "seccomp-invalid-" :suffix ".bpf"
+    (emacs-tests--with-temp-file filter ("seccomp-invalid-" ".bpf")
       ;; The --seccomp option is processed early, without filename
       ;; handlers.  Therefore remote or quoted filenames wouldn't
       ;; work.
@@ -80,9 +94,9 @@
         ;; Either 8 or 16, but 16 should be large enough in all cases.
         (filter-size 16))
     (skip-unless (file-executable-p emacs))
-    (ert-with-temp-file filter
-      :prefix "seccomp-too-large-" :suffix ".bpf"
-      :text (make-string (* (1+ ushort-max) filter-size) ?a)
+    (emacs-tests--with-temp-file
+        filter ("seccomp-too-large-" ".bpf"
+                (make-string (* (1+ ushort-max) filter-size) ?a))
       ;; The --seccomp option is processed early, without filename
       ;; handlers.  Therefore remote or quoted filenames wouldn't
       ;; work.
@@ -103,8 +117,8 @@
          (expand-file-name invocation-name invocation-directory))
         (process-environment nil))
     (skip-unless (file-executable-p emacs))
-    (ert-with-temp-file filter
-      :prefix "seccomp-invalid-" :suffix ".bpf" :text "123456"
+    (emacs-tests--with-temp-file filter ("seccomp-invalid-" ".bpf"
+                                         "123456")
       ;; The --seccomp option is processed early, without filename
       ;; handlers.  Therefore remote or quoted filenames wouldn't
       ;; work.

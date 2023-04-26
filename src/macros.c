@@ -1,6 +1,6 @@
 /* Keyboard macros.
 
-Copyright (C) 1985-1986, 1993, 2000-2023 Free Software Foundation, Inc.
+Copyright (C) 1985-1986, 1993, 2000-2022 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -128,9 +128,9 @@ end_kbd_macro (void)
   update_mode_lines = 20;
   kset_last_kbd_macro
     (current_kboard,
-     Fvector ((current_kboard->kbd_macro_end
-	       - current_kboard->kbd_macro_buffer),
-	      current_kboard->kbd_macro_buffer));
+     make_event_array ((current_kboard->kbd_macro_end
+			- current_kboard->kbd_macro_buffer),
+		       current_kboard->kbd_macro_buffer));
 }
 
 DEFUN ("end-kbd-macro", Fend_kbd_macro, Send_kbd_macro, 0, 2, "p",
@@ -273,15 +273,9 @@ pop_kbd_macro (Lisp_Object info)
 }
 
 DEFUN ("execute-kbd-macro", Fexecute_kbd_macro, Sexecute_kbd_macro, 1, 3, 0,
-       doc: /* Execute MACRO as a sequence of events.
-If MACRO is a string or vector, then the events in it are executed
-exactly as if they had been input by the user.
-
-If MACRO is a symbol, its function definition is used.  If that is
-another symbol, this process repeats.  Eventually the result should be
-a string or vector.  If the result is not a symbol, string, or vector,
-an error is signaled.
-
+       doc: /* Execute MACRO as string of editor command characters.
+MACRO can also be a vector of keyboard events.  If MACRO is a symbol,
+its function definition is used.
 COUNT is a repeat count, or nil for once, or 0 for infinite loop.
 
 Optional third arg LOOPFUNC may be a function that is called prior to
@@ -293,7 +287,7 @@ buffer before the macro is executed.  */)
 {
   Lisp_Object final;
   Lisp_Object tem;
-  specpdl_ref pdlcount = SPECPDL_INDEX ();
+  ptrdiff_t pdlcount = SPECPDL_INDEX ();
   EMACS_INT repeat = 1;
   EMACS_INT success_count = 0;
 

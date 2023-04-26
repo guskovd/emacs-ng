@@ -1,6 +1,6 @@
 ;;; mh-thread.el --- MH-E threading support  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2002-2004, 2006-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2002-2004, 2006-2022 Free Software Foundation, Inc.
 
 ;; Author: Satyaki Das <satyaki@theforce.stanford.edu>
 ;; Maintainer: Bill Wohler <wohler@newt.com>
@@ -86,33 +86,41 @@
   message parent children
   (real-child-p t))
 
-(defvar-local mh-thread-id-hash nil
+(defvar mh-thread-id-hash nil
   "Hash table used to canonicalize message identifiers.")
+(make-variable-buffer-local 'mh-thread-id-hash)
 
-(defvar-local mh-thread-subject-hash nil
+(defvar mh-thread-subject-hash nil
   "Hash table used to canonicalize subject strings.")
+(make-variable-buffer-local 'mh-thread-subject-hash)
 
-(defvar-local mh-thread-id-table nil
+(defvar mh-thread-id-table nil
   "Thread ID table maps from message identifiers to message containers.")
+(make-variable-buffer-local 'mh-thread-id-table)
 
-(defvar-local mh-thread-index-id-map nil
+(defvar mh-thread-index-id-map nil
   "Table to look up message identifier from message index.")
+(make-variable-buffer-local 'mh-thread-index-id-map)
 
-(defvar-local mh-thread-id-index-map nil
+(defvar mh-thread-id-index-map nil
   "Table to look up message index number from message identifier.")
+(make-variable-buffer-local 'mh-thread-id-index-map)
 
-(defvar-local mh-thread-subject-container-hash nil
+(defvar mh-thread-subject-container-hash nil
   "Hash table used to group messages by subject.")
+(make-variable-buffer-local 'mh-thread-subject-container-hash)
 
-(defvar-local mh-thread-duplicates nil
+(defvar mh-thread-duplicates nil
   "Hash table used to associate messages with the same message identifier.")
+(make-variable-buffer-local 'mh-thread-duplicates)
 
-(defvar-local mh-thread-history ()
+(defvar mh-thread-history ()
   "Variable to remember the transformations to the thread tree.
 When new messages are added, these transformations are rewound,
 then the links are added from the newly seen messages. Finally
 the transformations are redone to get the new thread tree. This
 makes incremental threading easier.")
+(make-variable-buffer-local 'mh-thread-history)
 
 (defvar mh-thread-body-width nil
   "Width of scan substring that contains subject and body of message.")
@@ -139,7 +147,7 @@ to the message that started everything."
     (cond (thread-root-flag
            (while (mh-thread-immediate-ancestor))
            (mh-maybe-show))
-          ((equal current-level 0)
+          ((equal current-level 1)
            (message "Message has no ancestor"))
           (t (mh-thread-immediate-ancestor)
              (mh-maybe-show)))))
@@ -242,8 +250,8 @@ sibling."
 (defun mh-thread-current-indentation-level ()
   "Find the number of spaces by which current message is indented."
   (save-excursion
-    (let ((address-start-offset (+ mh-cmd-note
-                                   mh-scan-field-from-start-offset))
+    (let ((address-start-offset (+ mh-cmd-note mh-scan-date-flag-width
+                                   mh-scan-date-width 1))
           (level 0))
       (beginning-of-line)
       (forward-char address-start-offset)
@@ -275,8 +283,8 @@ at the end."
   (beginning-of-line)
   (if (eobp)
       nil
-    (let ((address-start-offset (+ mh-cmd-note
-                                   mh-scan-field-from-start-offset))
+    (let ((address-start-offset (+ mh-cmd-note mh-scan-date-flag-width
+                                   mh-scan-date-width 1))
           (level (mh-thread-current-indentation-level))
           spaces begin)
       (setq begin (point))
@@ -286,7 +294,7 @@ at the end."
         (while (not (eobp))
           (forward-char address-start-offset)
           (unless (equal (string-match spaces (buffer-substring-no-properties
-                                               (point) (line-end-position)))
+                                               (point) (mh-line-end-position)))
                          0)
             (beginning-of-line)
             (backward-char)
@@ -447,8 +455,8 @@ If optional argument STRING is given then that is assumed to be
 the scan line. Otherwise uses the line at point as the scan line
 to parse."
   (let* ((string (or string (buffer-substring-no-properties
-                             (line-beginning-position)
-                             (line-end-position))))
+                             (mh-line-beginning-position)
+                             (mh-line-end-position))))
          (address-start (+ mh-cmd-note mh-scan-field-from-start-offset))
          (body-start (+ mh-cmd-note mh-scan-field-from-end-offset))
          (first-string (substring string 0 address-start)))
@@ -589,20 +597,20 @@ Only information about messages in MSG-LIST are added to the tree."
         (while (not (eobp))
           (cl-block process-message
             (let* ((index-line
-                    (prog1 (buffer-substring (point) (line-end-position))
+                    (prog1 (buffer-substring (point) (mh-line-end-position))
                       (forward-line)))
                    (index (string-to-number index-line))
-                   (id (prog1 (buffer-substring (point) (line-end-position))
+                   (id (prog1 (buffer-substring (point) (mh-line-end-position))
                          (forward-line)))
                    (refs (prog1
-                             (buffer-substring (point) (line-end-position))
+                             (buffer-substring (point) (mh-line-end-position))
                            (forward-line)))
                    (in-reply-to (prog1 (buffer-substring (point)
-                                                         (line-end-position))
+                                                         (mh-line-end-position))
                                   (forward-line)))
                    (subject (prog1
                                 (buffer-substring
-                                 (point) (line-end-position))
+                                 (point) (mh-line-end-position))
                               (forward-line)))
                    (subject-re-p nil))
               (unless (gethash index mh-thread-scan-line-map)
@@ -865,6 +873,7 @@ This function can only be used the folder is threaded."
 (provide 'mh-thread)
 
 ;; Local Variables:
+;; indent-tabs-mode: nil
 ;; sentence-end-double-space: nil
 ;; End:
 

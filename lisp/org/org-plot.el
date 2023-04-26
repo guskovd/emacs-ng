@@ -1,11 +1,11 @@
 ;;; org-plot.el --- Support for Plotting from Org -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2008-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2008-2022 Free Software Foundation, Inc.
 ;;
 ;; Author: Eric Schulte <schulte dot eric at gmail dot com>
-;; Maintainer: TEC <orgmode@tec.tecosaur.net>
+;; Maintainer: TEC <tecosaur@gmail.com>
 ;; Keywords: tables, plotting
-;; URL: https://orgmode.org
+;; Homepage: https://orgmode.org
 ;;
 ;; This file is part of GNU Emacs.
 ;;
@@ -30,9 +30,6 @@
 ;; feature suggestions
 
 ;;; Code:
-
-(require 'org-macs)
-(org-assert-version)
 
 (require 'cl-lib)
 (require 'org)
@@ -275,15 +272,15 @@ argument for the FUNCTION."
 	     for k in keys collect
 	     (cons k (funcall function (lookup k alist1) (lookup k alist2))))))
 
-(defun org--plot/item-frequencies (values &optional normalize)
+(defun org--plot/item-frequencies (values &optional normalise)
   "Return an alist indicating the frequency of values in VALUES list.
-When NORMALIZE is non-nil, the count is divided by the number of values."
-  (let ((normaliser (if normalize (float (length values)) 1)))
+When NORMALISE is non-nil, the count is divided by the number of values."
+  (let ((normaliser (if normalise (float (length values)) 1)))
     (cl-loop for (n . m) in (seq-group-by #'identity values)
 	     collect (cons n (/ (length m) normaliser)))))
 
 (defun org--plot/prime-factors (value)
-  "Return the prime decomposition of VALUE, e.g. for 12, (3 2 2)."
+  "Return the prime decomposition of VALUE, e.g. for 12, '(3 2 2)."
   (let ((factors '(1)) (i 1))
     (while (/= 1 value)
       (setq i (1+ i))
@@ -293,11 +290,6 @@ When NORMALIZE is non-nil, the count is divided by the number of values."
 	(setq i (1- i))
 	))
     (cl-subseq factors 0 -1)))
-
-(defgroup org-plot nil
-  "Options for plotting in Org mode."
-  :tag "Org Plot"
-  :group 'org)
 
 (defcustom org-plot/gnuplot-script-preamble ""
   "String of function to be inserted before the gnuplot plot command is run.
@@ -629,9 +621,8 @@ manner suitable for prepending to a user-specified script."
   "Find any overlays for IMG-FILE in the current Org buffer, and refresh them."
   (dolist (img-overlay org-inline-image-overlays)
     (when (string= img-file (plist-get (cdr (overlay-get img-overlay 'display)) :file))
-      (when (and (file-exists-p img-file)
-                 (fboundp 'image-flush))
-        (image-flush (overlay-get img-overlay 'display))))))
+      (when (file-exists-p img-file)
+        (image-refresh (overlay-get img-overlay 'display))))))
 
 ;;-----------------------------------------------------------------------------
 ;; facade functions
@@ -676,8 +667,7 @@ line directly before or after the table."
 	   (num-cols (length (if (eq (nth 0 table) 'hline) (nth 1 table)
 			       (nth 0 table))))
 	   (type (assoc (plist-get params :plot-type)
-			org-plot/preset-plot-types))
-           gnuplot-script)
+			org-plot/preset-plot-types)))
 
       (unless type
 	(user-error "Org-plot type `%s' is undefined" (plist-get params :plot-type)))
@@ -692,10 +682,9 @@ line directly before or after the table."
 				  (looking-at "[[:space:]]*#\\+"))
 			(setf params (org-plot/collect-options params))))
       ;; Dump table to datafile
-      (let ((dump-func (plist-get type :data-dump)))
-        (if dump-func
-	    (funcall dump-func table data-file num-cols params)
-	  (org-plot/gnuplot-to-data table data-file params)))
+      (if-let ((dump-func (plist-get type :data-dump)))
+	  (funcall dump-func table data-file num-cols params)
+	(org-plot/gnuplot-to-data table data-file params))
       ;; Check type of ind column (timestamp? text?)
       (when (plist-get params :check-ind-type)
 	(let* ((ind (1- (plist-get params :ind)))
@@ -711,17 +700,16 @@ line directly before or after the table."
 				  ind-column))
 		 (plist-put params :textind t))))) ; ind holds text
       ;; Write script.
-      (setq gnuplot-script
-            (org-plot/gnuplot-script
-             table data-file num-cols params (plist-get params :script)))
       (with-temp-buffer
 	(if (plist-get params :script)	; user script
-	    (progn (insert gnuplot-script "\n")
+	    (progn (insert
+		    (org-plot/gnuplot-script table data-file num-cols params t))
+		   (insert "\n")
 		   (insert-file-contents (plist-get params :script))
 		   (goto-char (point-min))
 		   (while (re-search-forward "\\$datafile" nil t)
 		     (replace-match data-file nil nil)))
-	  (insert gnuplot-script))
+	  (insert (org-plot/gnuplot-script table data-file num-cols params)))
 	;; Graph table.
 	(gnuplot-mode)
         (condition-case nil

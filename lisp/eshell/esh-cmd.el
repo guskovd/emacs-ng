@@ -1,6 +1,6 @@
 ;;; esh-cmd.el --- command invocation  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1999-2023 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2022 Free Software Foundation, Inc.
 
 ;; Author: John Wiegley <johnw@gnu.org>
 
@@ -107,7 +107,6 @@
 (require 'esh-module)
 (require 'esh-io)
 (require 'esh-ext)
-(require 'generator)
 
 (eval-when-compile
   (require 'cl-lib)
@@ -132,10 +131,6 @@ There are several different kinds of commands, however."
   "A regexp which, if matched at beginning of an argument, means Lisp.
 Such arguments will be passed to `read', and then evaluated."
   :type 'regexp)
-
-(defcustom eshell-lisp-form-nil-is-failure t
-  "If non-nil, Lisp forms like (COMMAND ARGS) treat a nil result as failure."
-  :type 'boolean)
 
 (defcustom eshell-pre-command-hook nil
   "A hook run before each interactive command is invoked."
@@ -260,12 +255,12 @@ the command."
 
 (defcustom eshell-subcommand-bindings
   '((eshell-in-subcommand-p t)
-    (eshell-in-pipeline-p nil)
-    (default-directory default-directory))
+    (default-directory default-directory)
+    (process-environment (eshell-copy-environment)))
   "A list of `let' bindings for subcommand environments."
-  :version "29.1"		       ; removed `process-environment'
-  :type 'sexp
-  :risky t)
+  :type 'sexp)
+
+(put 'risky-local-variable 'eshell-subcommand-bindings t)
 
 (defvar eshell-ensure-newline-p nil
   "If non-nil, ensure that a newline is emitted after a Lisp form.
@@ -284,44 +279,14 @@ otherwise t.")
 (defvar eshell-in-subcommand-p nil)
 (defvar eshell-last-arguments nil)
 (defvar eshell-last-command-name nil)
-(defvar eshell-last-async-procs nil
-  "The currently-running foreground process(es).
-When executing a pipeline, this is a cons cell whose CAR is the
-first process (usually reading from stdin) and whose CDR is the
-last process (usually writing to stdout).  Otherwise, the CAR and
-CDR are the same process.
-
-When the process in the CDR completes, resume command evaluation.")
-
-(defvar eshell-allow-commands t
-  "If non-nil, allow evaluating command forms (including Lisp forms).
-If you want to forbid command forms, you can let-bind this to a
-non-nil value before calling `eshell-do-eval'.  Then, any command
-forms will signal `eshell-commands-forbidden'.  This is useful
-if, for example, you want to evaluate simple expressions like
-variable expansions, but not fully-evaluate the command.  See
-also `eshell-complete-parse-arguments'.")
-
-(define-error 'eshell-commands-forbidden "Commands forbidden")
+(defvar eshell-last-async-proc nil
+  "When this foreground process completes, resume command evaluation.")
 
 ;;; Functions:
 
-(defsubst eshell-interactive-process-p ()
-  "Return non-nil if there is a currently running command process."
-  eshell-last-async-procs)
-
-(defsubst eshell-head-process ()
-  "Return the currently running process at the head of any pipeline.
-This only returns external (non-Lisp) processes."
-  (car-safe eshell-last-async-procs))
-
-(defsubst eshell-tail-process ()
-  "Return the currently running process at the tail of any pipeline.
-This only returns external (non-Lisp) processes."
-  (cdr-safe eshell-last-async-procs))
-
-(define-obsolete-function-alias 'eshell-interactive-process
-  'eshell-tail-process "29.1")
+(defsubst eshell-interactive-process ()
+  "Return currently running command process, if non-Lisp."
+  eshell-last-async-proc)
 
 (defun eshell-cmd-initialize ()     ;Called from `eshell-mode' via intern-soft!
   "Initialize the Eshell command processing module."
@@ -330,7 +295,7 @@ This only returns external (non-Lisp) processes."
   (setq-local eshell-command-arguments nil)
   (setq-local eshell-last-arguments nil)
   (setq-local eshell-last-command-name nil)
-  (setq-local eshell-last-async-procs nil)
+  (setq-local eshell-last-async-proc nil)
 
   (add-hook 'eshell-kill-hook #'eshell-resume-command nil t)
 
@@ -341,7 +306,7 @@ This only returns external (non-Lisp) processes."
   (add-hook 'eshell-post-command-hook
             (lambda ()
               (setq eshell-current-command nil
-                    eshell-last-async-procs nil))
+                    eshell-last-async-proc nil))
             nil t)
 
   (add-hook 'eshell-parse-argument-hook
@@ -354,7 +319,7 @@ This only returns external (non-Lisp) processes."
 	      #'eshell-complete-lisp-symbols nil t)))
 
 (defun eshell-complete-lisp-symbols ()
-  "If there is a Lisp symbol, complete it."
+  "If there is a user reference, complete it."
   (let ((arg (pcomplete-actual-arg)))
     (when (string-match (concat "\\`" eshell-lisp-regexp) arg)
       (setq pcomplete-stub (substring arg (match-end 0))
@@ -365,38 +330,6 @@ This only returns external (non-Lisp) processes."
 ;; Command parsing
 
 (defvar eshell--sep-terms)
-
-(defmacro eshell-with-temp-command (region &rest body)
-  "Narrow the buffer to REGION and execute the forms in BODY.
-
-REGION is a cons cell (START . END) that specifies the region to
-which to narrow the buffer.  REGION can also be a string, in
-which case the macro temporarily inserts it into the buffer at
-point, and narrows the buffer to the inserted string.  Before
-executing BODY, point is set to the beginning of the narrowed
-REGION.
-
-The value returned is the last form in BODY."
-  (declare (indent 1))
-  `(let ((reg ,region))
-     (if (stringp reg)
-         ;; Since parsing relies partly on buffer-local state
-         ;; (e.g. that of `eshell-parse-argument-hook'), we need to
-         ;; perform the parsing in the Eshell buffer.
-         (let ((begin (point)) end)
-           (with-silent-modifications
-             (insert reg)
-             (setq end (point))
-             (unwind-protect
-                 (save-restriction
-                   (narrow-to-region begin end)
-                   (goto-char begin)
-                   ,@body)
-               (delete-region begin end))))
-       (save-restriction
-         (narrow-to-region (car reg) (cdr reg))
-         (goto-char (car reg))
-         ,@body))))
 
 (defun eshell-parse-command (command &optional args toplevel)
   "Parse the COMMAND, adding ARGS if given.
@@ -409,9 +342,15 @@ hooks should be run before and after the command."
 	  (append
 	   (if (consp command)
 	       (eshell-parse-arguments (car command) (cdr command))
-             (eshell-with-temp-command command
-               (goto-char (point-max))
-               (eshell-parse-arguments (point-min) (point-max))))
+	     (let ((here (point))
+		   (inhibit-point-motion-hooks t))
+               (with-silent-modifications
+                 ;; FIXME: Why not use a temporary buffer and avoid this
+                 ;; "insert&delete" business?  --Stef
+                 (insert command)
+                 (prog1
+                     (eshell-parse-arguments here (point))
+                   (delete-region here (point))))))
 	   args))
 	 (commands
 	  (mapcar
@@ -421,8 +360,7 @@ hooks should be run before and after the command."
                            (string= (car eshell--sep-terms) ";"))
                        (eshell-parse-pipeline cmd)
                      `(eshell-do-subjob
-                       (cons :eshell-background
-                             ,(eshell-parse-pipeline cmd)))))
+                       (list ,(eshell-parse-pipeline cmd)))))
              (setq eshell--sep-terms (cdr eshell--sep-terms))
              (if eshell-in-pipeline-p
                  cmd
@@ -430,11 +368,8 @@ hooks should be run before and after the command."
 	   (eshell-separate-commands terms "[&;]" nil 'eshell--sep-terms))))
     (let ((cmd commands))
       (while cmd
-        ;; Copy I/O handles so each full statement can manipulate them
-        ;; if they like.  Steal the handles for the last command in
-        ;; the list; we won't use the originals again anyway.
-        (setcar cmd `(eshell-with-copied-handles
-                      ,(car cmd) ,(not (cdr cmd))))
+	(if (cdr cmd)
+	    (setcar cmd `(eshell-commands ,(car cmd))))
 	(setq cmd (cdr cmd))))
     (if toplevel
 	`(eshell-commands (progn
@@ -495,19 +430,14 @@ hooks should be run before and after the command."
   (let ((sym (if eshell-in-pipeline-p
 		 'eshell-named-command*
 	       'eshell-named-command))
-        (grouped-terms (eshell-prepare-splice terms)))
-    (cond
-     (grouped-terms
-      `(let ((terms (nconc ,@grouped-terms)))
-         (,sym (car terms) (cdr terms))))
-     ;; If no terms are spliced, use a simpler command form.
-     ((cdr terms)
-      (list sym (car terms) `(list ,@(cdr terms))))
-     (t
-      (list sym (car terms))))))
+	(cmd (car terms))
+	(args (cdr terms)))
+    (if args
+	(list sym cmd `(list ,@(cdr terms)))
+      (list sym cmd))))
 
-(defvar eshell--command-body)
-(defvar eshell--test-body)
+(defvar eshell-command-body)
+(defvar eshell-test-body)
 
 (defsubst eshell-invokify-arg (arg &optional share-output silent)
   "Change ARG so it can be invoked from a structured command.
@@ -543,25 +473,30 @@ of its argument (i.e., use of a Lisp special form), it must be
 implemented via rewriting, rather than as a function."
   (if (and (equal (car terms) "for")
 	   (equal (nth 2 terms) "in"))
-      (let ((for-items (make-symbol "for-items"))
-            (body (car (last terms))))
+      (let ((body (car (last terms))))
 	(setcdr (last terms 2) nil)
-        `(let ((,for-items
-                (append
-                 ,@(mapcar
-                    (lambda (elem)
-                      (if (listp elem)
-                          elem
-                        `(list ,elem)))
-                    (nthcdr 3 terms)))))
-           (while ,for-items
-             (let ((,(intern (cadr terms)) (car ,for-items))
+	`(let ((for-items
+		(copy-tree
+		 (append
+		  ,@(mapcar
+		     (lambda (elem)
+		       (if (listp elem)
+			   elem
+			 `(list ,elem)))
+		     (cdr (cddr terms))))))
+	       (eshell-command-body '(nil))
+               (eshell-test-body '(nil)))
+	   (while (car for-items)
+	     (let ((,(intern (cadr terms)) (car for-items))
 		   (eshell--local-vars (cons ',(intern (cadr terms))
-                                             eshell--local-vars)))
+					    eshell--local-vars)))
 	       (eshell-protect
 	   	,(eshell-invokify-arg body t)))
-             (setq ,for-items (cdr ,for-items)))
-           (eshell-close-handles)))))
+	     (setcar for-items (cadr for-items))
+	     (setcdr for-items (cddr for-items)))
+           (eshell-close-handles
+            eshell-last-command-status
+            (list 'quote eshell-last-command-result))))))
 
 (defun eshell-structure-basic-command (func names keyword test body
 					    &optional else)
@@ -569,11 +504,10 @@ implemented via rewriting, rather than as a function."
 The first of NAMES should be the positive form, and the second the
 negative.  It's not likely that users should ever need to call this
 function."
-  ;; If the test form begins with `eshell-convert' or
-  ;; `eshell-escape-arg', it means something data-wise will be
-  ;; returned, and we should let that determine the truth of the
-  ;; statement.
-  (unless (memq (car test) '(eshell-convert eshell-escape-arg))
+  ;; If the test form begins with `eshell-convert', it means
+  ;; something data-wise will be returned, and we should let
+  ;; that determine the truth of the statement.
+  (unless (eq (car test) 'eshell-convert)
     (setq test
 	  `(progn ,test
                   (eshell-exit-success-p))))
@@ -590,9 +524,12 @@ function."
 
   ;; finally, create the form that represents this structured
   ;; command
-  `(progn
+  `(let ((eshell-command-body '(nil))
+         (eshell-test-body '(nil)))
      (,func ,test ,body ,else)
-     (eshell-close-handles)))
+     (eshell-close-handles
+        eshell-last-command-status
+        (list 'quote eshell-last-command-result))))
 
 (defun eshell-rewrite-while-command (terms)
   "Rewrite a `while' command into its equivalent Eshell command form.
@@ -622,7 +559,7 @@ must be implemented via rewriting, rather than as a function."
                                t))
        (if (= (length terms) 4)
 	   `(eshell-protect
-             ,(eshell-invokify-arg (car (last terms)) t))))))
+             ,(eshell-invokify-arg (car (last terms)))) t))))
 
 (defvar eshell-last-command-result)     ;Defined in esh-io.el.
 
@@ -688,13 +625,13 @@ This means an exit code of 0."
 	   (or (= (point-max) (1+ (point)))
 	       (not (eq (char-after (1+ (point))) ?\}))))
       (let ((end (eshell-find-delimiter ?\{ ?\})))
-        (unless end
-          (throw 'eshell-incomplete "{"))
-        (when (eshell-arg-delimiter (1+ end))
-          (prog1
-              `(eshell-as-subcommand
-                ,(eshell-parse-command (cons (1+ (point)) end)))
-            (goto-char (1+ end)))))))
+	(if (not end)
+	    (throw 'eshell-incomplete ?\{)
+	  (when (eshell-arg-delimiter (1+ end))
+	    (prog1
+		`(eshell-as-subcommand
+                  ,(eshell-parse-command (cons (1+ (point)) end)))
+	      (goto-char (1+ end))))))))
 
 (defun eshell-parse-lisp-argument ()
   "Parse a Lisp expression which is specified as an argument."
@@ -706,7 +643,7 @@ This means an exit code of 0."
 	      (condition-case nil
 		  (read (current-buffer))
 		(end-of-file
-                 (throw 'eshell-incomplete "(")))))
+		 (throw 'eshell-incomplete ?\()))))
 	(if (eshell-arg-delimiter)
 	    `(eshell-command-to-value
               (eshell-lisp-command (quote ,obj)))
@@ -749,20 +686,18 @@ if none)."
 ;; The structure of the following macros is very important to
 ;; `eshell-do-eval' [Iterative evaluation]:
 ;;
-;; @ Don't use special forms that conditionally evaluate their
-;;   arguments, such as `let*', unless Eshell explicitly supports
-;;   them.  Eshell supports the following special forms: `catch',
-;;   `condition-case', `if', `let', `prog1', `progn', `quote', `setq',
-;;   `unwind-protect', and `while'.
+;; @ Don't use forms that conditionally evaluate their arguments, such
+;;   as `setq', `if', `while', `let*', etc.  The only special forms
+;;   that can be used are `let', `condition-case' and
+;;   `unwind-protect'.
+;;
+;; @ The main body of a `let' can contain only one form.  Use `progn'
+;;   if necessary.
 ;;
 ;; @ The two `special' variables are `eshell-current-handles' and
 ;;   `eshell-current-subjob-p'.  Bind them locally with a `let' if you
 ;;   need to change them.  Change them directly only if your intention
 ;;   is to change the calling environment.
-;;
-;; These rules likewise apply to any other code that generates forms
-;; that `eshell-do-eval' will evaluated, such as command rewriting
-;; hooks (see `eshell-rewrite-command-hook' and friends).
 
 (defmacro eshell-do-subjob (object)
   "Evaluate a command OBJECT as a subjob.
@@ -801,16 +736,15 @@ this grossness will be made to disappear by using `call/cc'..."
 (defvar eshell-output-handle)           ;Defined in esh-io.el.
 (defvar eshell-error-handle)            ;Defined in esh-io.el.
 
-(defmacro eshell-with-copied-handles (object &optional steal-p)
-  "Duplicate current I/O handles, so OBJECT works with its own copy.
-If STEAL-P is non-nil, these new handles will be stolen from the
-current ones (see `eshell-duplicate-handles')."
+(defmacro eshell-copy-handles (object)
+  "Duplicate current I/O handles, so OBJECT works with its own copy."
   `(let ((eshell-current-handles
-          (eshell-duplicate-handles eshell-current-handles ,steal-p)))
+	  (eshell-create-handles
+	   (car (aref eshell-current-handles
+		      eshell-output-handle)) nil
+	   (car (aref eshell-current-handles
+		      eshell-error-handle)) nil)))
      ,object))
-
-(define-obsolete-function-alias 'eshell-copy-handles
-  #'eshell-with-copied-handles "30.1")
 
 (defmacro eshell-protect (object)
   "Protect I/O handles, so they aren't get closed after eval'ing OBJECT."
@@ -822,13 +756,16 @@ current ones (see `eshell-duplicate-handles')."
   "Execute the commands in PIPELINE, connecting each to one another.
 This macro calls itself recursively, with NOTFIRST non-nil."
   (when (setq pipeline (cadr pipeline))
-    `(eshell-with-copied-handles
+    `(eshell-copy-handles
       (progn
 	,(when (cdr pipeline)
 	   `(let ((nextproc
 		   (eshell-do-pipelines (quote ,(cdr pipeline)) t)))
               (eshell-set-output-handle ,eshell-output-handle
-                                        'append nextproc)))
+                                        'append nextproc)
+              (eshell-set-output-handle ,eshell-error-handle
+                                        'append nextproc)
+              (setq tailproc (or tailproc nextproc))))
 	,(let ((head (car pipeline)))
 	   (if (memq (car head) '(let progn))
 	       (setq head (car (last head))))
@@ -844,12 +781,7 @@ This macro calls itself recursively, with NOTFIRST non-nil."
 	       ,(cond ((not notfirst) (quote 'first))
 		      ((cdr pipeline) t)
 		      (t (quote 'last)))))
-          (let ((proc ,(car pipeline)))
-            (set headproc (or proc (symbol-value headproc)))
-            (set tailproc (or (symbol-value tailproc) proc))
-            proc)))
-      ;; Steal handles if this is the last item in the pipeline.
-      ,(null (cdr pipeline)))))
+	  ,(car pipeline))))))
 
 (defmacro eshell-do-pipelines-synchronously (pipeline)
   "Execute the commands in PIPELINE in sequence synchronously.
@@ -860,6 +792,8 @@ This is used on systems where async subprocesses are not supported."
        ,(when (cdr pipeline)
           `(let ((output-marker ,(point-marker)))
              (eshell-set-output-handle ,eshell-output-handle
+                                       'append output-marker)
+             (eshell-set-output-handle ,eshell-error-handle
                                        'append output-marker)))
        ,(let ((head (car pipeline)))
           (if (memq (car head) '(let progn))
@@ -879,7 +813,7 @@ This is used on systems where async subprocesses are not supported."
        (let ((result ,(car pipeline)))
          ;; tailproc gets the result of the last successful process in
          ;; the pipeline.
-         (set tailproc (or result (symbol-value tailproc)))
+         (setq tailproc (or result tailproc))
          ,(if (cdr pipeline)
               `(eshell-do-pipelines-synchronously (quote ,(cdr pipeline))))
          result))))
@@ -888,48 +822,40 @@ This is used on systems where async subprocesses are not supported."
 
 (defmacro eshell-execute-pipeline (pipeline)
   "Execute the commands in PIPELINE, connecting each to one another."
-  `(let ((eshell-in-pipeline-p t)
-         (headproc (make-symbol "headproc"))
-         (tailproc (make-symbol "tailproc")))
-     (set headproc nil)
-     (set tailproc nil)
+  `(let ((eshell-in-pipeline-p t) tailproc)
      (progn
-       ,(if eshell-supports-asynchronous-processes
+       ,(if (fboundp 'make-process)
 	    `(eshell-do-pipelines ,pipeline)
-          `(let ((tail-handles (eshell-duplicate-handles
-                                eshell-current-handles)))
+	  `(let ((tail-handles (eshell-create-handles
+				(car (aref eshell-current-handles
+					   ,eshell-output-handle)) nil
+				(car (aref eshell-current-handles
+					   ,eshell-error-handle)) nil)))
 	     (eshell-do-pipelines-synchronously ,pipeline)))
-       (eshell-process-identity (cons (symbol-value headproc)
-                                      (symbol-value tailproc))))))
+       (eshell-process-identity tailproc))))
 
 (defmacro eshell-as-subcommand (command)
-  "Execute COMMAND as a subcommand.
-A subcommand creates a local environment so that any changes to
-the environment don't propagate outside of the subcommand's
-scope.  This lets you use commands like `cd' within a subcommand
-without changing the current directory of the main Eshell
-buffer."
+  "Execute COMMAND using a temp buffer.
+This is used so that certain Lisp commands, such as `cd', when
+executed in a subshell, do not disturb the environment of the main
+Eshell buffer."
   `(let ,eshell-subcommand-bindings
      ,command))
 
 (defmacro eshell-do-command-to-value (object)
   "Run a subcommand prepared by `eshell-command-to-value'.
 This avoids the need to use `let*'."
-  (declare (obsolete nil "30.1"))
   `(let ((eshell-current-handles
 	  (eshell-create-handles value 'overwrite)))
      (progn
        ,object
        (symbol-value value))))
 
-(defmacro eshell-command-to-value (command)
-  "Run an Eshell COMMAND synchronously, returning its output."
-  (let ((value (make-symbol "eshell-temp")))
-    `(let ((eshell-in-pipeline-p nil)
-           (eshell-current-handles
-	    (eshell-create-handles ',value 'overwrite)))
-       ,command
-       ,value)))
+(defmacro eshell-command-to-value (object)
+  "Run OBJECT synchronously, returning its result as a string.
+Returns a string comprising the output from the command."
+  `(let ((value (make-symbol "eshell-temp")))
+     (eshell-do-command-to-value ,object)))
 
 ;;;_* Iterative evaluation
 ;;
@@ -978,71 +904,24 @@ at the moment are:
   "Completion for the `debug' command."
   (while (pcomplete-here '("errors" "commands"))))
 
-(iter-defun eshell--find-subcommands (haystack)
-  "Recursively search for subcommand forms in HAYSTACK.
-This yields the SUBCOMMANDs when found in forms like
-\"(eshell-as-subcommand SUBCOMMAND)\"."
-  (dolist (elem haystack)
-    (cond
-     ((eq (car-safe elem) 'eshell-as-subcommand)
-      (iter-yield (cdr elem)))
-     ((listp elem)
-      (iter-yield-from (eshell--find-subcommands elem))))))
-
-(defun eshell--invoke-command-directly (command)
-  "Determine whether the given COMMAND can be invoked directly.
-COMMAND should be a non-top-level Eshell command in parsed form.
-
-A command can be invoked directly if all of the following are true:
-
-* The command is of the form
-  \"(eshell-trap-errors (eshell-named-command NAME ARGS))\",
-  where ARGS is optional.
-
-* NAME is a string referring to an alias function and isn't a
-  complex command (see `eshell-complex-commands').
-
-* Any subcommands in ARGS can also be invoked directly."
-  (when (and (eq (car command) 'eshell-trap-errors)
-             (eq (car (cadr command)) 'eshell-named-command))
-    (let ((name (cadr (cadr command)))
-          (args (cdr-safe (nth 2 (cadr command)))))
-      (and name (stringp name)
-	   (not (member name eshell-complex-commands))
-	   (catch 'simple
-	     (dolist (pred eshell-complex-commands t)
-	       (when (and (functionp pred)
-		          (funcall pred name))
-	         (throw 'simple nil))))
-	   (eshell-find-alias-function name)
-           (catch 'indirect-subcommand
-             (iter-do (subcommand (eshell--find-subcommands args))
-               (unless (eshell--invoke-command-directly subcommand)
-                 (throw 'indirect-subcommand nil)))
-             t)))))
-
 (defun eshell-invoke-directly (command)
-  "Determine whether the given COMMAND can be invoked directly.
-COMMAND should be a top-level Eshell command in parsed form, as
-produced by `eshell-parse-command'."
-  (let ((base (cadr (nth 2 (nth 2 (cadr command))))))
-    (eshell--invoke-command-directly base)))
-
-(defun eshell-eval-argument (argument)
-  "Evaluate a single Eshell ARGUMENT and return the result."
-  (let* ((form (eshell-with-temp-command argument
-                 (eshell-parse-argument)))
-         (result (eshell-do-eval form t)))
-    (cl-assert (eq (car result) 'quote))
-    (cadr result)))
+  (let ((base (cadr (nth 2 (nth 2 (cadr command))))) name)
+    (if (and (eq (car base) 'eshell-trap-errors)
+	     (eq (car (cadr base)) 'eshell-named-command))
+	(setq name (cadr (cadr base))))
+    (and name (stringp name)
+	 (not (member name eshell-complex-commands))
+	 (catch 'simple
+	   (progn
+	    (dolist (pred eshell-complex-commands)
+	      (if (and (functionp pred)
+		       (funcall pred name))
+		  (throw 'simple nil)))
+	    t))
+	 (eshell-find-alias-function name))))
 
 (defun eshell-eval-command (command &optional input)
-  "Evaluate the given COMMAND iteratively.
-Return the process (or head and tail processes) created by
-COMMAND, if any.  If COMMAND is a background command, return the
-process(es) in a cons cell like:
-
-  (:eshell-background . PROCESS)"
+  "Evaluate the given COMMAND iteratively."
   (if eshell-current-command
       ;; We can just stick the new command at the end of the current
       ;; one, and everything will happen as it should.
@@ -1058,12 +937,20 @@ process(es) in a cons cell like:
            (erase-buffer)
            (insert "command: \"" input "\"\n")))
     (setq eshell-current-command command)
-    (let* (result
-           (delim (catch 'eshell-incomplete
-                    (ignore (setq result (eshell-resume-eval))))))
-      (when delim
-        (error "Unmatched delimiter: %S" delim))
-      result)))
+    (let* ((delim (catch 'eshell-incomplete
+                    (eshell-resume-eval)))
+           (val (car-safe delim)))
+      ;; If the return value of `eshell-resume-eval' is wrapped in a
+      ;; list, it indicates that the command was run asynchronously.
+      ;; In that case, unwrap the value before checking the delimiter
+      ;; value.
+      (if (and val
+               (not (eshell-processp val))
+               (not (eq val t)))
+          (error "Unmatched delimiter: %S" val)
+        ;; Eshell-command expect a list like (<process>) to know if the
+        ;; command should be async or not.
+        (or (and (eshell-processp val) delim) val)))))
 
 (defun eshell-resume-command (proc status)
   "Resume the current command when a process ends."
@@ -1071,24 +958,24 @@ process(es) in a cons cell like:
     (unless (or (not (stringp status))
 		(string= "stopped" status)
 		(string-match eshell-reset-signals status))
-      (if (eq proc (eshell-tail-process))
+      (if (eq proc (eshell-interactive-process))
 	  (eshell-resume-eval)))))
 
 (defun eshell-resume-eval ()
   "Destructively evaluate a form which may need to be deferred."
   (eshell-condition-case err
       (progn
-	(setq eshell-last-async-procs nil)
+	(setq eshell-last-async-proc nil)
 	(when eshell-current-command
 	  (let* (retval
-		 (procs (catch 'eshell-defer
+		 (proc (catch 'eshell-defer
 			 (ignore
 			  (setq retval
 				(eshell-do-eval
 				 eshell-current-command))))))
-           (if (eshell-process-pair-p procs)
-               (ignore (setq eshell-last-async-procs procs))
-             (cadr retval)))))
+	    (if (eshell-processp proc)
+		(ignore (setq eshell-last-async-proc proc))
+	      (cadr retval)))))
     (error
      (error (error-message-string err)))))
 
@@ -1105,17 +992,9 @@ process(es) in a cons cell like:
        (eshell-debug-command ,(concat "done " (eval tag)) form))))
 
 (defun eshell-do-eval (form &optional synchronous-p)
-  "Evaluate FORM, simplifying it as we go.
+  "Evaluate form, simplifying it as we go.
 Unless SYNCHRONOUS-P is non-nil, throws `eshell-defer' if it needs to
-be finished later after the completion of an asynchronous subprocess.
-
-As this function evaluates FORM, it will gradually replace
-subforms with the (quoted) result of evaluating them.  For
-example, a function call is replaced with the result of the call.
-This allows us to resume evaluation of FORM after something
-inside throws `eshell-defer' simply by calling this function
-again.  Any forms preceding one that throw `eshell-defer' will
-have been replaced by constants."
+be finished later after the completion of an asynchronous subprocess."
   (cond
    ((not (listp form))
     (list 'quote (eval form)))
@@ -1136,46 +1015,41 @@ have been replaced by constants."
     (let ((args (cdr form)))
       (cond
        ((eq (car form) 'while)
-        ;; Wrap the `while' form with let-bindings for the command and
-        ;; test bodies.  This helps us resume evaluation midway
-        ;; through the loop.
-        (let ((new-form (copy-tree `(let ((eshell--command-body nil)
-                                          (eshell--test-body nil))
-                                      (eshell--wrapped-while ,@args)))))
-          (eshell-manipulate "modifying while form"
-            (setcar form (car new-form))
-            (setcdr form (cdr new-form)))
-          (eshell-do-eval form synchronous-p)))
-       ((eq (car form) 'eshell--wrapped-while)
-        (when eshell--command-body
-          (cl-assert (not synchronous-p))
-          (eshell-do-eval eshell--command-body)
-          (setq eshell--command-body nil
-                eshell--test-body nil))
         ;; `copy-tree' is needed here so that the test argument
-        ;; doesn't get modified and thus always yield the same result.
-        (unless eshell--test-body
-          (setq eshell--test-body (copy-tree (car args))))
-        (while (cadr (eshell-do-eval eshell--test-body synchronous-p))
-          (setq eshell--command-body
-                (if (cddr args)
-                    `(progn ,@(copy-tree (cdr args)))
-                  (copy-tree (cadr args))))
-          (eshell-do-eval eshell--command-body synchronous-p)
-          (setq eshell--command-body nil
-                eshell--test-body (copy-tree (car args)))))
+	;; doesn't get modified and thus always yield the same result.
+	(when (car eshell-command-body)
+	  (cl-assert (not synchronous-p))
+	  (eshell-do-eval (car eshell-command-body))
+	  (setcar eshell-command-body nil)
+	  (setcar eshell-test-body nil))
+	(unless (car eshell-test-body)
+          (setcar eshell-test-body (copy-tree (car args))))
+	(while (cadr (eshell-do-eval (car eshell-test-body)))
+	  (setcar eshell-command-body
+                  (if (cddr args)
+                      `(progn ,@(copy-tree (cdr args)))
+                    (copy-tree (cadr args))))
+	  (eshell-do-eval (car eshell-command-body) synchronous-p)
+	  (setcar eshell-command-body nil)
+          (setcar eshell-test-body (copy-tree (car args))))
+	(setcar eshell-command-body nil))
        ((eq (car form) 'if)
-        (eshell-manipulate "evaluating if condition"
-          (setcar args (eshell-do-eval (car args) synchronous-p)))
-        (eshell-do-eval
-         (cond
-          ((eval (car args))            ; COND is non-nil
-           (cadr args))
-          ((cdddr args)                 ; Multiple ELSE forms
-           `(progn ,@(cddr args)))
-          (t                            ; Zero or one ELSE forms
-           (caddr args)))
-         synchronous-p))
+        ;; `copy-tree' is needed here so that the test argument
+	;; doesn't get modified and thus always yield the same result.
+	(if (car eshell-command-body)
+	    (progn
+	      (cl-assert (not synchronous-p))
+	      (eshell-do-eval (car eshell-command-body)))
+	  (unless (car eshell-test-body)
+            (setcar eshell-test-body (copy-tree (car args))))
+	  (setcar eshell-command-body
+                  (copy-tree
+                   (if (cadr (eshell-do-eval (car eshell-test-body)))
+                       (cadr args)
+                     (car (cddr args)))))
+	  (eshell-do-eval (car eshell-command-body) synchronous-p))
+	(setcar eshell-command-body nil)
+	(setcar eshell-test-body nil))
        ((eq (car form) 'setcar)
 	(setcar (cdr args) (eshell-do-eval (cadr args) synchronous-p))
 	(eval form))
@@ -1183,48 +1057,21 @@ have been replaced by constants."
 	(setcar (cdr args) (eshell-do-eval (cadr args) synchronous-p))
 	(eval form))
        ((eq (car form) 'let)
-        (unless (eq (car-safe (cadr args)) 'eshell-do-eval)
-          (eshell-manipulate "evaluating let args"
-            (dolist (letarg (car args))
-              (when (and (listp letarg)
-                         (not (eq (cadr letarg) 'quote)))
-                (setcdr letarg
-                        (list (eshell-do-eval
-                               (cadr letarg) synchronous-p)))))))
+	(if (not (eq (car (cadr args)) 'eshell-do-eval))
+	    (eshell-manipulate "evaluating let args"
+	      (dolist (letarg (car args))
+		(if (and (listp letarg)
+			 (not (eq (cadr letarg) 'quote)))
+		    (setcdr letarg
+			    (list (eshell-do-eval
+				   (cadr letarg) synchronous-p)))))))
         (cl-progv
-            (mapcar (lambda (binding)
-                      (if (consp binding) (car binding) binding))
+            (mapcar (lambda (binding) (if (consp binding) (car binding) binding))
                     (car args))
             ;; These expressions should all be constants now.
-            (mapcar (lambda (binding)
-                      (when (consp binding) (eval (cadr binding))))
+            (mapcar (lambda (binding) (if (consp binding) (eval (cadr binding))))
                     (car args))
-          (let (deferred result)
-            ;; Evaluate the `let' body, catching `eshell-defer' so we
-            ;; can handle it below.
-            (setq deferred
-                  (catch 'eshell-defer
-                    (ignore (setq result (eshell-do-eval
-                                          (macroexp-progn (cdr args))
-                                          synchronous-p)))))
-            ;; If something threw `eshell-defer', we need to update
-            ;; the let-bindings' values so that those values are
-            ;; correct when we resume evaluation of this form.
-            (when deferred
-              (eshell-manipulate "rebinding let args after `eshell-defer'"
-                (let ((bindings (car args)))
-                  (while bindings
-                    (let ((binding (if (consp (car bindings))
-                                       (caar bindings)
-                                     (car bindings))))
-                      (setcar bindings
-                              (list binding
-                                    (list 'quote (symbol-value binding)))))
-                    (pop bindings))))
-              (throw 'eshell-defer deferred))
-            ;; If we get here, there was no `eshell-defer' thrown, so
-            ;; just return the `let' body's result.
-            result)))
+	  (eshell-do-eval (macroexp-progn (cdr args)) synchronous-p)))
        ((memq (car form) '(catch condition-case unwind-protect))
 	;; `condition-case' and `unwind-protect' have to be
 	;; handled specially, because we only want to call
@@ -1291,16 +1138,17 @@ have been replaced by constants."
 		    (setcar form (car new-form))
 		    (setcdr form (cdr new-form)))
 		  (eshell-do-eval form synchronous-p))
-              (if-let (((memq (car form) eshell-deferrable-commands))
-                       ((not eshell-current-subjob-p))
-                       (procs (eshell-make-process-pair result)))
-                  (if synchronous-p
-		      (eshell/wait (cdr procs))
+	      (if (and (memq (car form) eshell-deferrable-commands)
+		       (not eshell-current-subjob-p)
+		       result
+		       (eshell-processp result))
+		  (if synchronous-p
+		      (eshell/wait result)
 		    (eshell-manipulate "inserting ignore form"
 		      (setcar form 'ignore)
 		      (setcdr form nil))
-		    (throw 'eshell-defer procs))
-                (list 'quote result))))))))))))
+		    (throw 'eshell-defer result))
+		(list 'quote result))))))))))))
 
 ;; command invocation
 
@@ -1333,9 +1181,8 @@ have been replaced by constants."
                         name)
                   (eshell-search-path name)))))
       (if (not program)
-          (eshell-error (format "which: no %s in (%s)\n"
-                                name (string-join (eshell-get-path t)
-                                                  (path-separator))))
+	  (eshell-error (format "which: no %s in (%s)\n"
+				name (getenv "PATH")))
 	(eshell-printn program)))))
 
 (put 'eshell/which 'eshell-no-numeric-conversions t)
@@ -1343,8 +1190,6 @@ have been replaced by constants."
 (defun eshell-named-command (command &optional args)
   "Insert output from a plain COMMAND, using ARGS.
 COMMAND may result in an alias being executed, or a plain command."
-  (unless eshell-allow-commands
-    (signal 'eshell-commands-forbidden '(named)))
   (setq eshell-last-arguments args
 	eshell-last-command-name (eshell-stringify command))
   (run-hook-with-args 'eshell-prepare-command-hook)
@@ -1393,9 +1238,8 @@ or an external command."
 (defun eshell-exec-lisp (printer errprint func-or-form args form-p)
   "Execute a Lisp FUNC-OR-FORM, maybe passing ARGS.
 PRINTER and ERRPRINT are functions to use for printing regular
-messages and errors, respectively.  FORM-P should be non-nil if
-FUNC-OR-FORM represent a Lisp form; ARGS will be ignored in that
-case."
+messages, and errors.  FORM-P should be non-nil if FUNC-OR-FORM
+represent a Lisp form; ARGS will be ignored in that case."
   (eshell-condition-case err
       (let ((result
              (save-current-buffer
@@ -1404,15 +1248,6 @@ case."
                  (apply func-or-form args)))))
         (and result (funcall printer result))
         result)
-    (eshell-pipe-broken
-     ;; If FUNC-OR-FORM tried and failed to write some output to a
-     ;; process, it will raise an `eshell-pipe-broken' signal (this is
-     ;; analogous to SIGPIPE on POSIX systems).  In this case, set the
-     ;; command status to some non-zero value to indicate an error; to
-     ;; match GNU/Linux, we use 141, which the numeric value of
-     ;; SIGPIPE on GNU/Linux (13) with the high bit (2^7) set.
-     (setq eshell-last-command-status 141)
-     nil)
     (error
      (setq eshell-last-command-status 1)
      (let ((msg (error-message-string err)))
@@ -1427,111 +1262,87 @@ case."
 (defsubst eshell-apply* (printer errprint func args)
   "Call FUNC, with ARGS, trapping errors and return them as output.
 PRINTER and ERRPRINT are functions to use for printing regular
-messages and errors, respectively."
+messages, and errors."
   (eshell-exec-lisp printer errprint func args nil))
 
 (defsubst eshell-funcall* (printer errprint func &rest args)
-  "Call FUNC, with ARGS, trapping errors and return them as output.
-PRINTER and ERRPRINT are functions to use for printing regular
-messages and errors, respectively."
+  "Call FUNC, with ARGS, trapping errors and return them as output."
   (eshell-apply* printer errprint func args))
 
 (defsubst eshell-eval* (printer errprint form)
-  "Evaluate FORM, trapping errors and returning them.
-PRINTER and ERRPRINT are functions to use for printing regular
-messages and errors, respectively."
+  "Evaluate FORM, trapping errors and returning them."
   (eshell-exec-lisp printer errprint form nil t))
 
 (defsubst eshell-apply (func args)
   "Call FUNC, with ARGS, trapping errors and return them as output.
-Print the result using `eshell-print'; if an error occurs, print
-it via `eshell-error'."
-  (eshell-apply* #'eshell-print #'eshell-error func args))
+PRINTER and ERRPRINT are functions to use for printing regular
+messages, and errors."
+  (eshell-apply* 'eshell-print 'eshell-error func args))
 
 (defsubst eshell-funcall (func &rest args)
-  "Call FUNC, with ARGS, trapping errors and return them as output.
-Print the result using `eshell-print'; if an error occurs, print
-it via `eshell-error'."
+  "Call FUNC, with ARGS, trapping errors and return them as output."
   (eshell-apply func args))
 
 (defsubst eshell-eval (form)
-  "Evaluate FORM, trapping errors and returning them.
-Print the result using `eshell-print'; if an error occurs, print
-it via `eshell-error'."
-  (eshell-eval* #'eshell-print #'eshell-error form))
+  "Evaluate FORM, trapping errors and returning them."
+  (eshell-eval* 'eshell-print 'eshell-error form))
 
 (defsubst eshell-applyn (func args)
   "Call FUNC, with ARGS, trapping errors and return them as output.
-Print the result using `eshell-printn'; if an error occurs, print it
-via `eshell-errorn'."
-  (eshell-apply* #'eshell-printn #'eshell-errorn func args))
+PRINTER and ERRPRINT are functions to use for printing regular
+messages, and errors."
+  (eshell-apply* 'eshell-printn 'eshell-errorn func args))
 
 (defsubst eshell-funcalln (func &rest args)
-  "Call FUNC, with ARGS, trapping errors and return them as output.
-Print the result using `eshell-printn'; if an error occurs, print it
-via `eshell-errorn'."
+  "Call FUNC, with ARGS, trapping errors and return them as output."
   (eshell-applyn func args))
 
 (defsubst eshell-evaln (form)
-  "Evaluate FORM, trapping errors and returning them.
-Print the result using `eshell-printn'; if an error occurs, print it
-via `eshell-errorn'."
-  (eshell-eval* #'eshell-printn #'eshell-errorn form))
+  "Evaluate FORM, trapping errors and returning them."
+  (eshell-eval* 'eshell-printn 'eshell-errorn form))
 
 (defvar eshell-last-output-end)         ;Defined in esh-mode.el.
 
 (defun eshell-lisp-command (object &optional args)
   "Insert Lisp OBJECT, using ARGS if a function."
-  (unless eshell-allow-commands
-    (signal 'eshell-commands-forbidden '(lisp)))
   (catch 'eshell-external               ; deferred to an external command
-    (setq eshell-last-command-status 0
-          eshell-last-arguments args)
     (let* ((eshell-ensure-newline-p (eshell-interactive-output-p))
-           (command-form-p (functionp object))
            (result
-            (if command-form-p
-                (let ((numeric (not (get object
-                                         'eshell-no-numeric-conversions)))
-                      (fname-args (get object 'eshell-filename-arguments)))
-                  (when (or numeric fname-args)
-                    (while args
-                      (let ((arg (car args)))
-                        (cond
-                         ((and numeric (stringp arg) (> (length arg) 0)
-                               (text-property-any 0 (length arg)
-                                                  'number t arg))
-                          ;; If any of the arguments are flagged as
-                          ;; numbers waiting for conversion, convert
-                          ;; them now.
-                          (setcar args (string-to-number arg)))
-                         ((and fname-args (stringp arg)
-                               (string-equal arg "~"))
-                          ;; If any of the arguments match "~",
-                          ;; prepend "./" to treat it as a regular
-                          ;; file name.
-                          (setcar args (concat "./" arg)))))
-                      (setq args (cdr args))))
-                  (setq eshell-last-command-name
+            (if (functionp object)
+                (progn
+                  (setq eshell-last-arguments args
+                        eshell-last-command-name
                         (concat "#<function " (symbol-name object) ">"))
+                  (let ((numeric (not (get object
+                                           'eshell-no-numeric-conversions)))
+                        (fname-args (get object 'eshell-filename-arguments)))
+                    (when (or numeric fname-args)
+                      (while args
+                        (let ((arg (car args)))
+                          (cond ((and numeric (stringp arg) (> (length arg) 0)
+                                      (text-property-any 0 (length arg)
+                                                         'number t arg))
+                                 ;; If any of the arguments are
+                                 ;; flagged as numbers waiting for
+                                 ;; conversion, convert them now.
+                                 (setcar args (string-to-number arg)))
+                                ((and fname-args (stringp arg)
+                                      (string-equal arg "~"))
+                                 ;; If any of the arguments match "~",
+                                 ;; prepend "./" to treat it as a
+                                 ;; regular file name.
+                                 (setcar args (concat "./" arg)))))
+                        (setq args (cdr args)))))
                   (eshell-apply object eshell-last-arguments))
-              (setq eshell-last-command-name "#<Lisp object>")
+              (setq eshell-last-arguments args
+                    eshell-last-command-name "#<Lisp object>")
               (eshell-eval object))))
       (if (and eshell-ensure-newline-p
 	       (save-excursion
 		 (goto-char eshell-last-output-end)
 		 (not (bolp))))
 	  (eshell-print "\n"))
-      (eshell-close-handles
-       ;; If `eshell-lisp-form-nil-is-failure' is non-nil, Lisp forms
-       ;; that succeeded but have a nil result should have an exit
-       ;; status of 2.
-       (when (and eshell-lisp-form-nil-is-failure
-                  (not command-form-p)
-                  (= eshell-last-command-status 0)
-                  (not result))
-         2)
-       (list 'quote result)))))
+      (eshell-close-handles 0 (list 'quote result)))))
 
 (defalias 'eshell-lisp-command* #'eshell-lisp-command)
 

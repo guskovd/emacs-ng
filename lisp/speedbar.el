@@ -1,6 +1,6 @@
 ;;; speedbar.el --- quick access to files and tags in a frame  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 1996-2023 Free Software Foundation, Inc.
+;; Copyright (C) 1996-2022 Free Software Foundation, Inc.
 
 ;; Author: Eric M. Ludlam <zappo@gnu.org>
 ;; Keywords: file, tags, tools
@@ -306,9 +306,10 @@ attached to and added to this list before the new frame is initialized."
 		       (symbol :tag "Parameter")
 		       (sexp :tag "Value"))))
 
-(defcustom speedbar-use-imenu-flag t
+(defcustom speedbar-use-imenu-flag (fboundp 'imenu)
   "Non-nil means use imenu for file parsing, nil to use etags.
-Etags support is not as robust as imenu support." ; See Bug#51102
+XEmacs prior to 20.4 doesn't support imenu, therefore the default is to
+use etags instead.  Etags support is not as robust as imenu support."
   :tag "Use Imenu for tags"
   :group 'speedbar
   :type 'boolean)
@@ -349,7 +350,7 @@ determined automatically."
 
 (defcustom speedbar-sort-tags nil
   "If non-nil, sort tags in the speedbar display.  *Obsolete*.
-Use `speedbar-tag-hierarchy-method' instead."
+Use `semantic-tag-hierarchy-method' instead."
   :group 'speedbar
   :type 'boolean)
 
@@ -703,6 +704,8 @@ If you want to change this while speedbar is active, either use
 (defvar speedbar-update-flag-disable nil
   "Permanently disable changing of the update flag.")
 
+(define-obsolete-variable-alias
+  'speedbar-syntax-table 'speedbar-mode-syntax-table "24.1")
 (defvar speedbar-mode-syntax-table
   (let ((st (make-syntax-table)))
     ;; Turn off paren matching around here.
@@ -717,6 +720,8 @@ If you want to change this while speedbar is active, either use
     st)
   "Syntax-table used on the speedbar.")
 
+
+(define-obsolete-variable-alias 'speedbar-key-map 'speedbar-mode-map "24.1")
 (defvar speedbar-mode-map
   (let ((map (make-keymap)))
     (suppress-keymap map t)
@@ -795,10 +800,15 @@ This basically creates a sparse keymap, and makes its parent be
      ["Auto Update" speedbar-toggle-updates
       :active (not speedbar-update-flag-disable)
       :style toggle :selected speedbar-update-flag])
-   (when (and (fboundp 'defimage) (display-graphic-p))
-     (list
-      ["Use Images" speedbar-toggle-images
-       :style toggle :selected speedbar-use-images])))
+   (if (and (or (fboundp 'defimage)
+		(fboundp 'make-image-specifier))
+	    (if (fboundp 'display-graphic-p)
+		(display-graphic-p)
+	      window-system))
+       (list
+	["Use Images" speedbar-toggle-images
+	 :style toggle :selected speedbar-use-images]))
+   )
   "Base part of the speedbar menu.")
 
 (defvar speedbar-easymenu-definition-special
@@ -928,10 +938,7 @@ supported at a time.
   ;; hscroll
   (setq-local auto-hscroll-mode nil)
   ;; reset the selection variable
-  (setq speedbar-last-selected-file nil)
-  (unless (display-graphic-p)
-    (message (substitute-command-keys
-              "Use \\[speedbar-get-focus] to see the speedbar window"))))
+  (setq speedbar-last-selected-file nil))
 
 (defun speedbar-frame-reposition-smartly ()
   "Reposition the speedbar frame to be next to the attached frame."
@@ -2267,7 +2274,9 @@ the list."
 		      (with-current-buffer (get-file-buffer f)
                         speedbar-tag-hierarchy-method)
 		    speedbar-tag-hierarchy-method))
-         (lst (copy-tree lst)))
+	 (lst (if (fboundp 'copy-tree)
+		  (copy-tree lst)
+		lst)))
     (while methods
       (setq lst (funcall (car methods) lst)
 	    methods (cdr methods)))
@@ -2591,12 +2600,13 @@ interrupted by the user."
   (if (not speedbar-stealthy-update-recurse)
       (let ((l (speedbar-initial-stealthy-functions))
 	    (speedbar-stealthy-update-recurse t))
-	(speedbar-with-writable
-	  (while (and l (funcall (car l)))
-	    ;;(sit-for 0)
-	    (setq l (cdr l))))
-	;;(dframe-message "Exit with %S" (car l))
-	)))
+	(unwind-protect
+	    (speedbar-with-writable
+	      (while (and l (funcall (car l)))
+		;;(sit-for 0)
+		(setq l (cdr l))))
+	  ;;(dframe-message "Exit with %S" (car l))
+	  ))))
 
 (defun speedbar-reset-scanners ()
   "Reset any variables used by functions in the stealthy list as state.
@@ -2788,7 +2798,15 @@ to add more types of version control systems."
 	     (not (or (and (featurep 'ange-ftp)
 			   (string-match
 			    (car (symbol-value 'ange-ftp-name-format))
-                            (expand-file-name default-directory))))))
+			    (expand-file-name default-directory)))
+		      ;; efs support: Bob Weiner
+		      (and (featurep 'efs)
+			   (string-match
+			    (let ((reg (symbol-value 'efs-directory-regexp)))
+			      (if (stringp reg)
+				  reg
+				(car reg)))
+			    (expand-file-name default-directory))))))
 	(setq speedbar-vc-to-do-point 0))
     (if (numberp speedbar-vc-to-do-point)
 	(progn
@@ -3508,7 +3526,7 @@ Returns the tag list, or t for an error."
     (error t)))
 )
 
-;;; Tag Management -- etags
+;;; Tag Management -- etags  (old XEmacs compatibility part)
 ;;
 (defvar speedbar-fetch-etags-parse-list
   '(;; Note that java has the same parse-group as c
@@ -3551,7 +3569,10 @@ This variable is ignored if `speedbar-use-imenu-flag' is t."
 FLAG then becomes a member of etags command line arguments.  If flag
 is \"sort\", then toggle the value of `speedbar-sort-tags'.  If its
 value is \"show\" then toggle the value of
-`speedbar-show-unknown-files'."
+`speedbar-show-unknown-files'.
+
+  This function is a convenience function for XEmacs menu created by
+Farzin Guilak <farzin@protocol.com>."
   (interactive)
   (cond
    ((equal flag "sort")
@@ -3571,36 +3592,38 @@ value is \"show\" then toggle the value of
   "For FILE, run etags and create a list of symbols extracted.
 Each symbol will be associated with its line position in FILE."
   (let ((newlist nil))
-    (save-excursion
-      (if (get-buffer "*etags tmp*")
-	  (kill-buffer "*etags tmp*"))	;kill to clean it up
-      (if (<= 1 speedbar-verbosity-level)
-	  (dframe-message "Fetching etags..."))
-      (set-buffer (get-buffer-create "*etags tmp*"))
-      (apply 'call-process speedbar-fetch-etags-command nil
-	     (current-buffer) nil
-	     (append speedbar-fetch-etags-arguments (list file)))
-      (goto-char (point-min))
-      (if (<= 1 speedbar-verbosity-level)
-	  (dframe-message "Fetching etags..."))
-      (let ((expr
-	     (let ((exprlst speedbar-fetch-etags-parse-list)
-		   (ans nil))
-	       (while (and (not ans) exprlst)
-		 (if (string-match (car (car exprlst)) file)
-		     (setq ans (car exprlst)))
-		 (setq exprlst (cdr exprlst)))
-	       (cdr ans))))
-	(if expr
-	    (let (tnl)
-	      (set-buffer (get-buffer-create "*etags tmp*"))
-	      (while (not (save-excursion (end-of-line) (eobp)))
-		(save-excursion
-		  (setq tnl (speedbar-extract-one-symbol expr)))
-		(if tnl (setq newlist (cons tnl newlist)))
-		(forward-line 1)))
-	  (dframe-message
-	   "Sorry, no support for a file of that extension"))))
+    (unwind-protect
+	(save-excursion
+	  (if (get-buffer "*etags tmp*")
+	      (kill-buffer "*etags tmp*"))	;kill to clean it up
+	  (if (<= 1 speedbar-verbosity-level)
+	      (dframe-message "Fetching etags..."))
+	  (set-buffer (get-buffer-create "*etags tmp*"))
+	  (apply 'call-process speedbar-fetch-etags-command nil
+		 (current-buffer) nil
+		 (append speedbar-fetch-etags-arguments (list file)))
+	  (goto-char (point-min))
+	  (if (<= 1 speedbar-verbosity-level)
+	      (dframe-message "Fetching etags..."))
+	  (let ((expr
+		 (let ((exprlst speedbar-fetch-etags-parse-list)
+		       (ans nil))
+		   (while (and (not ans) exprlst)
+		     (if (string-match (car (car exprlst)) file)
+			 (setq ans (car exprlst)))
+		     (setq exprlst (cdr exprlst)))
+		   (cdr ans))))
+	    (if expr
+		(let (tnl)
+		  (set-buffer (get-buffer-create "*etags tmp*"))
+		  (while (not (save-excursion (end-of-line) (eobp)))
+		    (save-excursion
+		      (setq tnl (speedbar-extract-one-symbol expr)))
+		    (if tnl (setq newlist (cons tnl newlist)))
+		    (forward-line 1)))
+	      (dframe-message
+	       "Sorry, no support for a file of that extension"))))
+      )
     (if speedbar-sort-tags
 	(sort newlist (lambda (a b) (string< (car a) (car b))))
       (reverse newlist))))
@@ -3671,20 +3694,26 @@ regular expression EXPR."
 
 ;;; BUFFER DISPLAY mode.
 ;;
-(defvar speedbar-buffers-key-map
-  (let ((map (speedbar-make-specialized-keymap)))
-    ;; Basic tree features
-    (define-key map "e" #'speedbar-edit-line)
-    (define-key map "\C-m" #'speedbar-edit-line)
-    (define-key map "+" #'speedbar-expand-line)
-    (define-key map "=" #'speedbar-expand-line)
-    (define-key map "-" #'speedbar-contract-line)
-    (define-key map " " #'speedbar-toggle-line-expansion)
-    ;; Buffer specific keybindings
-    (define-key map "k" #'speedbar-buffer-kill-buffer)
-    (define-key map "r" #'speedbar-buffer-revert-buffer)
-    map)
+(defvar speedbar-buffers-key-map nil
   "Keymap used when in the buffers display mode.")
+
+(if speedbar-buffers-key-map
+    nil
+  (setq speedbar-buffers-key-map (speedbar-make-specialized-keymap))
+
+  ;; Basic tree features
+  (define-key speedbar-buffers-key-map "e" 'speedbar-edit-line)
+  (define-key speedbar-buffers-key-map "\C-m" 'speedbar-edit-line)
+  (define-key speedbar-buffers-key-map "+" 'speedbar-expand-line)
+  (define-key speedbar-buffers-key-map "=" 'speedbar-expand-line)
+  (define-key speedbar-buffers-key-map "-" 'speedbar-contract-line)
+  (define-key speedbar-buffers-key-map " " 'speedbar-toggle-line-expansion)
+
+  ;; Buffer specific keybindings
+  (define-key speedbar-buffers-key-map "k" 'speedbar-buffer-kill-buffer)
+  (define-key speedbar-buffers-key-map "r" 'speedbar-buffer-revert-buffer)
+
+  )
 
 (defvar speedbar-buffer-easymenu-definition
   '(["Jump to buffer" speedbar-edit-line t]

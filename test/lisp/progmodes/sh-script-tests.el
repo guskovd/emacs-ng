@@ -1,6 +1,6 @@
 ;;; sh-script-tests.el --- Tests for sh-script.el  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2021-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2021-2022 Free Software Foundation, Inc.
 
 ;; This file is part of GNU Emacs.
 
@@ -23,7 +23,6 @@
 
 (require 'sh-script)
 (require 'ert)
-(require 'ert-x)
 
 (ert-deftest test-sh-script-indentation ()
   (with-temp-buffer
@@ -48,43 +47,5 @@
     echo foo
 }
 "))))
-
-(ert-deftest test-indentation ()
-  (ert-test-erts-file (ert-resource-file "sh-indents.erts")))
-
-(ert-deftest test-indent-after-continuation ()
-  (with-temp-buffer
-    (insert "for f \\\nin a; do \\\ntoto; \\\ndone\n")
-    (shell-script-mode)
-    (let ((sh-indent-for-continuation '++))
-      (let ((sh-indent-after-continuation t))
-        (indent-region (point-min) (point-max))
-        (should (equal (buffer-string)
-                       "for f \\\n\tin a; do \\\n    toto; \\\n    done\n")))
-      (let ((sh-indent-after-continuation 'always))
-        (indent-region (point-min) (point-max))
-        (should (equal (buffer-string)
-                       "for f \\\n\tin a; do \\\n\ttoto; \\\n\tdone\n")))
-      (let ((sh-indent-after-continuation nil))
-        (indent-region (point-min) (point-max))
-        (should (equal (buffer-string)
-                       "for f \\\nin a; do \\\n    toto; \\\ndone\n"))))))
-
-(defun test-sh-back (string &optional pos)
-  (with-temp-buffer
-    (shell-script-mode)
-    (insert string)
-    (sh-smie--default-backward-token)
-    (= (point) (or pos 1))))
-
-(ert-deftest test-backward-token ()
-  (should (test-sh-back "foo"))
-  (should (test-sh-back "foo.bar"))
-  (should (test-sh-back "foo\\1bar"))
-  (should (test-sh-back "foo\\\nbar"))
-  (should (test-sh-back "foo\\\n\\\n\\\nbar"))
-  (should (test-sh-back "foo"))
-  (should-not (test-sh-back "foo;bar"))
-  (should (test-sh-back "foo#zot")))
 
 ;;; sh-script-tests.el ends here

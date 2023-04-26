@@ -1,10 +1,10 @@
 ;;; ol-docview.el --- Links to Docview mode buffers  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2009-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2009-2022 Free Software Foundation, Inc.
 
 ;; Author: Jan Böcker <jan.boecker at jboecker dot de>
 ;; Keywords: outlines, hypermedia, calendar, wp
-;; URL: https://orgmode.org
+;; Homepage: https://orgmode.org
 ;;
 ;; This file is part of GNU Emacs.
 ;;
@@ -42,8 +42,6 @@
 
 ;;; Code:
 
-(require 'org-macs)
-(org-assert-version)
 
 (require 'doc-view)
 (require 'ol)
@@ -77,9 +75,7 @@
 		   (string-to-number (match-string 2 link)))))
     ;; Let Org mode open the file (in-emacs = 1) to ensure
     ;; org-link-frame-setup is respected.
-    (if (file-exists-p path)
-        (org-open-file path 1)
-      (error "No such file: %s" path))
+    (org-open-file path 1)
     (when page (doc-view-goto-page page))))
 
 (defun org-docview-store-link ()

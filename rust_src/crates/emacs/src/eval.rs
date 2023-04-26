@@ -1,6 +1,6 @@
 //! Generic Lisp eval functions
 
-use crate::{bindings::xsignal, lisp::LispObject};
+use crate::{bindings::signal_or_quit, lisp::LispObject};
 
 /// Signal an error.  Args are ERROR-SYMBOL and associated DATA. This
 /// function does not return.
@@ -22,7 +22,7 @@ pub fn signal_rust(error_symbol: LispObject, data: LispObject) -> ! {
     }
     #[cfg(not(test))]
     {
-        unsafe { xsignal(error_symbol, data) };
+        unsafe { signal_or_quit(error_symbol, data, false) };
         unreachable!();
     }
 }

@@ -1,113 +1,126 @@
-use super::font::FontRef;
-use crate::gl::context::GLContextTrait;
-use crate::output::Canvas;
-use crate::output::CanvasRef;
-use crate::output::OutputRef;
-use crate::window_system::frame::FrameId;
-use emacs::bindings::do_pending_window_change;
-use emacs::frame::LispFrameRef;
-use raw_window_handle::RawDisplayHandle;
-use raw_window_handle::RawWindowHandle;
-use webrender::api::ColorF;
-use webrender::{self, api::units::*};
+use emacs::{
+    bindings::{
+        list4i, make_frame, make_frame_without_minibuffer, make_minibuffer_frame, output_method,
+        wr_output,
+    },
+    frame::{window_frame_live_or_selected, LispFrameRef},
+    globals::{Qinner_edges, Qnil, Qnone, Qonly, Qouter_edges},
+    keyboard::KeyboardRef,
+    lisp::LispObject,
+};
+use glutin::dpi::PhysicalPosition;
 
-use super::display_info::DisplayInfoRef;
+use crate::{event_loop::EVENT_LOOP, output::OutputRef};
 
-pub trait LispFrameWindowSystemExt {
-    fn output(&self) -> OutputRef;
-    fn cursor_color(&self) -> ColorF;
-    fn cursor_foreground_color(&self) -> ColorF;
-    fn window_handle(&self) -> Option<RawWindowHandle>;
-    fn display_handle(&self) -> Option<RawDisplayHandle>;
-    fn scale_factor(&self) -> f64;
-    fn set_scale_factor(&mut self, scale_factor: f64) -> bool;
-    fn unique_id(&self) -> FrameId;
+use super::{display_info::DisplayInfoRef, output::Output};
+
+pub fn create_frame(
+    display: LispObject,
+    dpyinfo: DisplayInfoRef,
+    tem: LispObject,
+    mut kb: KeyboardRef,
+) -> LispFrameRef {
+    let frame = if tem.eq(Qnone) || tem.is_nil() {
+        unsafe { make_frame_without_minibuffer(Qnil, kb.as_mut(), display) }
+    } else if tem.eq(Qonly) {
+        unsafe { make_minibuffer_frame() }
+    } else if tem.is_window() {
+        unsafe { make_frame_without_minibuffer(tem, kb.as_mut(), display) }
+    } else {
+        unsafe { make_frame(true) }
+    };
+
+    let mut frame = LispFrameRef::new(frame);
+
+    frame.terminal = dpyinfo.get_inner().terminal.as_mut();
+    frame.set_output_method(output_method::output_wr);
+
+    let mut event_loop = EVENT_LOOP.lock().unwrap();
+    let mut output = Box::new(Output::build(&mut event_loop, frame));
+
+    let window_id = output.get_window().id();
+
+    output.set_display_info(dpyinfo);
+
+    // Remeber to destory the Output object when frame destoried.
+    let output = Box::into_raw(output);
+    frame.output_data.wr = output as *mut wr_output;
+
+    dpyinfo
+        .get_inner()
+        .outputs
+        .insert(window_id, frame.wr_output());
+
+    frame
+}
+
+pub fn frame_edges(frame: LispObject, type_: LispObject) -> LispObject {
+    let frame = window_frame_live_or_selected(frame);
+
+    let output = frame.wr_output();
+
+    let window = output.get_window();
+
+    let (left, top, right, bottom) = match type_ {
+        Qouter_edges => {
+            let pos = window
+                .outer_position()
+                .unwrap_or_else(|_| PhysicalPosition::<i32>::new(0, 0));
+
+            let size = window.outer_size();
+
+            let left = pos.x;
+            let top = pos.y;
+            let right = left + size.width as i32;
+            let bottom = top + size.height as i32;
+
+            (left, top, right, bottom)
+        }
+        Qinner_edges => {
+            let pos = window
+                .inner_position()
+                .unwrap_or_else(|_| PhysicalPosition::<i32>::new(0, 0));
+            let size = window.inner_size();
+            let internal_border_width = frame.internal_border_width();
+
+            // webrender window has no interanl menu_bar, tab_bar and tool_bar
+            let left = pos.x + internal_border_width;
+            let top = pos.x + internal_border_width;
+            let right = (left + size.width as i32) - internal_border_width;
+            let bottom = (top + size.height as i32) - internal_border_width;
+
+            (left, top, right, bottom)
+        }
+        // native edges
+        _ => {
+            let pos = window
+                .inner_position()
+                .unwrap_or_else(|_| PhysicalPosition::<i32>::new(0, 0));
+            let size = window.inner_size();
+
+            let left = pos.x;
+            let top = pos.y;
+            let right = left + size.width as i32;
+            let bottom = top + size.height as i32;
+
+            (left, top, right, bottom)
+        }
+    };
+    unsafe { list4i(left as i64, top as i64, right as i64, bottom as i64) }
 }
 
 pub trait LispFrameExt {
-    fn canvas(&self) -> CanvasRef;
-    fn logical_size(&self) -> LayoutSize;
-    fn physical_size(&self) -> DeviceIntSize;
-    fn font(&self) -> FontRef;
-    fn set_font(&mut self, font: FontRef);
-    fn fontset(&self) -> i32;
-    fn set_fontset(&mut self, fontset: i32);
-    fn display_info(&self) -> DisplayInfoRef;
-    fn set_display_info(&mut self, dpyinfo: DisplayInfoRef);
-    fn handle_size_change(&mut self, size: DeviceIntSize, scale_factor: f64);
-    fn handle_scale_factor_change(&mut self, _scale_factor: f64);
-    fn create_gl_context(&self) -> crate::gl::context::GLContext;
+    fn wr_output(&self) -> OutputRef;
+    fn wr_display_info(&self) -> DisplayInfoRef;
 }
 
 impl LispFrameExt for LispFrameRef {
-    fn font(&self) -> FontRef {
-        FontRef::new(self.output().as_raw().font as *mut _)
+    fn wr_output(&self) -> OutputRef {
+        let output: OutputRef = unsafe { self.output_data.wr.into() };
+        output
     }
 
-    fn fontset(&self) -> i32 {
-        self.output().as_raw().fontset
-    }
-
-    fn set_font(&mut self, mut font: FontRef) {
-        self.output().as_raw().font = font.as_mut();
-    }
-
-    fn set_fontset(&mut self, fontset: i32) {
-        self.output().as_raw().fontset = fontset;
-    }
-
-    fn display_info(&self) -> DisplayInfoRef {
-        self.output().display_info()
-    }
-
-    fn set_display_info(&mut self, mut dpyinfo: DisplayInfoRef) {
-        self.output().as_raw().display_info = dpyinfo.get_raw().as_mut();
-    }
-
-    fn logical_size(&self) -> LayoutSize {
-        LayoutSize::new(self.pixel_width as f32, self.pixel_height as f32)
-    }
-
-    fn physical_size(&self) -> DeviceIntSize {
-        let size = self.logical_size() * euclid::Scale::new(self.scale_factor() as f32);
-        size.to_i32()
-    }
-
-    fn handle_size_change(&mut self, size: DeviceIntSize, scale_factor: f64) {
-        log::trace!("frame handle_size_change: {size:?}");
-        self.handle_scale_factor_change(scale_factor);
-
-        self.change_size(
-            size.width as i32,
-            size.height as i32 - self.menu_bar_height,
-            false,
-            true,
-            false,
-        );
-
-        unsafe { do_pending_window_change(false) };
-
-        self.canvas().update();
-    }
-
-    fn handle_scale_factor_change(&mut self, scale_factor: f64) {
-        log::trace!("frame handle_scale_factor_change... {scale_factor:?}");
-        if self.set_scale_factor(scale_factor) {
-            self.canvas().update();
-        }
-    }
-
-    fn canvas(&self) -> CanvasRef {
-        if self.output().canvas().is_null() {
-            log::debug!("canvas_data empty");
-            let canvas = Box::new(Canvas::build(self.clone()));
-            self.output().inner().set_canvas(canvas);
-        }
-
-        self.output().canvas()
-    }
-
-    fn create_gl_context(&self) -> crate::gl::context::GLContext {
-        crate::gl::context::GLContext::build(self)
+    fn wr_display_info(&self) -> DisplayInfoRef {
+        self.wr_output().display_info()
     }
 }

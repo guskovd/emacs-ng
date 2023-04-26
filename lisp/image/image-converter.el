@@ -1,6 +1,6 @@
 ;;; image-converter.el --- Converting images from exotic formats -*- lexical-binding: t -*-
 
-;; Copyright (C) 2019-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2019-2022 Free Software Foundation, Inc.
 
 ;; Author: Lars Magne Ingebrigtsen <larsi@gnus.org>
 ;; Keywords: images
@@ -38,26 +38,16 @@ If nil, Emacs will try to find one of the supported converters
 installed on the system.
 
 The actual range of image formats that will be converted depends
-on the image formats which the chosen converter is able to
-handle.  `auto-mode-alist' is then used to further filter the
-formats that are to be supported: only the suffixes that map to
+on what image formats the chosen converter reports being able to
+handle.  `auto-mode-alist' is then used to further filter what
+formats that are to be supported: Only the suffixes that map to
 `image-mode' will be handled."
   :group 'image
   :type 'symbol
   :version "27.1")
 
-(defcustom image-convert-to-format "png"
-  "The image format to convert to.
-This should be a string like \"png\" or \"ppm\", or some
-other (preferably lossless) format that Emacs understands
-natively.  The converter chosen has to support this format; if
-not, the conversion will fail."
-  :group 'image
-  :version "29.1"
-  :type 'string)
-
 (defvar image-converter-regexp nil
-  "A regexp that matches the file name suffixes which can be converted.")
+  "A regexp that matches the file name suffixes that can be converted.")
 
 (defvar image-converter-file-name-extensions nil
   "A list of file name suffixes that can be converted.")
@@ -66,23 +56,17 @@ not, the conversion will fail."
   '((graphicsmagick :command ("gm" "convert") :probe ("-list" "format"))
     (ffmpeg :command "ffmpeg" :probe "-decoders")
     (imagemagick :command "convert" :probe ("-list" "format")))
-  "List of supported image converters to try and required command-line switches.")
-
-(defvar image-converter--extra-converters (make-hash-table :test #'equal))
-
-(defun image-converter-initialize ()
-  "Determine the external image converter to be used.
-This also determines which external formats we can parse."
-  (unless image-converter
-    (image-converter--find-converter)))
+  "List of supported image converters to try.")
 
 (defun image-convert-p (source &optional data-p)
   "Return `image-convert' if SOURCE is an image that can be converted.
 SOURCE can either be a file name or a string containing image
 data.  In the latter case, DATA-P should be non-nil.  If DATA-P
-is a string, it should be a MIME format string specifying the image type,
-like \"image/gif\"."
-  (image-converter-initialize)
+is a string, it should be a MIME format string like
+\"image/gif\"."
+  ;; Find an installed image converter.
+  (unless image-converter
+    (image-converter--find-converter))
   ;; When image-converter was customized
   (when (and image-converter (not image-converter-regexp))
     (when-let ((formats (image-converter--probe image-converter)))
@@ -101,22 +85,22 @@ like \"image/gif\"."
        'image-convert))
 
 (defun image-convert (image &optional image-format)
-  "Convert IMAGE to an image format which Emacs understands.
-This will usually be \"png\", but is controlled by the value
-of the `image-convert-to-format' user option.
+  "Convert IMAGE file to the PNG format.
+IMAGE can either be a file name or image data.
 
-IMAGE can either be a file name, an image object returned
-by `create-image', or a string with image data.  In the latter
-case, IMAGE-FORMAT should be a symbol whose name is a MIME
-specification of image format, such as \"image/webp\".
-For instance:
+To pass in image data, IMAGE should a string containing the image
+data, and IMAGE-FORMAT should be a symbol with a MIME format name
+like \"image/webp\".  For instance:
 
-  (image-convert data-string \\='image/bmp)
+  (image-convert data-string 'image/bmp)
 
-This function converts the image to the preferred format, per
-the value of `image-convert-to-format', and returns the
-converted image data as a string."
-  (image-converter-initialize)
+IMAGE can also be an image object as returned by `create-image'.
+
+This function converts the image to PNG, and the converted image
+data is returned as a string."
+  ;; Find an installed image converter.
+  (unless image-converter
+    (image-converter--find-converter))
   (unless image-converter
     (error "No external image converters available"))
   (when (and image-format
@@ -124,41 +108,33 @@ converted image data as a string."
     (error "IMAGE-FORMAT should be a symbol like `image/png'"))
   (with-temp-buffer
     (set-buffer-multibyte nil)
-    (let* ((source (if (listp image)
-                       (plist-get (cdr image) :file)
-                     image))
-           (format (if (listp image)
-                       (plist-get (cdr image) :data-p)
-                     image-format))
-           (type (if format
-                     (image-converter--mime-type format)
-                   (file-name-extension source)))
-           (extra-converter (gethash type image-converter--extra-converters)))
-      (if extra-converter
-          (funcall extra-converter source format)
-        (when-let ((err (image-converter--convert
-                         image-converter source format)))
-          (error "%s" err))))
+    (when-let ((err (image-converter--convert
+                     image-converter
+                     (if (listp image)
+                         (plist-get (cdr image) :file)
+                       image)
+                     (if (listp image)
+                         (plist-get (cdr image) :data-p)
+                       image-format))))
+      (error "%s" err))
     (if (listp image)
         ;; Return an image object that's the same as we were passed,
         ;; but ignore the :type value.
-        (apply #'create-image (buffer-string)
-               (intern image-convert-to-format)
-               t
+        (apply #'create-image (buffer-string) 'png t
                (cl-loop for (key val) on (cdr image) by #'cddr
                         unless (eq key :type)
                         append (list key val)))
       (buffer-string))))
 
 (defun image-converter--value (type elem)
-  "Return the value of property ELEM for image converter TYPE."
+  "Return the value of ELEM of image converter TYPE."
   (let ((value (plist-get (cdr (assq type image-converter--converters)) elem)))
     (if (stringp value)
         (list value)
       value)))
 
 (cl-defmethod image-converter--probe ((type (eql 'graphicsmagick)))
-  "Check whether the system has GraphicsMagick installed that's usable converter."
+  "Check whether the system has GraphicsMagick installed."
   (with-temp-buffer
     (let ((command (image-converter--value type :command))
           formats)
@@ -176,7 +152,7 @@ converted image data as a string."
         (nreverse formats)))))
 
 (cl-defmethod image-converter--probe ((type (eql 'imagemagick)))
-  "Check whether the system has ImageMagick installed that's a usable converter."
+  "Check whether the system has ImageMagick installed."
   (with-temp-buffer
     (let ((command (image-converter--value type :command))
           formats)
@@ -196,7 +172,7 @@ converted image data as a string."
       (nreverse formats))))
 
 (cl-defmethod image-converter--probe ((type (eql 'ffmpeg)))
-  "Check whether the system has ffmpeg installed that's a usable converter."
+  "Check whether the system has ffmpeg installed."
   (with-temp-buffer
     (let ((command (image-converter--value type :command))
           formats)
@@ -214,7 +190,7 @@ converted image data as a string."
         (nreverse formats)))))
 
 (defun image-converter--find-converter ()
-  "Find an installed image converter Emacs can use."
+  "Find an installed image converter."
   (catch 'done
     (dolist (elem image-converter--converters)
       (when-let ((formats (image-converter--filter-formats
@@ -238,12 +214,12 @@ Only suffixes that map to `image-mode' are returned."
 
 (cl-defmethod image-converter--convert ((type (eql 'graphicsmagick)) source
                                         image-format)
-  "Convert image in SOURCE using GraphicsMagick."
+  "Convert using GraphicsMagick."
   (image-converter--convert-magick type source image-format))
 
 (cl-defmethod image-converter--convert ((type (eql 'imagemagick)) source
                                         image-format)
-  "Convert image in SOURCE using ImageMagick."
+  "Convert using ImageMagick."
   (image-converter--convert-magick type source image-format))
 
 (defun image-converter--mime-type (image-format)
@@ -251,74 +227,51 @@ Only suffixes that map to `image-mode' are returned."
        (cadr (split-string (symbol-name image-format) "/"))))
 
 (defun image-converter--convert-magick (type source image-format)
-  (let ((command (image-converter--value type :command))
-        (coding-system-for-read 'no-conversion))
+  (let ((command (image-converter--value type :command)))
     (unless (zerop (if image-format
                        ;; We have the image data in SOURCE.
                        (progn
                          (insert source)
-                         (let ((coding-system-for-write 'no-conversion))
-                           (apply #'call-process-region (point-min) (point-max)
-                                  (car command) t t nil
-                                  (append
-                                   (cdr command)
-                                   (list (format "%s:-"
-                                                 (image-converter--mime-type
-                                                  image-format))
-                                       (concat image-convert-to-format
-                                               ":-"))))))
+                         (apply #'call-process-region (point-min) (point-max)
+                                (car command) t t nil
+                                (append
+                                 (cdr command)
+                                 (list (format "%s:-"
+                                               (image-converter--mime-type
+                                                image-format))
+                                       "png:-"))))
                      ;; SOURCE is a file name.
                      (apply #'call-process (car command)
                             nil t nil
                             (append (cdr command)
-                                    (list (expand-file-name source)
-                                          (concat image-convert-to-format
-                                                  ":-"))))))
+                                    (list (expand-file-name source) "png:-")))))
       ;; If the command failed, hopefully the buffer contains the
       ;; error message.
       (buffer-string))))
 
 (cl-defmethod image-converter--convert ((type (eql 'ffmpeg)) source
                                         image-format)
-  "Convert image in SOURCE using ffmpeg."
-  (let ((command (image-converter--value type :command))
-        (coding-system-for-read 'no-conversion))
+  "Convert using ffmpeg."
+  (let ((command (image-converter--value type :command)))
     (unless (zerop (if image-format
                        (progn
                          (insert source)
-                         (let ((coding-system-for-write 'no-conversion))
-                           (apply #'call-process-region
-                                  (point-min) (point-max) (car command)
-                                  t '(t nil) nil
-                                  (append
-                                   (cdr command)
-                                   (list "-i" "-"
-                                         "-c:v" image-convert-to-format
-                                         "-f" "image2pipe" "-")))))
+                         (apply #'call-process-region
+                                (point-min) (point-max) (car command)
+                                t '(t nil) nil
+                                (append
+                                 (cdr command)
+                                 (list "-i" "-"
+                                       "-c:v" "png"
+                                       "-f" "image2pipe" "-"))))
                      (apply #'call-process
                             (car command)
                             nil '(t nil) nil
                             (append (cdr command)
                                     (list "-i" (expand-file-name source)
-                                          "-c:v" image-convert-to-format
-                                          "-f" "image2pipe"
+                                          "-c:v" "png" "-f" "image2pipe"
                                           "-")))))
       "ffmpeg error when converting")))
-
-;;;###autoload
-(defun image-converter-add-handler (suffix converter)
-  "Make Emacs use CONVERTER to parse image files whose names end with SUFFIX.
-CONVERTER is a function with two arguments, the file name or a string
-with the image data, and a non-nil value if the first argument is image data.
-The converter should produce the image in the current buffer, converted to
-the format given by `image-convert-to-format'.
-SUFFIX should not include the leading dot."
-  (cl-pushnew suffix image-converter-file-name-extensions :test #'equal)
-  (setq image-converter-file-name-extensions
-        (sort image-converter-file-name-extensions #'string<))
-  (setq image-converter-regexp
-        (concat "\\." (regexp-opt image-converter-file-name-extensions) "\\'"))
-  (setf (gethash suffix image-converter--extra-converters) converter))
 
 (provide 'image-converter)
 

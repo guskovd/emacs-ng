@@ -1,6 +1,6 @@
 /* Process support for GNU Emacs on the Microsoft Windows API.
 
-Copyright (C) 1992, 1995, 1999-2023 Free Software Foundation, Inc.
+Copyright (C) 1992, 1995, 1999-2022 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -62,8 +62,6 @@ along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 #include "syssignal.h"
 #include "w32term.h"
 #include "coding.h"
-
-void w32_raise (int);
 
 #define RVA_TO_PTR(var,section,filedata) \
   ((void *)((section)->PointerToRawData					\
@@ -311,21 +309,6 @@ sigismember (const sigset_t *set, int signo)
     emacs_abort ();
 
   return (*set & (1U << signo)) != 0;
-}
-
-/* A fuller emulation of 'raise', which supports signals that MS
-   runtime doesn't know about.  */
-void
-w32_raise (int signo)
-{
-  if (!(signo == SIGCHLD || signo == SIGALRM || signo == SIGPROF))
-    raise (signo);
-
-  /* Call the handler directly for the signals that we handle
-     ourselves.  */
-  signal_handler handler = sig_handlers[signo];
-  if (!(handler == SIG_DFL || handler == SIG_IGN || handler == SIG_ERR))
-    handler (signo);
 }
 
 pid_t
@@ -1223,7 +1206,6 @@ static DWORD WINAPI
 reader_thread (void *arg)
 {
   child_process *cp;
-  int fd;
 
   /* Our identity */
   cp = (child_process *)arg;
@@ -1238,13 +1220,12 @@ reader_thread (void *arg)
     {
       int rc;
 
-      fd = cp->fd;
-      if (fd >= 0 && (fd_info[fd].flags & FILE_CONNECT) != 0)
-	rc = _sys_wait_connect (fd);
-      else if (fd >= 0 && (fd_info[fd].flags & FILE_LISTEN) != 0)
-	rc = _sys_wait_accept (fd);
+      if (cp->fd >= 0 && (fd_info[cp->fd].flags & FILE_CONNECT) != 0)
+	rc = _sys_wait_connect (cp->fd);
+      else if (cp->fd >= 0 && (fd_info[cp->fd].flags & FILE_LISTEN) != 0)
+	rc = _sys_wait_accept (cp->fd);
       else
-	rc = _sys_read_ahead (fd);
+	rc = _sys_read_ahead (cp->fd);
 
       /* Don't bother waiting for the event if we already have been
 	 told to exit by delete_child.  */
@@ -1257,7 +1238,7 @@ reader_thread (void *arg)
         {
 	  DebPrint (("reader_thread.SetEvent(0x%x) failed with %lu for fd %ld (PID %d)\n",
 		     (DWORD_PTR)cp->char_avail, GetLastError (),
-		     fd, cp->pid));
+		     cp->fd, cp->pid));
 	  return 1;
 	}
 
@@ -1284,24 +1265,6 @@ reader_thread (void *arg)
 	 us to exit.  */
       if (cp->status == STATUS_READ_ERROR)
 	break;
-    }
-  /* If this thread was reading from a pipe process, close the
-     descriptor used for reading, as sys_close doesn't in that case.  */
-  if ((fd_info[fd].flags & FILE_DONT_CLOSE) == FILE_DONT_CLOSE)
-    {
-      int i;
-      /* If w32.c:sys_close is still processing this descriptor, wait
-	 for a while for it to finish.  */
-      for (i = 0; i < 5; i++)
-	{
-	  if (fd_info[fd].flags == FILE_DONT_CLOSE)
-	    {
-	      fd_info[fd].flags = 0;
-	      _close (fd);
-	      break;
-	    }
-	  Sleep (5);
-	}
     }
   return 0;
 }

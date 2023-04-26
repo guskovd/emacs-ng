@@ -4,7 +4,7 @@
 ;; Created: Fri Mar 26 1999
 ;; Keywords: unix
 
-;; Copyright (C) 1999-2023 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2022 Free Software Foundation, Inc.
 
 ;; This file is part of GNU Emacs.
 
@@ -166,8 +166,7 @@ It is a function which takes two arguments, the directory and its parent."
 
 ;;;###autoload
 (defun find-lisp-find-dired (dir regexp)
-  "Find the files within DIR whose names match REGEXP.
-A Dired buffer with the results will be opened."
+  "Find files in DIR, matching REGEXP."
   (interactive "DFind files in directory: \nsMatching regexp: ")
   (let ((find-lisp-regexp regexp))
     (find-lisp-find-dired-internal
@@ -176,54 +175,34 @@ A Dired buffer with the results will be opened."
      'find-lisp-default-directory-predicate
      "*Find Lisp Dired*")))
 
-(defun find-lisp-find-dired-other-window (dir regexp)
-  "Same as `find-lisp-find-dired', but use another window."
-  (interactive "DFind files in directory: \nsMatching regexp: ")
-  (let ((find-lisp-regexp regexp))
-    (find-lisp-find-dired-internal
-     dir
-     'find-lisp-default-file-predicate
-     'find-lisp-default-directory-predicate
-     "*Find Lisp Dired*"
-     'OTHER-WINDOW)))
-
 ;; Just the subdirectories
 ;;;###autoload
 (defun find-lisp-find-dired-subdirectories (dir)
   "Find all subdirectories of DIR."
-  (interactive "DFind dired subdirectories of directory: ")
+  (interactive "DFind subdirectories of directory: ")
   (find-lisp-find-dired-internal
    dir
    'find-lisp-file-predicate-is-directory
    'find-lisp-default-directory-predicate
    "*Find Lisp Dired Subdirectories*"))
 
-;;;###autoload
-(defun find-lisp-find-dired-subdirs-other-window (dir)
-  "Same as `find-lisp-find-dired-subdirectories', but use another window."
-  (interactive "DDired descendent dirs of directory: ")
-  (find-lisp-find-dired-internal dir
-                                 'find-lisp-file-predicate-is-directory
-                                 'find-lisp-default-directory-predicate
-                                 "*Find Lisp Dired Subdirectories*"
-                                 'OTHER-WINDOW))
-
 ;; Most of this is lifted from find-dired.el
 ;;
 (defun find-lisp-find-dired-internal (dir file-predicate
-                                          directory-predicate buffer-name
-                                          &optional other-window)
+					  directory-predicate buffer-name)
   "Run find (Lisp version) and go into Dired mode on a buffer of the output."
-  (let ((dired-buffers  dired-buffers)
-        (regexp         find-lisp-regexp))
-    ;; Expand DIR ("" means `default-directory'), ensuring a trailing slash.
+  (let ((dired-buffers dired-buffers)
+	(regexp find-lisp-regexp))
+    ;; Expand DIR ("" means default-directory), and make sure it has a
+    ;; trailing slash.
     (setq dir (file-name-as-directory (expand-file-name dir)))
     ;; Check that it's really a directory.
     (or (file-directory-p dir)
 	(error "find-dired needs a directory: %s" dir))
-    (unless (and (buffer-name)  (string= buffer-name (buffer-name)))
-      (let ((buf  (get-buffer-create buffer-name)))
-        (if other-window (pop-to-buffer buf) (switch-to-buffer buf))))
+    (or
+     (and (buffer-name)
+	  (string= buffer-name (buffer-name)))
+	(switch-to-buffer (get-buffer-create buffer-name)))
     (widen)
     (kill-all-local-variables)
     (setq buffer-read-only nil)
@@ -252,8 +231,8 @@ A Dired buffer with the results will be opened."
 	(dired-simple-subdir-alist)
       ;; else we have an ancient tree dired (or classic dired, where
       ;; this does no harm)
-      (setq dired-subdir-alist
-            (list (cons default-directory (point-min-marker)))))
+      (setq-local dired-subdir-alist
+                  (list (cons default-directory (point-min-marker)))))
     (find-lisp-insert-directory
      dir file-predicate directory-predicate 'ignore)
     (goto-char (point-min))
@@ -299,19 +278,10 @@ A Dired buffer with the results will be opened."
   (revert-buffer))
 
 (defun find-lisp-find-dired-insert-file (file buffer)
-  "Insert line for FILE in BUFFER.
-FILE is a file or a directory name.
-
-This function heeds `dired-actual-switches'."
   (set-buffer buffer)
   (insert find-lisp-line-indent
-          (find-lisp-format
-           (propertize file 'dired-filename t)
-           (file-attributes file 'string)
-           (or (and dired-actual-switches
-                    (split-string-and-unquote dired-actual-switches))
-               (list ""))
-           nil)))
+	  (find-lisp-format file (file-attributes file 'string) (list "")
+			  (current-time))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Lifted from ls-lisp. We don't want to require it, because that
@@ -319,14 +289,15 @@ This function heeds `dired-actual-switches'."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defun find-lisp-format (file-name file-attr switches now)
-  "Format one line of long `ls' output for file or directory FILE-NAME.
+  "Format one line of long ls output for file FILE-NAME.
 FILE-ATTR and FILE-SIZE give the file's attributes and size.
 SWITCHES and TIME-INDEX give the full switch list and time data."
   (let ((file-type (file-attribute-type file-attr)))
-    (concat (and (memq ?i switches)	; inode number
-		 (format "%6d " (file-attribute-inode-number file-attr)))
-	    (and (memq ?s switches)	; size in K
-		 (format "%4d " (1+ (/ (file-attribute-size file-attr) 1024))))
+    (concat (if (memq ?i switches)	; inode number
+		(format "%6d " (file-attribute-inode-number file-attr)))
+	    ;; nil is treated like "" in concat
+	    (if (memq ?s switches)	; size in K
+		(format "%4d " (1+ (/ (file-attribute-size file-attr) 1024))))
 	    (file-attribute-modes file-attr)
 	    (format " %3d %-8s %-8s %8d "
 		    (file-attribute-link-number file-attr)
@@ -338,14 +309,14 @@ SWITCHES and TIME-INDEX give the full switch list and time data."
 		      (if (numberp (file-attribute-group-id file-attr))
 			  (int-to-string (file-attribute-group-id file-attr))
 			(file-attribute-group-id file-attr)))
-		    (file-attribute-size file-attr))
+		    (file-attribute-size file-attr)
+		    )
 	    (find-lisp-format-time file-attr switches now)
 	    " "
 	    file-name
-            (and (eq t file-type)  (memq ?F switches)
-                 "/")                  ; Add `/' for dir if `F' switch
-	    (and (stringp file-type)
-                 (concat " -> " file-type)) ; Add " -> " for symbolic link
+	    (if (stringp file-type)	; is a symbolic link
+		(concat " -> " file-type)
+	      "")
 	    "\n")))
 
 (defun find-lisp-time-index (switches)

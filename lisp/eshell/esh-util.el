@@ -1,6 +1,6 @@
 ;;; esh-util.el --- general utilities  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1999-2023 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2022 Free Software Foundation, Inc.
 
 ;; Author: John Wiegley <johnw@gnu.org>
 
@@ -63,11 +63,11 @@ has no effect."
 Setting this to nil is offered as an aid to debugging only."
   :type 'boolean)
 
-(defcustom eshell-private-file-modes #o600 ; umask 177
+(defcustom eshell-private-file-modes 384 ; umask 177
   "The file-modes value to use for creating \"private\" files."
   :type 'integer)
 
-(defcustom eshell-private-directory-modes #o700 ; umask 077
+(defcustom eshell-private-directory-modes 448 ; umask 077
   "The file-modes value to use for creating \"private\" directories."
   :type 'integer)
 
@@ -94,6 +94,13 @@ a non-nil value, will be passed strings, not numbers, even when an
 argument matches `eshell-number-regexp'."
   :type 'boolean)
 
+(defcustom eshell-number-regexp "-?\\([0-9]*\\.\\)?[0-9]+\\(e[-0-9.]+\\)?"
+  "Regular expression used to match numeric arguments.
+If `eshell-convert-numeric-arguments' is non-nil, and an argument
+matches this regexp, it will be converted to a Lisp number, using the
+function `string-to-number'."
+  :type 'regexp)
+
 (defcustom eshell-ange-ls-uids nil
   "List of user/host/id strings, used to determine remote ownership."
   :type '(repeat (cons :tag "Host for User/UID map"
@@ -103,22 +110,6 @@ argument matches `eshell-number-regexp'."
 				     (repeat :tag "UIDs" string))))))
 
 ;;; Internal Variables:
-
-(defvar eshell-number-regexp
-  (rx (? "-")
-      (or (seq (+ digit) (? "." (* digit)))
-          (seq (* digit) "." (+ digit)))
-      ;; Optional exponent
-      (? (or "e" "E")
-         (or "+INF" "+NaN"
-             (seq (? (or "+" "-")) (+ digit)))))
-  "Regular expression used to match numeric arguments.
-If `eshell-convert-numeric-arguments' is non-nil, and an argument
-matches this regexp, it will be converted to a Lisp number, using the
-function `string-to-number'.")
-
-(defvar eshell-integer-regexp (rx (? "-") (+ digit))
-  "Regular expression used to match integer arguments.")
 
 (defvar eshell-group-names nil
   "A cache to hold the names of groups.")
@@ -131,19 +122,6 @@ function `string-to-number'.")
 
 (defvar eshell-user-timestamp nil
   "A timestamp of when the user file was read.")
-
-(defvar eshell-command-output-properties
-  `( field command-output
-     front-sticky (field)
-     rear-nonsticky (field)
-     ;; Text inserted by a user in the middle of process output
-     ;; should be marked as output.  This is needed for commands
-     ;; such as `yank' or `just-one-space' which don't use
-     ;; `insert-and-inherit' and thus bypass default text property
-     ;; inheritance.
-     insert-in-front-hooks (,#'eshell--mark-as-output
-                            ,#'eshell--mark-yanked-as-output))
-  "A list of text properties to apply to command output.")
 
 ;;; Obsolete variables:
 
@@ -170,182 +148,87 @@ Otherwise, evaluates FORM with no error handling."
 	 ,@handlers)
     form))
 
-(defun eshell--mark-as-output (start end &optional object)
-  "Mark the text from START to END as Eshell output.
-OBJECT can be a buffer or string.  If nil, mark the text in the
-current buffer."
-  (with-silent-modifications
-    (add-text-properties start end eshell-command-output-properties
-                         object)))
-
-(defun eshell--mark-yanked-as-output (start end)
-  "Mark yanked text from START to END as Eshell output."
-  ;; `yank' removes the field text property from the text it inserts
-  ;; due to `yank-excluded-properties', so arrange for this text
-  ;; property to be reapplied in the `after-change-functions'.
-  (letrec ((hook
-            (lambda (start1 end1 _len1)
-              (remove-hook 'after-change-functions hook t)
-              (when (and (= start start1)
-                         (= end end1))
-                (eshell--mark-as-output start1 end1)))))
-    (add-hook 'after-change-functions hook nil t)))
-
 (defun eshell-find-delimiter
   (open close &optional bound reverse-p backslash-p)
   "From point, find the CLOSE delimiter corresponding to OPEN.
-The matching is bounded by BOUND. If REVERSE-P is non-nil,
-process the region backwards.
-
-If BACKSLASH-P is non-nil, or OPEN and CLOSE are different
-characters, then a backslash can be used to escape a delimiter
-(or another backslash).  Otherwise, the delimiter is escaped by
-doubling it up."
+The matching is bounded by BOUND.
+If REVERSE-P is non-nil, process the region backwards.
+If BACKSLASH-P is non-nil, and OPEN and CLOSE are the same character,
+then quoting is done by a backslash, rather than a doubled delimiter."
   (save-excursion
     (let ((depth 1)
 	  (bound (or bound (point-max))))
-      (when (if reverse-p
-                (eq (char-before) close)
-              (eq (char-after) open))
-        (forward-char (if reverse-p -1 1)))
+      (if (if reverse-p
+	      (eq (char-before) close)
+	    (eq (char-after) open))
+	  (forward-char (if reverse-p -1 1)))
       (while (and (> depth 0)
-                  (funcall (if reverse-p #'> #'<) (point) bound))
-        (let ((c (if reverse-p (char-before) (char-after))))
+		  (funcall (if reverse-p '> '<) (point) bound))
+	(let ((c (if reverse-p (char-before) (char-after))) nc)
 	  (cond ((and (not reverse-p)
 		      (or (not (eq open close))
 			  backslash-p)
 		      (eq c ?\\)
-                      (memq (char-after (1+ (point)))
-                            (list open close ?\\)))
+		      (setq nc (char-after (1+ (point))))
+		      (or (eq nc open) (eq nc close)))
 		 (forward-char 1))
 		((and reverse-p
 		      (or (not (eq open close))
 			  backslash-p)
-                      (eq (char-before (1- (point))) ?\\)
-                      (memq c (list open close ?\\)))
+		      (or (eq c open) (eq c close))
+		      (eq (char-before (1- (point)))
+			  ?\\))
 		 (forward-char -1))
 		((eq open close)
-                 (when (eq c open)
-                   (if (and (not backslash-p)
-                            (eq (if reverse-p
-                                    (char-before (1- (point)))
-                                  (char-after (1+ (point))))
-                                open))
-                       (forward-char (if reverse-p -1 1))
-                     (setq depth (1- depth)))))
+		 (if (eq c open)
+		     (if (and (not backslash-p)
+			      (eq (if reverse-p
+				      (char-before (1- (point)))
+				    (char-after (1+ (point)))) open))
+			 (forward-char (if reverse-p -1 1))
+		       (setq depth (1- depth)))))
 		((= c open)
 		 (setq depth (+ depth (if reverse-p -1 1))))
 		((= c close)
 		 (setq depth (+ depth (if reverse-p 1 -1))))))
 	(forward-char (if reverse-p -1 1)))
-      (when (= depth 0)
-        (if reverse-p (point) (1- (point)))))))
+      (if (= depth 0)
+	  (if reverse-p (point) (1- (point)))))))
 
-(defun eshell-convertible-to-number-p (string)
-  "Return non-nil if STRING can be converted to a number.
-If `eshell-convert-numeric-aguments', always return nil."
-  (and eshell-convert-numeric-arguments
-       (string-match
-        (concat "\\`\\s-*" eshell-number-regexp "\\s-*\\'")
-        string)))
-
-(defun eshell-convert-to-number (string)
-  "Try to convert STRING to a number.
-If STRING doesn't look like a number (or
-`eshell-convert-numeric-aguments' is nil), just return STRING
-unchanged."
-  (if (eshell-convertible-to-number-p string)
-      (string-to-number string)
-    string))
-
-(defun eshell-convert (string &optional to-string)
-  "Convert STRING into a more-native Lisp object.
-If TO-STRING is non-nil, always return a single string with
-trailing newlines removed.  Otherwise, this behaves as follows:
-
-* Return non-strings as-is.
-
-* Split multiline strings by line.
-
-* If `eshell-convert-numeric-aguments' is non-nil and every line
-  of output looks like a number, convert them to numbers."
-  (cond
-   ((not (stringp string))
-    (if to-string
-        (eshell-stringify string)
-      string))
-   (to-string (string-trim-right string "\n+"))
-   (t (let ((len (length string)))
-        (if (= len 0)
-	    string
-	  (when (eq (aref string (1- len)) ?\n)
+(defun eshell-convert (string)
+  "Convert STRING into a more native looking Lisp object."
+  (if (not (stringp string))
+      string
+    (let ((len (length string)))
+      (if (= len 0)
+	  string
+	(if (eq (aref string (1- len)) ?\n)
 	    (setq string (substring string 0 (1- len))))
-          (if (string-search "\n" string)
-              (let ((lines (split-string string "\n")))
-                (if (seq-every-p #'eshell-convertible-to-number-p lines)
-                    (mapcar #'string-to-number lines)
-                  lines))
-            (eshell-convert-to-number string)))))))
+	(if (string-search "\n" string)
+	    (split-string string "\n")
+	  (if (and eshell-convert-numeric-arguments
+		   (string-match
+		    (concat "\\`\\s-*" eshell-number-regexp
+			    "\\s-*\\'") string))
+	      (string-to-number string)
+	    string))))))
 
 (defvar-local eshell-path-env (getenv "PATH")
   "Content of $PATH.
 It might be different from \(getenv \"PATH\"), when
 `default-directory' points to a remote host.")
 
-(make-obsolete-variable 'eshell-path-env 'eshell-get-path "29.1")
-
-(defvar-local eshell-path-env-list nil)
-
-(connection-local-set-profile-variables
- 'eshell-connection-default-profile
- '((eshell-path-env-list . nil)))
-
-(connection-local-set-profiles
- '(:application eshell)
- 'eshell-connection-default-profile)
-
-(defun eshell-get-path (&optional literal-p)
+(defun eshell-get-path ()
   "Return $PATH as a list.
-If LITERAL-P is nil, return each directory of the path as a full,
-possibly-remote file name; on MS-Windows, add the current
-directory as the first directory in the path as well.
-
-If LITERAL-P is non-nil, return the local part of each directory,
-as the $PATH was actually specified."
-  (with-connection-local-application-variables 'eshell
-    (let ((remote (file-remote-p default-directory))
-          (path
-           (or eshell-path-env-list
-               ;; If not already cached, get the path from
-               ;; `exec-path', removing the last element, which is
-               ;; `exec-directory'.
-               (setq-connection-local eshell-path-env-list
-                                      (butlast (exec-path))))))
-      (when (and (not literal-p)
-                 (not remote)
-                 (eshell-under-windows-p))
-        (push "." path))
-      (if (and remote (not literal-p))
-          (mapcar (lambda (x) (file-name-concat remote x)) path)
-        path))))
-
-(defun eshell-set-path (path)
-  "Set the Eshell $PATH to PATH.
-PATH can be either a list of directories or a string of
-directories separated by `path-separator'."
-  (with-connection-local-application-variables 'eshell
-    (setq-connection-local
-     eshell-path-env-list
-     (if (listp path)
-	 path
-       ;; Don't use `parse-colon-path' here, since we don't want
-       ;; the additional translations it does on each element.
-       (split-string path (path-separator))))))
+Add the current directory on MS-Windows."
+  (eshell-parse-colon-path
+   (if (eshell-under-windows-p)
+       (concat "." path-separator eshell-path-env)
+     eshell-path-env)))
 
 (defun eshell-parse-colon-path (path-env)
   "Split string with `parse-colon-path'.
 Prepend remote identification of `default-directory', if any."
-  (declare (obsolete nil "29.1"))
   (let ((remote (file-remote-p default-directory)))
     (if remote
 	(mapcar
@@ -379,7 +262,6 @@ Prepend remote identification of `default-directory', if any."
 
 (defun eshell-to-flat-string (value)
   "Make value a string.  If separated by newlines change them to spaces."
-  (declare (obsolete nil "29.1"))
   (let ((text (eshell-stringify value)))
     (if (string-match "\n+\\'" text)
 	(setq text (replace-match "" t t text)))
@@ -387,31 +269,40 @@ Prepend remote identification of `default-directory', if any."
       (setq text (replace-match " " t t text)))
     text))
 
+(defmacro eshell-for (for-var for-list &rest forms)
+  "Iterate through a list."
+  (declare (obsolete dolist "24.1"))
+  (declare (indent 2))
+  `(let ((list-iter ,for-list))
+     (while list-iter
+       (let ((,for-var (car list-iter)))
+	 ,@forms)
+       (setq list-iter (cdr list-iter)))))
+
 (define-obsolete-function-alias 'eshell-flatten-list #'flatten-tree "27.1")
 
 (defun eshell-stringify (object)
   "Convert OBJECT into a string value."
   (cond
    ((stringp object) object)
+   ((and (listp object)
+	 (not (eq object nil)))
+    (let ((string (pp-to-string object)))
+      (substring string 0 (1- (length string)))))
    ((numberp object)
     (number-to-string object))
-   ((and (eq object t)
-	 (not eshell-stringify-t))
-    nil)
    (t
-    (string-trim-right (pp-to-string object)))))
+    (unless (and (eq object t)
+		 (not eshell-stringify-t))
+      (pp-to-string object)))))
 
 (defsubst eshell-stringify-list (args)
   "Convert each element of ARGS into a string value."
   (mapcar #'eshell-stringify args))
 
-(defsubst eshell-list-to-string (list)
-  "Convert LIST into a single string separated by spaces."
-  (mapconcat #'eshell-stringify list " "))
-
 (defsubst eshell-flatten-and-stringify (&rest args)
   "Flatten and stringify all of the ARGS into a single string."
-  (eshell-list-to-string (flatten-tree args)))
+  (mapconcat #'eshell-stringify (flatten-tree args) " "))
 
 (defsubst eshell-directory-files (regexp &optional directory)
   "Return a list of files in the given DIRECTORY matching REGEXP."
@@ -499,7 +390,7 @@ list."
   ;; runs while point is in the minibuffer and the users attempt
   ;; to use completion.  Don't ask me.
   (condition-case nil
-      (sit-for 0)
+      (sit-for 0 0)
     (error nil)))
 
 (defun eshell-read-passwd-file (file)
@@ -626,7 +517,7 @@ list."
 (autoload 'parse-time-string "parse-time")
 
 (eval-when-compile
-  (require 'ange-ftp))		; ange-ftp-parse-filename
+  (require 'ange-ftp nil t))		; ange-ftp-parse-filename
 
 (defvar tramp-file-name-structure)
 (declare-function ange-ftp-ls "ange-ftp"
@@ -698,11 +589,11 @@ list."
 The optional argument ID-FORMAT specifies the preferred uid and
 gid format.  Valid values are `string' and `integer', defaulting to
 `integer'.  See `file-attributes'."
-  (let* ((expanded-file (expand-file-name file))
+  (let* ((file (expand-file-name file))
 	 entry)
-    (if (string-equal (file-remote-p expanded-file 'method) "ftp")
-	(let ((base (file-name-nondirectory expanded-file))
-	      (dir (file-name-directory expanded-file)))
+    (if (string-equal (file-remote-p file 'method) "ftp")
+	(let ((base (file-name-nondirectory file))
+	      (dir (file-name-directory file)))
 	  (if (string-equal "" base) (setq base "."))
 	  (unless entry
 	    (setq entry (eshell-parse-ange-ls dir))
@@ -717,20 +608,6 @@ gid format.  Valid values are `string' and `integer', defaulting to
 (defsubst eshell-processp (proc)
   "If the `processp' function does not exist, PROC is not a process."
   (and (fboundp 'processp) (processp proc)))
-
-(defun eshell-process-pair-p (procs)
-  "Return non-nil if PROCS is a pair of process objects."
-  (and (consp procs)
-       (eshell-processp (car procs))
-       (eshell-processp (cdr procs))))
-
-(defun eshell-make-process-pair (procs)
-  "Make a pair of process objects from PROCS if possible.
-This represents the head and tail of a pipeline of processes,
-where the head and tail may be the same process."
-  (pcase procs
-    ((pred eshell-processp) (cons procs procs))
-    ((pred eshell-process-pair-p) procs)))
 
 ;; (defun eshell-copy-file
 ;;   (file newname &optional ok-if-already-exists keep-date)

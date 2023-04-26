@@ -2,7 +2,7 @@
 /*                                 CLHEIR.H                                */
 /* ======================================================================= */
 
-// CLASS HIERARCHY
+// CLASS HEIRARCHY
 // Locations or Agents are both of type generic_object. Generic_objects may
 // have states, and are responsible for updating their states appropriately
 // when their step() functions are executed.

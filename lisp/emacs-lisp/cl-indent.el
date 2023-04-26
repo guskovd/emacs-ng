@@ -1,6 +1,6 @@
 ;;; cl-indent.el --- Enhanced lisp-indent mode  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1987, 2000-2023 Free Software Foundation, Inc.
+;; Copyright (C) 1987, 2000-2022 Free Software Foundation, Inc.
 
 ;; Author: Richard Mlynarik <mly@eddie.mit.edu>
 ;; Created: July 1987
@@ -378,9 +378,10 @@ instead."
 					  function)
 			    (setq tentative-defun t))
 			   ((string-match
-                             (concat "\\`\\("
-                                     (regexp-opt '("with" "without" "do"))
-                                     "\\)-")
+                             (eval-when-compile
+                              (concat "\\`\\("
+                                      (regexp-opt '("with" "without" "do"))
+                                      "\\)-"))
                              function)
 			    (setq method '(&lambda &body))))))
                   ;; backwards compatibility.  Bletch.

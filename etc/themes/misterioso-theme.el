@@ -1,6 +1,6 @@
 ;;; misterioso-theme.el --- Custom face theme for Emacs  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2011-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2011-2022 Free Software Foundation, Inc.
 
 ;; Author: Sebastian Hermida
 
@@ -21,11 +21,8 @@
 
 ;;; Code:
 
-;;;###theme-autoload
 (deftheme misterioso
-  "Predominantly blue/cyan faces on a dark cyan background."
-  :background-mode 'dark
-  :kind 'color-scheme)
+  "Predominantly blue/cyan faces on a dark cyan background.")
 
 (let ((class '((class color) (min-colors 89))))
 

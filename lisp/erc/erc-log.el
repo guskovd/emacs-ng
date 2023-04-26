@@ -1,9 +1,9 @@
 ;;; erc-log.el --- Logging facilities for ERC.  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2003-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2003-2022 Free Software Foundation, Inc.
 
 ;; Author: Lawrence Mitchell <wence@gmx.li>
-;; Maintainer: Amin Bandali <bandali@gnu.org>, F. Jason Park <jp@neverwas.me>
+;; Maintainer: Amin Bandali <bandali@gnu.org>
 ;; URL: https://www.emacswiki.org/emacs/ErcLogging
 ;; Keywords: comm, IRC, chat, client, Internet, logging
 
@@ -198,7 +198,6 @@ This should ideally, be a \"catch-all\" coding system, like
 
 The function should take one argument, which is the text to filter."
   :type '(choice (function "Function")
-                 (function-item erc-stamp-prefix-log-filter)
 		 (const :tag "No filtering" nil)))
 
 
@@ -231,8 +230,7 @@ also be a predicate function.  To only log when you are not set away, use:
    ;; append, so that 'erc-initialize-log-marker runs first
    (add-hook 'erc-connect-pre-hook #'erc-log-setup-logging 'append)
    (dolist (buffer (erc-buffer-list))
-     (erc-log-setup-logging buffer))
-   (erc--modify-local-map t "C-c C-l" #'erc-save-buffer-in-logs))
+     (erc-log-setup-logging buffer)))
   ;; disable
   ((remove-hook 'erc-insert-post-hook #'erc-save-buffer-in-logs)
    (remove-hook 'erc-send-post-hook #'erc-save-buffer-in-logs)
@@ -243,8 +241,9 @@ also be a predicate function.  To only log when you are not set away, use:
    (remove-hook 'erc-part-hook #'erc-conditional-save-buffer)
    (remove-hook 'erc-connect-pre-hook #'erc-log-setup-logging)
    (dolist (buffer (erc-buffer-list))
-     (erc-log-disable-logging buffer))
-   (erc--modify-local-map nil "C-c C-l" #'erc-save-buffer-in-logs)))
+     (erc-log-disable-logging buffer))))
+
+(define-key erc-mode-map "\C-c\C-l" #'erc-save-buffer-in-logs)
 
 ;;; functionality referenced from erc.el
 (defun erc-log-setup-logging (buffer)

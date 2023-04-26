@@ -1,9 +1,9 @@
 ;;; erc-pcomplete.el --- Provides programmable completion for ERC  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2002-2004, 2006-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2002-2004, 2006-2022 Free Software Foundation, Inc.
 
 ;; Author: Sacha Chua <sacha@free.net.ph>
-;; Maintainer: Amin Bandali <bandali@gnu.org>, F. Jason Park <jp@neverwas.me>
+;; Maintainer: Amin Bandali <bandali@gnu.org>
 ;; Keywords: comm
 ;; URL: https://www.emacswiki.org/emacs/ErcCompletion
 
@@ -56,8 +56,6 @@ add this string to nicks completed."
   "If t, order nickname completions with the most recent speakers first."
   :type 'boolean)
 
-;;;###autoload(put 'Completion 'erc--module 'completion)
-;;;###autoload(put 'pcomplete 'erc--module 'completion)
 ;;;###autoload(autoload 'erc-completion-mode "erc-pcomplete" nil t)
 (define-erc-module pcomplete Completion
   "In ERC Completion mode, the TAB key does completion whenever possible."
@@ -180,10 +178,6 @@ for use on `completion-at-point-function'."
 
 (defun pcomplete/erc-mode/UNIGNORE ()
   (pcomplete-here (erc-with-server-buffer erc-ignore-list)))
-
-(defun pcomplete/erc-mode/RECONNECT ()
-  (pcomplete-here '("cancel"))
-  (pcomplete-opt "a"))
 
 ;;; Functions that provide possible completions.
 

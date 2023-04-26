@@ -1,5 +1,5 @@
 /* Extended regular expression matching and search library.
-   Copyright (C) 2002-2023 Free Software Foundation, Inc.
+   Copyright (C) 2002-2022 Free Software Foundation, Inc.
    This file is part of the GNU C Library.
    Contributed by Isamu Hasegawa <isamu@yamato.ibm.com>.
 
@@ -30,8 +30,10 @@ static re_dfastate_t *create_cd_newstate (const re_dfa_t *dfa,
 					  re_hashval_t hash);
 static reg_errcode_t re_string_realloc_buffers (re_string_t *pstr,
 						Idx new_buf_len);
+#ifdef RE_ENABLE_I18N
 static void build_wcs_buffer (re_string_t *pstr);
 static reg_errcode_t build_wcs_upper_buffer (re_string_t *pstr);
+#endif /* RE_ENABLE_I18N */
 static void build_upper_buffer (re_string_t *pstr);
 static void re_string_translate_buffer (re_string_t *pstr);
 static unsigned int re_string_context_at (const re_string_t *input, Idx idx,
@@ -89,6 +91,7 @@ re_string_construct (re_string_t *pstr, const char *str, Idx len,
 
   if (icase)
     {
+#ifdef RE_ENABLE_I18N
       if (dfa->mb_cur_max > 1)
 	{
 	  while (1)
@@ -106,13 +109,16 @@ re_string_construct (re_string_t *pstr, const char *str, Idx len,
 	    }
 	}
       else
+#endif /* RE_ENABLE_I18N  */
 	build_upper_buffer (pstr);
     }
   else
     {
+#ifdef RE_ENABLE_I18N
       if (dfa->mb_cur_max > 1)
 	build_wcs_buffer (pstr);
       else
+#endif /* RE_ENABLE_I18N  */
 	{
 	  if (trans != NULL)
 	    re_string_translate_buffer (pstr);
@@ -133,6 +139,7 @@ static reg_errcode_t
 __attribute_warn_unused_result__
 re_string_realloc_buffers (re_string_t *pstr, Idx new_buf_len)
 {
+#ifdef RE_ENABLE_I18N
   if (pstr->mb_cur_max > 1)
     {
       wint_t *new_wcs;
@@ -155,6 +162,7 @@ re_string_realloc_buffers (re_string_t *pstr, Idx new_buf_len)
 	  pstr->offsets = new_offsets;
 	}
     }
+#endif /* RE_ENABLE_I18N  */
   if (pstr->mbs_allocated)
     {
       unsigned char *new_mbs = re_realloc (pstr->mbs, unsigned char,
@@ -186,6 +194,7 @@ re_string_construct_common (const char *str, Idx len, re_string_t *pstr,
   pstr->raw_stop = pstr->stop;
 }
 
+#ifdef RE_ENABLE_I18N
 
 /* Build wide character buffer PSTR->WCS.
    If the byte sequence of the string are:
@@ -521,6 +530,7 @@ re_string_skip_chars (re_string_t *pstr, Idx new_raw_idx, wint_t *last_wc)
   *last_wc = wc;
   return rawbuf_idx;
 }
+#endif /* RE_ENABLE_I18N  */
 
 /* Build the buffer PSTR->MBS, and apply the translation if we need.
    This function is used in case of REG_ICASE.  */
@@ -575,8 +585,10 @@ re_string_reconstruct (re_string_t *pstr, Idx idx, int eflags)
   else
     {
       /* Reset buffer.  */
+#ifdef RE_ENABLE_I18N
       if (pstr->mb_cur_max > 1)
 	memset (&pstr->cur_state, '\0', sizeof (mbstate_t));
+#endif /* RE_ENABLE_I18N */
       pstr->len = pstr->raw_len;
       pstr->stop = pstr->raw_stop;
       pstr->valid_len = 0;
@@ -596,6 +608,7 @@ re_string_reconstruct (re_string_t *pstr, Idx idx, int eflags)
       if (__glibc_likely (offset < pstr->valid_raw_len))
 	{
 	  /* Yes, move them to the front of the buffer.  */
+#ifdef RE_ENABLE_I18N
 	  if (__glibc_unlikely (pstr->offsets_needed))
 	    {
 	      Idx low = 0, high = pstr->valid_len, mid;
@@ -659,12 +672,15 @@ re_string_reconstruct (re_string_t *pstr, Idx idx, int eflags)
 		}
 	    }
 	  else
+#endif
 	    {
 	      pstr->tip_context = re_string_context_at (pstr, offset - 1,
 							eflags);
+#ifdef RE_ENABLE_I18N
 	      if (pstr->mb_cur_max > 1)
 		memmove (pstr->wcs, pstr->wcs + offset,
 			 (pstr->valid_len - offset) * sizeof (wint_t));
+#endif /* RE_ENABLE_I18N */
 	      if (__glibc_unlikely (pstr->mbs_allocated))
 		memmove (pstr->mbs, pstr->mbs + offset,
 			 pstr->valid_len - offset);
@@ -675,6 +691,7 @@ re_string_reconstruct (re_string_t *pstr, Idx idx, int eflags)
 	}
       else
 	{
+#ifdef RE_ENABLE_I18N
 	  /* No, skip all characters until IDX.  */
 	  Idx prev_valid_len = pstr->valid_len;
 
@@ -684,7 +701,9 @@ re_string_reconstruct (re_string_t *pstr, Idx idx, int eflags)
 	      pstr->stop = pstr->raw_stop - idx + offset;
 	      pstr->offsets_needed = 0;
 	    }
+#endif
 	  pstr->valid_len = 0;
+#ifdef RE_ENABLE_I18N
 	  if (pstr->mb_cur_max > 1)
 	    {
 	      Idx wcs_idx;
@@ -768,6 +787,7 @@ re_string_reconstruct (re_string_t *pstr, Idx idx, int eflags)
 	      pstr->valid_raw_len = pstr->valid_len;
 	    }
 	  else
+#endif /* RE_ENABLE_I18N */
 	    {
 	      int c = pstr->raw_mbs[pstr->raw_mbs_idx + offset - 1];
 	      pstr->valid_raw_len = 0;
@@ -787,6 +807,7 @@ re_string_reconstruct (re_string_t *pstr, Idx idx, int eflags)
   pstr->stop -= offset;
 
   /* Then build the buffers.  */
+#ifdef RE_ENABLE_I18N
   if (pstr->mb_cur_max > 1)
     {
       if (pstr->icase)
@@ -799,6 +820,7 @@ re_string_reconstruct (re_string_t *pstr, Idx idx, int eflags)
 	build_wcs_buffer (pstr);
     }
   else
+#endif /* RE_ENABLE_I18N */
     if (__glibc_unlikely (pstr->mbs_allocated))
       {
 	if (pstr->icase)
@@ -824,22 +846,28 @@ re_string_peek_byte_case (const re_string_t *pstr, Idx idx)
   if (__glibc_likely (!pstr->mbs_allocated))
     return re_string_peek_byte (pstr, idx);
 
+#ifdef RE_ENABLE_I18N
   if (pstr->mb_cur_max > 1
       && ! re_string_is_single_byte_char (pstr, pstr->cur_idx + idx))
     return re_string_peek_byte (pstr, idx);
+#endif
 
   off = pstr->cur_idx + idx;
+#ifdef RE_ENABLE_I18N
   if (pstr->offsets_needed)
     off = pstr->offsets[off];
+#endif
 
   ch = pstr->raw_mbs[pstr->raw_mbs_idx + off];
 
+#ifdef RE_ENABLE_I18N
   /* Ensure that e.g. for tr_TR.UTF-8 BACKSLASH DOTLESS SMALL LETTER I
      this function returns CAPITAL LETTER I instead of first byte of
      DOTLESS SMALL LETTER I.  The latter would confuse the parser,
      since peek_byte_case doesn't advance cur_idx in any way.  */
   if (pstr->offsets_needed && !isascii (ch))
     return re_string_peek_byte (pstr, idx);
+#endif
 
   return ch;
 }
@@ -850,6 +878,7 @@ re_string_fetch_byte_case (re_string_t *pstr)
   if (__glibc_likely (!pstr->mbs_allocated))
     return re_string_fetch_byte (pstr);
 
+#ifdef RE_ENABLE_I18N
   if (pstr->offsets_needed)
     {
       Idx off;
@@ -875,6 +904,7 @@ re_string_fetch_byte_case (re_string_t *pstr)
 			    re_string_char_size_at (pstr, pstr->cur_idx));
       return ch;
     }
+#endif
 
   return pstr->raw_mbs[pstr->raw_mbs_idx + pstr->cur_idx++];
 }
@@ -882,8 +912,10 @@ re_string_fetch_byte_case (re_string_t *pstr)
 static void
 re_string_destruct (re_string_t *pstr)
 {
+#ifdef RE_ENABLE_I18N
   re_free (pstr->wcs);
   re_free (pstr->offsets);
+#endif /* RE_ENABLE_I18N  */
   if (pstr->mbs_allocated)
     re_free (pstr->mbs);
 }
@@ -901,6 +933,7 @@ re_string_context_at (const re_string_t *input, Idx idx, int eflags)
   if (__glibc_unlikely (idx == input->len))
     return ((eflags & REG_NOTEOL) ? CONTEXT_ENDBUF
 	    : CONTEXT_NEWLINE | CONTEXT_ENDBUF);
+#ifdef RE_ENABLE_I18N
   if (input->mb_cur_max > 1)
     {
       wint_t wc;
@@ -920,6 +953,7 @@ re_string_context_at (const re_string_t *input, Idx idx, int eflags)
 	      ? CONTEXT_NEWLINE : 0);
     }
   else
+#endif
     {
       c = re_string_byte_at (input, idx);
       if (bitset_contain (input->word_char, c))
@@ -1396,28 +1430,32 @@ re_dfa_add_node (re_dfa_t *dfa, re_token_t token)
       if (__glibc_unlikely (new_nodes == NULL))
 	return -1;
       dfa->nodes = new_nodes;
-      dfa->nodes_alloc = new_nodes_alloc;
       new_nexts = re_realloc (dfa->nexts, Idx, new_nodes_alloc);
-      if (new_nexts != NULL)
-	dfa->nexts = new_nexts;
       new_indices = re_realloc (dfa->org_indices, Idx, new_nodes_alloc);
-      if (new_indices != NULL)
-	dfa->org_indices = new_indices;
       new_edests = re_realloc (dfa->edests, re_node_set, new_nodes_alloc);
-      if (new_edests != NULL)
-	dfa->edests = new_edests;
       new_eclosures = re_realloc (dfa->eclosures, re_node_set, new_nodes_alloc);
-      if (new_eclosures != NULL)
-	dfa->eclosures = new_eclosures;
       if (__glibc_unlikely (new_nexts == NULL || new_indices == NULL
 			    || new_edests == NULL || new_eclosures == NULL))
-	return -1;
+	{
+	   re_free (new_nexts);
+	   re_free (new_indices);
+	   re_free (new_edests);
+	   re_free (new_eclosures);
+	   return -1;
+	}
+      dfa->nexts = new_nexts;
+      dfa->org_indices = new_indices;
+      dfa->edests = new_edests;
+      dfa->eclosures = new_eclosures;
+      dfa->nodes_alloc = new_nodes_alloc;
     }
   dfa->nodes[dfa->nodes_len] = token;
   dfa->nodes[dfa->nodes_len].constraint = 0;
+#ifdef RE_ENABLE_I18N
   dfa->nodes[dfa->nodes_len].accept_mb =
     ((token.type == OP_PERIOD && dfa->mb_cur_max > 1)
      || token.type == COMPLEX_BRACKET);
+#endif
   dfa->nexts[dfa->nodes_len] = -1;
   re_node_set_init_empty (dfa->edests + dfa->nodes_len);
   re_node_set_init_empty (dfa->eclosures + dfa->nodes_len);
@@ -1613,7 +1651,9 @@ create_ci_newstate (const re_dfa_t *dfa, const re_node_set *nodes,
       re_token_type_t type = node->type;
       if (type == CHARACTER && !node->constraint)
 	continue;
+#ifdef RE_ENABLE_I18N
       newstate->accept_mb |= node->accept_mb;
+#endif /* RE_ENABLE_I18N */
 
       /* If the state has the halt node, the state is a halt state.  */
       if (type == END_OF_RE)
@@ -1665,7 +1705,9 @@ create_cd_newstate (const re_dfa_t *dfa, const re_node_set *nodes,
 
       if (type == CHARACTER && !constraint)
 	continue;
+#ifdef RE_ENABLE_I18N
       newstate->accept_mb |= node->accept_mb;
+#endif /* RE_ENABLE_I18N */
 
       /* If the state has the halt node, the state is a halt state.  */
       if (type == END_OF_RE)

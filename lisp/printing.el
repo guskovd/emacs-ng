@@ -1,11 +1,18 @@
 ;;; printing.el --- printing utilities  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2000-2001, 2003-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2000-2001, 2003-2022 Free Software Foundation, Inc.
 
 ;; Author: Vinicius Jose Latorre <viniciusjl.gnu@gmail.com>
 ;; Keywords: wp, print, PostScript
-;; Old-Version: 6.9.3
+;; Version: 6.9.3
 ;; URL: https://www.emacswiki.org/cgi-bin/wiki/ViniciusJoseLatorre
+
+(defconst pr-version "6.9.3"
+  "printing.el, v 6.9.3 <2007/12/09 vinicius>
+
+Please send all bug fixes and enhancements to
+	bug-gnu-emacs@gnu.org and Vinicius Jose Latorre <viniciusjl.gnu@gmail.com>
+")
 
 ;; This file is part of GNU Emacs.
 
@@ -55,6 +62,10 @@
 ;; `printing' depends on ps-print package to generate PostScript files, to
 ;; spool and to despool PostScript buffer.  So, `printing' provides an
 ;; interface to ps-print package and it also provides some extra stuff.
+;;
+;; To download the latest ps-print package see
+;; `https://www.emacswiki.org/cgi-bin/wiki/PsPrintPackage'.
+;; Please, see README file for ps-print installation instructions.
 ;;
 ;; `printing' was inspired by:
 ;;
@@ -931,6 +942,11 @@
 ;;
 ;; Below are some URL where you can find good utilities.
 ;;
+;; * For `printing' package:
+;;
+;;    printing	`https://www.emacswiki.org/cgi-bin/emacs/download/printing.el'
+;;    ps-print	`https://www.emacswiki.org/cgi-bin/wiki/PsPrintPackage'
+;;
 ;; * For GNU or Unix system:
 ;;
 ;;    gs, gv         `https://www.gnu.org/software/ghostscript/ghostscript.html'
@@ -944,7 +960,7 @@
 ;;                   `https://www.gnu.org/software/ghostscript/ghostscript.html'
 ;;    gsprint        `https://www.cs.wisc.edu/~ghost/gsview/gsprint.htm'.
 ;;    enscript       `https://people.ssh.fi/mtr/genscript/'
-;;    psnup          `https://gnuwin32.sourceforge.net/packages/psutils.htm'
+;;    psnup          `http://gnuwin32.sourceforge.net/packages/psutils.htm'
 ;;    redmon         `http://www.ghostgum.com.au/software/redmon.htm'
 ;;
 ;;
@@ -998,6 +1014,10 @@
 
 (require 'lpr)
 (require 'ps-print)
+
+(and (string< ps-print-version "6.6.4")
+     (error "`printing' requires `ps-print' package version 6.6.4 or later"))
+
 
 (defconst pr-cygwin-system
   (and lpr-windows-system (getenv "OSTYPE")
@@ -1752,7 +1772,7 @@ Useful links:
   `https://linux.die.net/man/1/lp'
 
 * GNU utilities for w32 (cp.exe)
-  `https://unxutils.sourceforge.net/'"
+  `http://unxutils.sourceforge.net/'"
   :type '(repeat
 	  (list
 	   :tag "PostScript Printer"
@@ -2382,7 +2402,7 @@ Useful links:
   `http://gershwin.ens.fr/vdaniel/Doc-Locale/Outils-Gnu-Linux/PsUtils/'
 
 * psnup (PsUtils for Windows)
-  `https://gnuwin32.sourceforge.net/packages/psutils.htm'
+  `http://gnuwin32.sourceforge.net/packages/psutils.htm'
 
 * psnup documentation (GNU or Unix - or type `man psnup')
   `https://linux.die.net/man/1/psnup'
@@ -2762,7 +2782,7 @@ See `pr-ps-printer-alist'.")
       ["4-up"     (pr-ps-buffer-preview 4   t) t]
       ["Other..." (pr-ps-buffer-preview nil t)
        :keys "\\[pr-ps-buffer-preview]"])
-     ("Region" :active (and (not pr-spool-p) mark-active)
+     ("Region" :active (and (not pr-spool-p) (ps-mark-active-p))
       ["1-up"     (pr-ps-region-preview 1   t) t]
       ["2-up"     (pr-ps-region-preview 2   t) t]
       ["4-up"     (pr-ps-region-preview 4   t) t]
@@ -2817,7 +2837,7 @@ See `pr-ps-printer-alist'.")
       ["4-up"     (pr-ps-buffer-ps-print 4   t) t]
       ["Other..." (pr-ps-buffer-ps-print nil t)
        :keys "\\[pr-ps-buffer-ps-print]"])
-     ("Region" :active mark-active
+     ("Region" :active (ps-mark-active-p)
       ["1-up"     (pr-ps-region-ps-print 1   t) t]
       ["2-up"     (pr-ps-region-ps-print 2   t) t]
       ["4-up"     (pr-ps-region-ps-print 4   t) t]
@@ -2867,12 +2887,12 @@ See `pr-ps-printer-alist'.")
      "Replace non-printing chars with printable representations."
      ["Directory" pr-printify-directory t]
      ["Buffer"    pr-printify-buffer    t]
-     ["Region"    pr-printify-region    mark-active])
+     ["Region"    pr-printify-region    (ps-mark-active-p)])
     ("Print" :included (pr-visible-p 'text)
      :help "Send text to printer"
      ["Directory" pr-txt-directory t]
      ["Buffer"    pr-txt-buffer    t]
-     ["Region"    pr-txt-region    mark-active]
+     ["Region"    pr-txt-region    (ps-mark-active-p)]
      ["Mode"      pr-txt-mode      (pr-mode-alist-p)])
     ["Text Printers" pr-update-menus
      :active pr-txt-printer-alist :included (pr-visible-p 'text)
@@ -2987,7 +3007,9 @@ Calls `pr-update-menus' to adjust menus."
 
 
 (defconst pr-help-message
-  "\
+  (concat "printing.el version " pr-version
+	  "    ps-print.el version " ps-print-version
+	  "\n\n
 Menu Layout
 -----------
 
@@ -3040,7 +3062,7 @@ A. Interface:
 
 I. PostScript printing:
 
-   1. You can generate a PostScript file (if you type \\[universal-argument] before activating
+   1. You can generate a PostScript file (if you type C-u before activating
       menu) or PostScript temporary file for a directory, a buffer, a region
       or a major mode, choosing 1-up, 2-up, 4-up or any other n-up printing;
       after file generation, ghostview is activated using the file generated
@@ -3080,7 +3102,7 @@ I. PostScript printing:
 	      `pr-ps-utility-alist'.
 
    2. Operate the same way as option 1, but it sends directly the PostScript
-      code (or put in a file, if you've typed \\[universal-argument]) or it uses ghostscript to
+      code (or put in a file, if you've typed C-u) or it uses ghostscript to
       print the PostScript file generated.  It depends on option 18, if it's
       turned on, it uses ghostscript; otherwise, it sends directly to
       printer.  If spooling is on (option 16), the PostScript code is saved
@@ -3089,7 +3111,7 @@ I. PostScript printing:
       Instead of printing each buffer, region or major mode at once, you can
       save temporarily the PostScript code generated in a buffer and print it
       later.  The option `Despool...' despools the PostScript spooling buffer
-      directly on a printer.  If you type \\[universal-argument] before choosing this option,
+      directly on a printer.  If you type C-u before choosing this option,
       the PostScript code generated is saved in a file instead of sending it to
       the printer.  To spool the PostScript code generated you need to turn on
       option 16.  This option is enabled if spooling is on (option 16).
@@ -3193,12 +3215,14 @@ VI. Customization:
    23. Show current settings for `printing', `ps-print' or `lpr'.
 
    24. Quick help for printing menu layout.
-"
+")
   "Printing help message.")
 
 
 (defconst pr-interface-help-message
-  "\
+  (concat "printing.el version " pr-version
+	  "    ps-print.el version " ps-print-version
+	  "\n\n
 The printing interface buffer has the same functionality as the printing menu.
 The major difference is that the states (like sending PostScript generated to a
 file, n-up printing, etc.) are set and saved between printing buffer
@@ -3425,7 +3449,7 @@ The printing interface buffer has the following sections:
 
    Quick help for printing interface buffer and printing menu layout.  You can
    also quit the printing interface buffer or kill all printing help buffer.
-"
+")
   "Printing buffer interface help message.")
 
 
@@ -4183,8 +4207,7 @@ bottom."
 (defun pr-help (&rest _ignore)
   "Help for the printing package."
   (interactive)
-  (pr-show-setup (substitute-command-keys pr-help-message)
-                 "*Printing Help*"))
+  (pr-show-setup pr-help-message "*Printing Help*"))
 
 
 ;;;###autoload
@@ -4379,6 +4402,7 @@ Or choose the menu option Printing/Show Settings/printing."
     (mapconcat
      #'ps-print-quote
      (list
+      (concat "\n;;; printing.el version " pr-version "\n")
       ";; internal vars"
       (ps-comment-string "emacs-version       " emacs-version)
       (ps-comment-string "pr-txt-command      " pr-txt-command)
@@ -5037,8 +5061,7 @@ If menu binding was not done, calls `pr-menu-bind'."
 
 (defun pr-show-setup (settings buffer-name)
   (with-output-to-temp-buffer buffer-name
-    (with-current-buffer buffer-name
-      (insert settings))
+    (princ settings)
     (help-print-return-message)))
 
 
@@ -5546,11 +5569,13 @@ COMMAND.exe, COMMAND.bat and COMMAND.com in this order."
 (defvar pr-i-ps-send    'printer)
 
 
-(defvar-keymap pr-interface-map
-  :doc "Keymap for `pr-interface'."
-  :parent widget-keymap
-  "q" #'pr-interface-quit
-  "?" #'pr-interface-help)
+(defvar pr-interface-map
+  (let ((map (make-sparse-keymap)))
+    (set-keymap-parent map widget-keymap)
+    (define-key map "q" 'pr-interface-quit)
+    (define-key map "?" 'pr-interface-help)
+    map)
+  "Keymap for `pr-interface'.")
 
 (defmacro pr-interface-save (&rest body)
   `(with-current-buffer pr-i-buffer
@@ -5560,7 +5585,7 @@ COMMAND.exe, COMMAND.bat and COMMAND.com in this order."
 (defun pr-create-interface ()
   "Create the front end for printing package."
   (setq pr-i-buffer (buffer-name (current-buffer))
-        pr-i-region mark-active
+	pr-i-region (ps-mark-active-p)
 	pr-i-mode   (pr-mode-alist-p)
 	pr-i-window-configuration (current-window-configuration))
 
@@ -5572,6 +5597,9 @@ COMMAND.exe, COMMAND.bat and COMMAND.com in this order."
   (switch-to-buffer (get-buffer-create pr-buffer-name))
 
   ;; header
+  (let ((versions (concat "printing v" pr-version
+			  "    ps-print v" ps-print-version)))
+    (widget-insert (make-string (- 79 (length versions)) ?\ ) versions))
   (pr-insert-italic "\nCurrent Directory : " 1)
   (pr-insert-italic default-directory)
 
@@ -5623,11 +5651,11 @@ COMMAND.exe, COMMAND.bat and COMMAND.com in this order."
 		    (nreverse choices))
 		  " Buffer : " nil
 		  (lambda ()
-                    (pr-interface-save
-                     (setq pr-i-region mark-active
-                           pr-i-mode   (pr-mode-alist-p)))
-                    (pr-update-checkbox 'pr-i-region)
-                    (pr-update-checkbox 'pr-i-mode)))
+		     (pr-interface-save
+		      (setq pr-i-region (ps-mark-active-p)
+			    pr-i-mode   (pr-mode-alist-p)))
+		     (pr-update-checkbox 'pr-i-region)
+		     (pr-update-checkbox 'pr-i-mode)))
   ;;    1a. Buffer: Region
   (put 'pr-i-region 'pr-widget
        (pr-insert-checkbox
@@ -5635,7 +5663,7 @@ COMMAND.exe, COMMAND.bat and COMMAND.com in this order."
 	'pr-i-region
         (lambda (widget &rest _ignore)
           (let ((region-p (pr-interface-save
-                           mark-active)))
+                           (ps-mark-active-p))))
             (cond ((null (widget-value widget)) ; widget is nil
                    (setq pr-i-region nil))
                   (region-p		; widget is true and there is a region
@@ -6185,12 +6213,6 @@ COMMAND.exe, COMMAND.bat and COMMAND.com in this order."
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defconst pr-version "6.9.3"
-  "printing.el, v 6.9.3 <2007/12/09 vinicius>
-
-Please send all bug fixes and enhancements to
-   bug-gnu-emacs@gnu.org and Vinicius Jose Latorre <viniciusjl.gnu@gmail.com>")
-(make-obsolete-variable 'pr-version 'emacs-version "29.1")
 
 (provide 'printing)
 

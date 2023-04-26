@@ -1,6 +1,6 @@
 ;;; elisp-mode-tests.el --- Tests for emacs-lisp-mode  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2015-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2015-2022 Free Software Foundation, Inc.
 
 ;; Author: Dmitry Gutov <dgutov@yandex.ru>
 ;; Author: Stephen Leake <stephen_leake@member.fsf.org>
@@ -26,7 +26,6 @@
 (require 'ert-x)
 (require 'xref)
 (eval-when-compile (require 'cl-lib))
-(require 'ert-x)
 
 ;;; Completion
 
@@ -109,7 +108,7 @@
         (should (member "backup-inhibited" comps))
         (should-not (member "backup-buffer" comps))))))
 
-(ert-deftest elisp-completes-functions-after-let-bindings-2 ()
+(ert-deftest elisp-completes-functions-after-let-bindings ()
   (with-temp-buffer
     (emacs-lisp-mode)
     (insert "(let ((bar 1) (baz 2)) (ba")
@@ -182,16 +181,6 @@
         (erase-buffer) (insert "?B") (message nil)
         (call-interactively #'eval-last-sexp)
         (should (equal (current-message) "66 (#o102, #x42, ?B)"))))))
-
-;;; eval-defun
-
-(ert-deftest eval-defun-prints-edebug-when-instrumented ()
-  (skip-unless (not noninteractive))
-  (with-temp-buffer
-    (let ((current-prefix-arg '(4)))
-      (erase-buffer) (insert "(defun foo ())") (message nil)
-      (call-interactively #'eval-defun)
-      (should (equal (current-message) "Edebug: foo")))))
 
 ;;; eldoc
 
@@ -312,9 +301,12 @@
 
 ;; tmp may be on a different filesystem to the tests, but, ehh.
 (defvar xref--case-insensitive
-  (ert-with-temp-directory dir
-    (with-temp-file (expand-file-name "hElLo" dir) "hello")
-    (file-exists-p (expand-file-name "HELLO" dir)))
+  (let ((dir (make-temp-file "xref-test" t)))
+    (unwind-protect
+        (progn
+          (with-temp-file (expand-file-name "hElLo" dir) "hello")
+          (file-exists-p (expand-file-name "HELLO" dir)))
+      (delete-directory dir t)))
   "Non-nil if file system seems to be case-insensitive.")
 
 (defun xref-elisp-test-run (xrefs expected-xrefs)
@@ -448,8 +440,7 @@ to (xref-elisp-test-descr-to-target xref)."
 ;; track down the problem.
 (cl-defmethod xref-elisp-generic-no-default ((this xref-elisp-root-type) arg2)
   "Doc string generic no-default xref-elisp-root-type."
-  "non-default for no-default"
-  (list this arg2)) ; silence byte-compiler
+  "non-default for no-default")
 
 ;; defgeneric after defmethod in file to ensure the fallback search
 ;; method of just looking for the function name will fail.
@@ -459,15 +450,13 @@ to (xref-elisp-test-descr-to-target xref)."
   ;; dispatching code.
   )
 
-(with-no-warnings ; FIXME: Make more specific.
-  (cl-defgeneric xref-elisp-generic-co-located-default (arg1 arg2)
-    "Doc string generic co-located-default."
-    "co-located default"))
+(cl-defgeneric xref-elisp-generic-co-located-default (arg1 arg2)
+  "Doc string generic co-located-default."
+  "co-located default")
 
-(with-no-warnings ; FIXME: Make more specific.
-  (cl-defmethod xref-elisp-generic-co-located-default ((this xref-elisp-root-type) arg2)
-    "Doc string generic co-located-default xref-elisp-root-type."
-    "non-default for co-located-default"))
+(cl-defmethod xref-elisp-generic-co-located-default ((this xref-elisp-root-type) arg2)
+  "Doc string generic co-located-default xref-elisp-root-type."
+  "non-default for co-located-default")
 
 (cl-defgeneric xref-elisp-generic-separate-default (arg1 arg2)
   "Doc string generic separate-default."
@@ -476,23 +465,19 @@ to (xref-elisp-test-descr-to-target xref)."
 
 (cl-defmethod xref-elisp-generic-separate-default (arg1 arg2)
   "Doc string generic separate-default default."
-  "separate default"
-  (list arg1 arg2)) ; silence byte-compiler
+  "separate default")
 
 (cl-defmethod xref-elisp-generic-separate-default ((this xref-elisp-root-type) arg2)
   "Doc string generic separate-default xref-elisp-root-type."
-  "non-default for separate-default"
-  (list this arg2)) ; silence byte-compiler
+  "non-default for separate-default")
 
 (cl-defmethod xref-elisp-generic-implicit-generic (arg1 arg2)
   "Doc string generic implicit-generic default."
-  "default for implicit generic"
-  (list arg1 arg2)) ; silence byte-compiler
+  "default for implicit generic")
 
 (cl-defmethod xref-elisp-generic-implicit-generic ((this xref-elisp-root-type) arg2)
   "Doc string generic implicit-generic xref-elisp-root-type."
-  "non-default for implicit generic"
-  (list this arg2)) ; silence byte-compiler
+  "non-default for implicit generic")
 
 
 (xref-elisp-deftest find-defs-defgeneric-no-methods
@@ -627,7 +612,7 @@ to (xref-elisp-test-descr-to-target xref)."
    ))
 
 (xref-elisp-deftest find-defs-defgeneric-eval
-  (elisp--xref-find-definitions (eval '(cl-defgeneric stephe-leake-cl-defgeneric ()) t))
+  (elisp--xref-find-definitions (eval '(cl-defgeneric stephe-leake-cl-defgeneric ())))
   nil)
 
 ;; Define some mode-local overloadable/overridden functions for xref to find
@@ -729,7 +714,7 @@ to (xref-elisp-test-descr-to-target xref)."
 	       (expand-file-name "../../../lisp/progmodes/xref.el" emacs-test-dir)))))
 
 (xref-elisp-deftest find-defs-defun-eval
-  (elisp--xref-find-definitions (eval '(defun stephe-leake-defun ()) t))
+  (elisp--xref-find-definitions (eval '(defun stephe-leake-defun ())))
   nil)
 
 (xref-elisp-deftest find-defs-defun-c
@@ -796,11 +781,11 @@ to (xref-elisp-test-descr-to-target xref)."
    ))
 
 (xref-elisp-deftest find-defs-defvar-el
-  (elisp--xref-find-definitions 'xref--history)
+  (elisp--xref-find-definitions 'xref--marker-ring)
   (list
-   (xref-make "(defvar xref--history)"
+   (xref-make "(defvar xref--marker-ring)"
 	      (xref-make-elisp-location
-	       'xref--history 'defvar
+	       'xref--marker-ring 'defvar
 	       (expand-file-name "../../../lisp/progmodes/xref.el" emacs-test-dir)))
     ))
 
@@ -814,7 +799,7 @@ to (xref-elisp-test-descr-to-target xref)."
     "DEFVAR_PER_BUFFER (\"default-directory\"")))
 
 (xref-elisp-deftest find-defs-defvar-eval
-  (elisp--xref-find-definitions (eval '(defvar stephe-leake-defvar nil) t))
+  (elisp--xref-find-definitions (eval '(defvar stephe-leake-defvar nil)))
   nil)
 
 (xref-elisp-deftest find-defs-face-el
@@ -832,7 +817,7 @@ to (xref-elisp-test-descr-to-target xref)."
    ))
 
 (xref-elisp-deftest find-defs-face-eval
-  (elisp--xref-find-definitions (eval '(defface stephe-leake-defface nil "") t))
+  (elisp--xref-find-definitions (eval '(defface stephe-leake-defface nil "")))
   nil)
 
 (xref-elisp-deftest find-defs-feature-el
@@ -847,7 +832,7 @@ to (xref-elisp-test-descr-to-target xref)."
    ))
 
 (xref-elisp-deftest find-defs-feature-eval
-  (elisp--xref-find-definitions (eval '(provide 'stephe-leake-feature) t))
+  (elisp--xref-find-definitions (eval '(provide 'stephe-leake-feature)))
   nil)
 
 (ert-deftest elisp--preceding-sexp--char-name ()
@@ -856,14 +841,25 @@ to (xref-elisp-test-descr-to-target xref)."
     (insert "?\\N{HEAVY CHECK MARK}")
     (should (equal (elisp--preceding-sexp) ?\N{HEAVY CHECK MARK}))))
 
+(ert-deftest elisp-indent-basic ()
+  (with-temp-buffer
+    (emacs-lisp-mode)
+    (let ((orig "(defun x ()
+  (print (quote ( thingy great
+		  stuff)))
+  (print (quote (thingy great
+			stuff))))"))
+      (insert orig)
+      (indent-region (point-min) (point-max))
+      (should (equal (buffer-string) orig)))))
+
 (defun test--font (form search)
   (with-temp-buffer
     (emacs-lisp-mode)
     (if (stringp form)
         (insert form)
       (pp form (current-buffer)))
-    (with-suppressed-warnings ((interactive-only font-lock-debug-fontify))
-      (font-lock-debug-fontify))
+    (font-lock-debug-fontify)
     (goto-char (point-min))
     (and (re-search-forward search nil t)
          (get-text-property (match-beginning 1) 'face))))
@@ -1004,11 +1000,6 @@ evaluation of BODY."
     (should (equal (elisp--xref-infer-namespace p6) 'function)))
 
   (elisp-mode-test--with-buffer
-      (concat "(defclass child-class ({p1}parent-1 {p2}parent-2))\n")
-    (should (equal (elisp--xref-infer-namespace p1) 'function))
-    (should (equal (elisp--xref-infer-namespace p2) 'function)))
-
-  (elisp-mode-test--with-buffer
       (concat "(require '{p1}alpha)\n"
               "(fboundp '{p2}beta)\n"
               "(boundp '{p3}gamma)\n"
@@ -1099,7 +1090,7 @@ evaluation of BODY."
       (insert "f-test-compl")
       (completion-at-point)
       (goto-char (point-min))
-      (should (search-forward "f-test-complete-me" (pos-eol) t))
+      (should (search-forward "f-test-complete-me" (line-end-position) t))
       (goto-char (point-min))
       (should (string= (symbol-name (read (current-buffer)))
                        "elisp--foo-test-complete-me"))
@@ -1124,12 +1115,17 @@ evaluation of BODY."
                              (buffer-string)))))))
     (should (equal observed expected-longhand-form))))
 
-(ert-deftest test-indentation ()
-  (ert-test-erts-file (ert-resource-file "elisp-indents.erts"))
-  (ert-test-erts-file (ert-resource-file "flet.erts")
-                      (lambda ()
-                        (emacs-lisp-mode)
-                        (indent-region (point-min) (point-max)))))
+(ert-deftest test-cl-flet-indentation ()
+  :expected-result :failed              ; FIXME: bug#9622
+  (should (equal
+           (with-temp-buffer
+             (emacs-lisp-mode)
+             (insert "(cl-flet ((bla (x)\n(* x x)))\n(bla 42))")
+             (indent-region (point-min) (point-max))
+             (buffer-string))
+           "(cl-flet ((bla (x)
+	    (* x x)))
+  (bla 42))")))
 
 (provide 'elisp-mode-tests)
 ;;; elisp-mode-tests.el ends here

@@ -1,11 +1,11 @@
 ;;; ol-gnus.el --- Links to Gnus Groups and Messages -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2004-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2004-2022 Free Software Foundation, Inc.
 
 ;; Author: Carsten Dominik <carsten.dominik@gmail.com>
 ;;         Tassilo Horn <tassilo at member dot fsf dot org>
 ;; Keywords: outlines, hypermedia, calendar, wp
-;; URL: https://orgmode.org
+;; Homepage: https://orgmode.org
 ;;
 ;; This file is part of GNU Emacs.
 ;;
@@ -30,9 +30,6 @@
 ;; configure the variable `org-modules'.
 
 ;;; Code:
-
-(require 'org-macs)
-(org-assert-version)
 
 (require 'gnus-sum)
 (require 'gnus-util)
@@ -74,7 +71,7 @@ negates this setting for the duration of the command."
 
 (defcustom org-gnus-no-server nil
   "Should Gnus be started using `gnus-no-server'?"
-  :group 'org-link-follow
+  :group 'org-gnus
   :version "24.4"
   :package-version '(Org . "8.0")
   :type 'boolean)

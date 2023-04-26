@@ -1,6 +1,6 @@
 ;;; ibuf-ext.el --- extensions for ibuffer  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2000-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2000-2022 Free Software Foundation, Inc.
 
 ;; Author: Colin Walters <walters@verbum.org>
 ;; Maintainer: John Paul Wallington <jpw@gnu.org>
@@ -48,12 +48,30 @@
 ;;; Utility functions
 (defun ibuffer-remove-alist (key alist)
   "Remove all entries in ALIST that have a key equal to KEY."
-  (assoc-delete-all key (copy-sequence alist)))
+  (while (ibuffer-awhen (assoc key alist)
+           (setq alist (remove it alist)) it))
+  alist)
 
-(defun ibuffer-split-list (fn elts)
-  (declare (obsolete seq-group-by "29.1"))
-  (let ((res (seq-group-by fn elts)))
-    (list (cdr (assq t res)) (cdr (assq nil res)))))
+;; borrowed from Gnus
+(defun ibuffer-remove-duplicates (list)
+  "Return a copy of LIST with duplicate elements removed."
+  (let ((new nil)
+	(tail list))
+    (while tail
+      (or (member (car tail) new)
+	  (setq new (cons (car tail) new)))
+      (setq tail (cdr tail)))
+    (nreverse new)))
+
+(defun ibuffer-split-list (ibuffer-split-list-fn ibuffer-split-list-elts)
+  (let ((hip-crowd nil)
+	(lamers nil))
+    (dolist (ibuffer-split-list-elt ibuffer-split-list-elts)
+      (if (funcall ibuffer-split-list-fn ibuffer-split-list-elt)
+	  (push ibuffer-split-list-elt hip-crowd)
+	(push ibuffer-split-list-elt lamers)))
+    ;; Too bad Emacs Lisp doesn't have multiple values.
+    (list (nreverse hip-crowd) (nreverse lamers))))
 
 (defcustom ibuffer-never-show-predicates nil
   "A list of predicates (a regexp or function) for buffers not to display.
@@ -751,12 +769,11 @@ specification, with the same structure as an element of the list
 	  (i 0))
       (dolist (filtergroup filter-group-alist)
 	(let ((filterset (cdr filtergroup)))
-          (let* ((res (seq-group-by (lambda (bufmark)
-                                      (ibuffer-included-in-filters-p (car bufmark)
-                                                                     filterset))
-                                    bmarklist))
-                 (hip-crowd (cdr (assq t res)))
-                 (lamers (cdr (assq nil res))))
+	  (cl-destructuring-bind (hip-crowd lamers)
+	      (ibuffer-split-list (lambda (bufmark)
+				    (ibuffer-included-in-filters-p (car bufmark)
+								   filterset))
+				  bmarklist)
 	    (aset vec i hip-crowd)
 	    (cl-incf i)
 	    (setq bmarklist lamers))))
@@ -786,7 +803,7 @@ specification, with the same structure as an element of the list
         (mapcar (lambda (mode)
                   (cons (format "%s" mode) `((mode . ,mode))))
                 (let ((modes
-                       (seq-uniq
+                       (ibuffer-remove-duplicates
                         (mapcar (lambda (buf)
 				  (buffer-local-value 'major-mode buf))
                                 (buffer-list)))))
@@ -863,7 +880,7 @@ specification, with the same structure as an element of the list
   "Move point to the filter group whose name is NAME."
   (interactive
    (list (ibuffer-read-filter-group-name "Jump to filter group: ")))
-  (if-let ((it (assoc name (ibuffer-current-filter-groups-with-position))))
+  (ibuffer-aif (assoc name (ibuffer-current-filter-groups-with-position))
       (goto-char (cdr it))
     (error "No filter group with name %s" name)))
 
@@ -874,7 +891,7 @@ The group will be added to `ibuffer-filter-group-kill-ring'."
   (interactive (list (ibuffer-read-filter-group-name "Kill filter group: " t)))
   (when (equal name "Default")
     (error "Can't kill default filter group"))
-  (if-let ((it (assoc name ibuffer-filter-groups)))
+  (ibuffer-aif (assoc name ibuffer-filter-groups)
       (progn
 	(push (copy-tree it) ibuffer-filter-group-kill-ring)
 	(setq ibuffer-filter-groups (ibuffer-remove-alist
@@ -889,12 +906,13 @@ The group will be added to `ibuffer-filter-group-kill-ring'."
   "Kill the filter group at point.
 See also `ibuffer-kill-filter-group'."
   (interactive "P\np")
-  (if-let ((it (save-excursion
-                 (ibuffer-forward-line 0)
-                 (get-text-property (point) 'ibuffer-filter-group-name))))
-      (ibuffer-kill-filter-group it)
-    (funcall (if interactive-p #'call-interactively #'funcall)
-             #'kill-line arg)))
+  (ibuffer-aif (save-excursion
+		 (ibuffer-forward-line 0)
+		 (get-text-property (point) 'ibuffer-filter-group-name))
+      (progn
+	(ibuffer-kill-filter-group it))
+      (funcall (if interactive-p #'call-interactively #'funcall)
+	       #'kill-line arg)))
 
 (defun ibuffer-insert-filter-group-before (newgroup group)
   (let* ((found nil)
@@ -950,7 +968,7 @@ prompt for NAME, and use the current filters."
      (list
       (read-from-minibuffer "Save current filter groups as: ")
       ibuffer-filter-groups)))
-  (if-let ((it (assoc name ibuffer-saved-filter-groups)))
+  (ibuffer-aif (assoc name ibuffer-saved-filter-groups)
       (setcdr it groups)
     (push (cons name groups) ibuffer-saved-filter-groups))
   (ibuffer-maybe-save-stuff))
@@ -1122,7 +1140,7 @@ Interactively, prompt for NAME, and use the current filters."
      (list
       (read-from-minibuffer "Save current filters as: ")
       ibuffer-filtering-qualifiers)))
-  (if-let ((it (assoc name ibuffer-saved-filters)))
+  (ibuffer-aif (assoc name ibuffer-saved-filters)
       (setcdr it filters)
     (push (cons name filters) ibuffer-saved-filters))
   (ibuffer-maybe-save-stuff))
@@ -1193,9 +1211,7 @@ Interactively, prompt for NAME, and use the current filters."
      (let ((type (assq (car qualifier) ibuffer-filtering-alist)))
        (unless qualifier
          (error "Ibuffer: Bad qualifier %s" qualifier))
-       (if (cdr qualifier)
-           (format " [%s: %s]" (cadr type) (cdr qualifier))
-         (format " [%s]" (cadr type)))))))
+       (concat " [" (cadr type) ": " (format "%s]" (cdr qualifier)))))))
 
 (defun ibuffer-list-buffer-modes (&optional include-parents)
   "Create a completion table of buffer modes currently in use.
@@ -1299,7 +1315,7 @@ For example, for a buffer associated with file '/a/b/c.d', this
 matches against '/a/b/c.d'."
   (:description "full file name"
    :reader (read-from-minibuffer "Filter by full file name (regexp): "))
-  (when-let ((it (with-current-buffer buf (ibuffer-buffer-file-name))))
+  (ibuffer-awhen (with-current-buffer buf (ibuffer-buffer-file-name))
     (string-match qualifier it)))
 
 ;;;###autoload (autoload 'ibuffer-filter-by-basename "ibuf-ext")
@@ -1311,7 +1327,7 @@ matches against `c.d'."
   (:description "file basename"
    :reader (read-from-minibuffer
             "Filter by file name, without directory part (regex): "))
-  (when-let ((it (with-current-buffer buf (ibuffer-buffer-file-name))))
+  (ibuffer-awhen (with-current-buffer buf (ibuffer-buffer-file-name))
     (string-match qualifier (file-name-nondirectory it))))
 
 ;;;###autoload (autoload 'ibuffer-filter-by-file-extension "ibuf-ext")
@@ -1324,7 +1340,7 @@ pattern.  For example, for a buffer associated with file
   (:description "filename extension"
    :reader (read-from-minibuffer
             "Filter by filename extension without separator (regex): "))
-  (when-let ((it (with-current-buffer buf (ibuffer-buffer-file-name))))
+  (ibuffer-awhen (with-current-buffer buf (ibuffer-buffer-file-name))
     (string-match qualifier (or (file-name-extension it) ""))))
 
 ;;;###autoload (autoload 'ibuffer-filter-by-directory "ibuf-ext")
@@ -1334,14 +1350,12 @@ pattern.  For example, for a buffer associated with file
 For a buffer associated with file '/a/b/c.d', this matches
 against '/a/b'.  For a buffer not associated with a file, this
 matches against the value of `default-directory' in that buffer."
-  ( :description "directory name"
-    :reader (read-from-minibuffer "Filter by directory name (regex): "))
-  (with-current-buffer buf
-    (if-let* ((filename (ibuffer-buffer-file-name))
-              (dirname (file-name-directory filename)))
-        (string-match qualifier dirname)
-      (when default-directory
-        (string-match qualifier default-directory)))))
+  (:description "directory name"
+   :reader (read-from-minibuffer "Filter by directory name (regex): "))
+  (ibuffer-aif (with-current-buffer buf (ibuffer-buffer-file-name))
+      (let ((dirname (file-name-directory it)))
+        (when dirname (string-match qualifier dirname)))
+    (when default-directory (string-match qualifier default-directory))))
 
 ;;;###autoload (autoload 'ibuffer-filter-by-size-gt  "ibuf-ext")
 (define-ibuffer-filter size-gt
@@ -1583,10 +1597,7 @@ to move by.  The default is `ibuffer-marked-char'."
   "Hide all of the currently marked lines."
   (interactive)
   (if (= (ibuffer-count-marked-lines) 0)
-      (message (substitute-command-keys
-                (concat
-                 "No buffers marked; use \\<ibuffer-mode-map>"
-                 "\\[ibuffer-mark-forward] to mark a buffer")))
+      (message "No buffers marked; use `m' to mark a buffer")
     (let ((count
 	   (ibuffer-map-marked-lines
             (lambda (_buf _mark)
@@ -1650,67 +1661,68 @@ a prefix argument reverses the meaning of that variable."
 	  (error "No buffer with name %s" name)
 	(goto-char buf-point)))))
 
-(declare-function diff-check-labels "diff" (&optional force))
-(declare-function diff-file-local-copy "diff" (file-or-buf))
 (declare-function diff-sentinel "diff"
 		  (code &optional old-temp-file new-temp-file))
 
 (defun ibuffer-diff-buffer-with-file-1 (buffer)
-  "Compare BUFFER with its associated file, if any.
-Unlike `diff-no-select', insert output into current buffer
-without erasing it."
-  (when-let ((old (buffer-file-name buffer)))
-    (defvar diff-use-labels)
-    (let* ((new buffer)
-           (oldtmp (diff-file-local-copy old))
-           (newtmp (diff-file-local-copy new))
-           (switches diff-switches)
-           (command
-            (string-join
-             `(,diff-command
-               ,@(if (listp switches) switches (list switches))
-               ,@(and (eq diff-use-labels t)
-                      (list "--label" (shell-quote-argument old)
-                            "--label" (shell-quote-argument (format "%S" new))))
-               ,(shell-quote-argument (or oldtmp old))
-               ,(shell-quote-argument (or newtmp new)))
-             " "))
-           (inhibit-read-only t))
-      (insert ?\n command ?\n)
-      (diff-sentinel (call-process shell-file-name nil t nil
-                                   shell-command-switch command)
-                     oldtmp newtmp)
-      (goto-char (point-max)))
-    (redisplay)))
+  (let ((bufferfile (buffer-local-value 'buffer-file-name buffer))
+	(tempfile (make-temp-file "buffer-content-")))
+    (when bufferfile
+      (unwind-protect
+	  (progn
+	    (with-current-buffer buffer
+	      (write-region nil nil tempfile nil 'nomessage))
+	    (let* ((old (expand-file-name bufferfile))
+		   (new (expand-file-name tempfile))
+		   (oldtmp (file-local-copy old))
+		   (newtmp (file-local-copy new))
+		   (switches diff-switches)
+		   (command
+		    (mapconcat
+		     'identity
+		     `(,diff-command
+		       ;; Use explicitly specified switches
+		       ,@(if (listp switches) switches (list switches))
+		       ,@(if (or old new)
+			     (list "-L" (shell-quote-argument old)
+				   "-L" (shell-quote-argument
+					 (format "Buffer %s" (buffer-name buffer)))))
+		       ,(shell-quote-argument (or oldtmp old))
+		       ,(shell-quote-argument (or newtmp new)))
+		     " ")))
+	      (let ((inhibit-read-only t))
+		(insert command "\n")
+		(diff-sentinel
+		 (call-process shell-file-name nil
+			       (current-buffer) nil
+			       shell-command-switch command))
+		(insert "\n")))))
+      (sit-for 0)
+      (when (file-exists-p tempfile)
+	(delete-file tempfile)))))
 
 ;;;###autoload
 (defun ibuffer-diff-with-file ()
   "View the differences between marked buffers and their associated files.
 If no buffers are marked, use buffer at point.
-This requires the external program `diff-command' to be in your
-`exec-path'."
+This requires the external program \"diff\" to be in your `exec-path'."
   (interactive)
   (require 'diff)
-  (let ((marked-bufs (or (ibuffer-get-marked-buffers)
-                         (list (ibuffer-current-buffer t))))
-        (diff-buf (get-buffer-create "*Ibuffer Diff*")))
-    (with-current-buffer diff-buf
-      (setq buffer-read-only t)
-      (buffer-disable-undo)
-      (let ((inhibit-read-only t))
-        (erase-buffer))
-      (buffer-enable-undo)
+  (let ((marked-bufs (ibuffer-get-marked-buffers)))
+    (when (null marked-bufs)
+      (setq marked-bufs (list (ibuffer-current-buffer t))))
+    (with-current-buffer (get-buffer-create "*Ibuffer Diff*")
+      (setq buffer-read-only nil)
+      (buffer-disable-undo (current-buffer))
+      (erase-buffer)
+      (buffer-enable-undo (current-buffer))
       (diff-mode)
-      (diff-check-labels)
       (dolist (buf marked-bufs)
 	(unless (buffer-live-p buf)
 	  (error "Buffer %s has been killed" buf))
-        (ibuffer-diff-buffer-with-file-1 buf))
-      (goto-char (point-min))
-      (when (= (following-char) ?\n)
-        (let ((inhibit-read-only t))
-          (delete-char 1))))
-    (pop-to-buffer-same-window diff-buf)))
+	(ibuffer-diff-buffer-with-file-1 buf))
+      (setq buffer-read-only t)))
+  (switch-to-buffer "*Ibuffer Diff*"))
 
 ;;;###autoload
 (defun ibuffer-copy-filename-as-kill (&optional arg)
@@ -1972,8 +1984,6 @@ defaults to one."
      (lambda (buf _mark)
        (push buf ibuffer-do-occur-bufs)))
     (occur-1 regexp nlines ibuffer-do-occur-bufs)))
-
-(define-obsolete-function-alias 'ibuffer-remove-duplicates #'seq-uniq "29.1")
 
 (provide 'ibuf-ext)
 

@@ -1,10 +1,10 @@
 ;;; ob-ruby.el --- Babel Functions for Ruby          -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2009-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2009-2022 Free Software Foundation, Inc.
 
 ;; Author: Eric Schulte
 ;; Keywords: literate programming, reproducible research
-;; URL: https://orgmode.org
+;; Homepage: https://orgmode.org
 
 ;; This file is part of GNU Emacs.
 
@@ -29,16 +29,13 @@
 
 ;; - ruby and irb executables :: https://www.ruby-lang.org/
 ;;
-;; - ruby-mode :: Comes with Emacs.
+;; - ruby-mode :: Can be installed through ELPA, or from
+;;   https://github.com/eschulte/rinari/raw/master/util/ruby-mode.el
 ;;
 ;; - inf-ruby mode :: Can be installed through ELPA, or from
-;;   https://raw.githubusercontent.com/nonsequitur/inf-ruby/master/inf-ruby.el
+;;   https://github.com/eschulte/rinari/raw/master/util/inf-ruby.el
 
 ;;; Code:
-
-(require 'org-macs)
-(org-assert-version)
-
 (require 'ob)
 (require 'org-macs)
 

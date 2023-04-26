@@ -1,6 +1,6 @@
 ;;; time-date.el --- Date and time handling functions  -*- lexical-binding: t -*-
 
-;; Copyright (C) 1998-2023 Free Software Foundation, Inc.
+;; Copyright (C) 1998-2022 Free Software Foundation, Inc.
 
 ;; Author: Lars Magne Ingebrigtsen <larsi@gnus.org>
 ;;	Masanobu Umeda <umerin@mse.kyutech.ac.jp>
@@ -69,7 +69,7 @@ list (HIGH LOW MICRO PICO)."
 		     (pop elt)))
 	     (time-value (car elt))
 	     (gensym (make-symbol "time")))
-	`(let* ,(append `((,gensym (or ,time-value (time-convert nil 'list)))
+	`(let* ,(append `((,gensym (or ,time-value (current-time)))
 			  (,gensym
 			   (cond
 			    ((integerp ,gensym)
@@ -154,10 +154,7 @@ it is assumed that PICO was omitted and should be treated as zero."
 DATE should be in one of the forms recognized by `parse-time-string'.
 If DATE lacks timezone information, GMT is assumed."
   (condition-case err
-      (let ((parsed (parse-time-string date)))
-	(when (decoded-time-year parsed)
-	  (decoded-time-set-defaults parsed))
-	(encode-time parsed))
+      (encode-time (parse-time-string date))
     (error
      (let ((overflow-error '(error "Specified time is not representable")))
        (if (equal err overflow-error)
@@ -171,21 +168,15 @@ If DATE lacks timezone information, GMT is assumed."
 	      (error "Invalid date: %s" date)))))))))
 
 ;;;###autoload
-(defalias 'time-to-seconds #'float-time)
+(defalias 'time-to-seconds 'float-time)
 
 ;;;###autoload
-(defun seconds-to-time (seconds)
-  "Convert SECONDS to a proper time, like `current-time' would."
-  ;; FIXME: Should we (declare (obsolete time-convert "27.1")) ?
-  (time-convert seconds 'list))
+(defalias 'seconds-to-time 'time-convert)
 
 ;;;###autoload
 (defun days-to-time (days)
   "Convert DAYS into a time value."
-  ;; FIXME: We should likely just pass `t' to `time-convert'.
-  ;; All uses I could find in Emacs, GNU ELPA, and NonGNU ELPA can handle
-  ;; any valid time representation as return value.
-  (let ((time (time-convert (* 86400 days) 'list)))
+  (let ((time (time-convert (* 86400 days))))
     ;; Traditionally, this returned a two-element list if DAYS was an integer.
     ;; Keep that tradition if time-convert outputs timestamps in list form.
     (if (and (integerp days) (consp (cdr time)))
@@ -202,7 +193,7 @@ TIME should be either a time value or a date-time string."
   (time-subtract nil time))
 
 ;;;###autoload
-(define-obsolete-function-alias 'subtract-time #'time-subtract "26.1")
+(define-obsolete-function-alias 'subtract-time 'time-subtract "26.1")
 
 ;;;###autoload
 (defun date-to-day (date)
@@ -262,10 +253,10 @@ Returns a floating point number."
 ;;;###autoload
 (defun safe-date-to-time (date)
   "Parse a string DATE that represents a date-time and return a time value.
-If DATE is malformed, return a time value of zero."
+If DATE is malformed, return a time value of zeros."
   (condition-case ()
       (date-to-time date)
-    (error 0)))
+    (error '(0 0))))
 
 
 ;;;###autoload
@@ -293,23 +284,17 @@ use.  \"%,1s\" means \"use one decimal\".
 
 The \"%z\" specifier does not print anything.  When it is used, specifiers
 must be given in order of decreasing size.  To the left of \"%z\", nothing
-is output until the first non-zero unit is encountered.
-
-The \"%x\" specifier does not print anything.  When it is used,
-specifiers must be given in order of decreasing size.  To the
-right of \"%x\", trailing zero units are not output."
+is output until the first non-zero unit is encountered."
   (let ((start 0)
         (units '(("y" "year"   31536000)
                  ("d" "day"       86400)
                  ("h" "hour"       3600)
                  ("m" "minute"       60)
                  ("s" "second"        1)
-                 ("z")
-                 ("x")))
+                 ("z")))
         (case-fold-search t)
-        spec match usedunits zeroflag larger prev name unit num
-        leading-zeropos trailing-zeropos fraction
-        chop-leading chop-trailing)
+        spec match usedunits zeroflag larger prev name unit num zeropos
+        fraction)
     (while (string-match "%\\.?[0-9]*\\(,[0-9]\\)?\\(.\\)" string start)
       (setq start (match-end 0)
             spec (match-string 2 string))
@@ -318,16 +303,15 @@ right of \"%x\", trailing zero units are not output."
             (error "Bad format specifier: `%s'" spec))
         (if (assoc (downcase spec) usedunits)
             (error "Multiple instances of specifier: `%s'" spec))
-        (if (or (string-equal (car match) "z")
-                (string-equal (car match) "x"))
+        (if (string-equal (car match) "z")
             (setq zeroflag t)
           (unless larger
             (setq unit (nth 2 match)
                   larger (and prev (> unit prev))
                   prev unit)))
         (push match usedunits)))
-    (when (and zeroflag larger)
-      (error "Units are not in decreasing order of size"))
+    (and zeroflag larger
+         (error "Units are not in decreasing order of size"))
     (unless (numberp seconds)
       (setq seconds (float-time seconds)))
     (setq fraction (mod seconds 1)
@@ -339,28 +323,18 @@ right of \"%x\", trailing zero units are not output."
       (when (string-match
              (format "%%\\(\\.?[0-9]+\\)?\\(,[0-9]+\\)?\\(%s\\)" spec)
              string)
-        (cond
-         ((string-equal spec "z")
-          (setq chop-leading (and leading-zeropos
-                                  (min leading-zeropos (match-beginning 0)))))
-         ((string-equal spec "x")
-          (setq chop-trailing t))
-         (t
+        (if (string-equal spec "z")     ; must be last in units
+            (setq string
+                  (replace-regexp-in-string
+                   "%z" ""
+                   (substring string (min (or zeropos (match-end 0))
+                                          (match-beginning 0)))))
           ;; Cf article-make-date-line in gnus-art.
           (setq num (floor seconds unit)
                 seconds (- seconds (* num unit)))
-          (let ((is-zero (zerop (if (= unit 1)
-                                    (+ num fraction)
-                                  num))))
-            ;; Start position of the first non-zero unit.
-            (when (and (not leading-zeropos)
-                       (not is-zero))
-              (setq leading-zeropos (match-beginning 0)))
-            (unless is-zero
-              (setq trailing-zeropos nil))
-            (when (and (not trailing-zeropos)
-                       is-zero)
-              (setq trailing-zeropos (match-beginning 0))))
+          ;; Start position of the first non-zero unit.
+          (or zeropos
+              (setq zeropos (unless (zerop num) (match-beginning 0))))
           (setq string
                 (replace-match
                  (format (if (match-string 2 string)
@@ -383,17 +357,7 @@ right of \"%x\", trailing zero units are not output."
                            (format " %s%s" name
                                    (if (= num 1) "" "s"))))
                  t t string))))))
-    (let ((pre string))
-      (when (and chop-trailing trailing-zeropos)
-        (setq string (substring string 0 trailing-zeropos)))
-      (when chop-leading
-        (setq string (substring string chop-leading)))
-      ;; If we ended up removing everything, return the formatted
-      ;; string in full.
-      (when (equal string "")
-        (setq string pre)))
-    (setq string (replace-regexp-in-string "%[zx]" "" string)))
-  (string-trim (string-replace "%%" "%" string)))
+  (string-replace "%%" "%" string))
 
 (defvar seconds-to-string
   (list (list 1 "ms" 0.001)
@@ -442,11 +406,7 @@ entries only for the values that should be altered.
 
 For instance, if you want to \"add two months\" to TIME, then
 leave all other fields but the month field in DELTA nil, and make
-the month field 2.  For instance:
-
-  (decoded-time-add (decode-time) (make-decoded-time :month 2))
-
-The values in DELTA can be negative.
+the month field 2.  The values in DELTA can be negative.
 
 If applying a month/year delta leaves the time spec invalid, it
 is decreased to be valid (\"add one month\" to January 31st 2019
@@ -558,19 +518,15 @@ changes in daylight saving time are not taken into account."
 
 (cl-defun make-decoded-time (&key second minute hour
                                   day month year
-                                  (dst -1) zone)
+                                  dst zone)
   "Return a `decoded-time' structure with only the keywords given filled out."
   (list second minute hour day month year nil dst zone))
 
 (defun decoded-time-set-defaults (time &optional default-zone)
-  "Set most nil values in `decoded-time' TIME to default values.
-This can set TIME's year, month, day, hour, minute and second.
+  "Set any nil values in `decoded-time' TIME to default values.
 The default value is based on January 1st, 1970 at midnight.
 This year is used to guarantee portability; see Info
 node `(elisp) Time of Day'.
-
-Optional argument DEFAULT-ZONE specifies what time zone to
-default to when TIME's time zone is nil (meaning local time).
 
 TIME is modified and returned."
   (unless (decoded-time-second time)
@@ -587,16 +543,18 @@ TIME is modified and returned."
   (unless (decoded-time-year time)
     (setf (decoded-time-year time) 1970))
 
+  ;; When we don't have a time zone, default to DEFAULT-ZONE without
+  ;; DST if DEFAULT-ZONE if given, and to unknown DST otherwise.
   (unless (decoded-time-zone time)
-    (setf (decoded-time-zone time) default-zone))
-
-  ;; Do not set decoded-time-weekday or decoded-time-dst,
-  ;; as encode-time can infer them well enough when unknown.
+    (if default-zone
+	(progn (setf (decoded-time-zone time) default-zone)
+	       (setf (decoded-time-dst time) nil))
+      (setf (decoded-time-dst time) -1)))
 
   time)
 
 (defun decoded-time-period (time)
-  "Interpret TIME as a period and return its length in seconds.
+  "Interpret DECODED as a period and return its length in seconds.
 For computational purposes, years are 365 days long and months
 are 30 days long."
   (+ (if (consp (decoded-time-second time))

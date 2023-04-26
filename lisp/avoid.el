@@ -1,6 +1,6 @@
 ;;; avoid.el --- make mouse pointer stay out of the way of editing  -*- lexical-binding: t -*-
 
-;; Copyright (C) 1993-1994, 2000-2023 Free Software Foundation, Inc.
+;; Copyright (C) 1993-1994, 2000-2022 Free Software Foundation, Inc.
 
 ;; Author: Boris Goldowsky <boris@gnu.org>
 ;; Keywords: mouse
@@ -293,8 +293,6 @@ accumulated, and tries to keep it close to zero."
       (mouse-avoidance-set-mouse-position (cons (+ (car (cdr cur)) deltax)
 						(+ (cdr (cdr cur)) deltay))))))
 
-(defvar x-pointer-invisible) ; silence byte-compiler
-
 (defun mouse-avoidance-random-shape ()
   "Return a random cursor shape.
 This assumes that any variable whose name begins with x-pointer- and
@@ -302,14 +300,12 @@ has an integer value is a valid cursor shape.  You might want to
 redefine this function to suit your own tastes."
   (if (null mouse-avoidance-pointer-shapes)
       (progn
-	(dolist (i (all-completions "x-pointer-" obarray
-				    (lambda (x)
-				      (and (boundp x)
-                                           (integerp (symbol-value x))))))
-          (ignore-errors
-            (let ((value (symbol-value (intern i))))
-              (when (< value x-pointer-invisible)
-                (push value mouse-avoidance-pointer-shapes)))))))
+	(setq mouse-avoidance-pointer-shapes
+	      (mapcar (lambda (x) (symbol-value (intern x)))
+		      (all-completions "x-pointer-" obarray
+				       (lambda (x)
+					  (and (boundp x)
+                                               (integerp (symbol-value x)))))))))
   (seq-random-elt mouse-avoidance-pointer-shapes))
 
 (defun mouse-avoidance-ignore-p ()
@@ -321,8 +317,7 @@ redefine this function to suit your own tastes."
 	(not (eq (car mp) (selected-frame)))
         ;; Don't interfere with ongoing `mouse-drag-and-drop-region'
         ;; (Bug#36269).
-        (or (eq track-mouse 'dropping)
-            (eq track-mouse 'drag-source))
+        (eq track-mouse 'dropping)
 	;; Don't do anything if last event was a mouse event.
 	;; FIXME: this code fails in the case where the mouse was moved
 	;; since the last key-press but without generating any event.

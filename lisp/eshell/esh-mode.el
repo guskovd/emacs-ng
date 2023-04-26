@@ -1,6 +1,6 @@
 ;;; esh-mode.el --- user interface  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1999-2023 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2022 Free Software Foundation, Inc.
 
 ;; Author: John Wiegley <johnw@gnu.org>
 
@@ -58,16 +58,10 @@
 
 ;;; Code:
 
-;; Load the core Eshell modules; we'll call their initialization
-;; functions below in `eshell-mode'.
-(require 'esh-arg)
-(require 'esh-cmd)
-(require 'esh-ext)
-(require 'esh-io)
-(require 'esh-module)
-(require 'esh-proc)
 (require 'esh-util)
-(require 'esh-var)
+(require 'esh-module)
+(require 'esh-cmd)
+(require 'esh-arg)                      ;For eshell-parse-arguments
 
 (defgroup eshell-mode nil
   "This module contains code for handling input from the user."
@@ -79,7 +73,6 @@
 (defcustom eshell-mode-unload-hook nil
   "A hook that gets run when `eshell-mode' is unloaded."
   :type 'hook)
-(make-obsolete-variable 'eshell-mode-unload-hook nil "30.1")
 
 (defcustom eshell-mode-hook nil
   "A hook that gets run when `eshell-mode' is entered."
@@ -153,7 +146,7 @@ See variable `eshell-scroll-to-bottom-on-output' and function
 Eshell buffers are truncated from the top to be no greater than this
 number, if the function `eshell-truncate-buffer' is on
 `eshell-output-filter-functions'."
-  :type 'natnum)
+  :type 'integer)
 
 (defcustom eshell-output-filter-functions
   '(eshell-postoutput-scroll-to-bottom
@@ -162,8 +155,7 @@ number, if the function `eshell-truncate-buffer' is on
     eshell-watch-for-password-prompt)
   "Functions to call before output is displayed.
 These functions are only called for output that is displayed
-interactively (see `eshell-interactive-filter'), and not for
-output which is redirected."
+interactively, and not for output which is redirected."
   :type 'hook)
 
 (defcustom eshell-preoutput-filter-functions nil
@@ -173,10 +165,7 @@ inserted.  They return the string as it should be inserted."
   :type 'hook)
 
 (defcustom eshell-password-prompt-regexp
-  (format "%s[^%s]*[%s]\\s *\\'"
-          (regexp-opt password-word-equivalents t)
-          (apply #'string password-colon-equivalents)
-          (apply #'string password-colon-equivalents))
+  (format "\\(%s\\)[^:：៖]*[:：៖]\\s *\\'" (regexp-opt password-word-equivalents))
   "Regexp matching prompts for passwords in the inferior process.
 This is used by `eshell-watch-for-password-prompt'."
   :type 'regexp
@@ -186,7 +175,8 @@ This is used by `eshell-watch-for-password-prompt'."
   "A function called from beginning of line to skip the prompt."
   :type '(choice (const nil) function))
 
-(make-obsolete-variable 'eshell-skip-prompt-function nil "30.1")
+(define-obsolete-variable-alias 'eshell-status-in-modeline
+  'eshell-status-in-mode-line "24.3")
 
 (defcustom eshell-status-in-mode-line t
   "If non-nil, let the user know a command is running in the mode line."
@@ -200,11 +190,6 @@ This is used by `eshell-watch-for-password-prompt'."
 
 (defvar eshell-first-time-p t
   "A variable which is non-nil the first time Eshell is loaded.")
-
-(defvar eshell-non-interactive-p nil
-  "A variable which is non-nil when Eshell is not running interactively.
-Modules should use this variable so that they don't clutter
-non-interactive sessions, such as when using `eshell-command'.")
 
 ;; Internal Variables:
 
@@ -275,33 +260,31 @@ non-interactive sessions, such as when using `eshell-command'.")
      (standard-syntax-table))
     st))
 
-(defvar-keymap eshell-mode-map
-  "C-c"   'eshell-command-map
-  "RET"   #'eshell-send-input
-  "M-RET" #'eshell-queue-input
-  "C-M-l" #'eshell-show-output)
+(defvar eshell-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map [(control ?c)] 'eshell-command-map)
+    (define-key map "\r" #'eshell-send-input)
+    (define-key map "\M-\r" #'eshell-queue-input)
+    (define-key map [(meta control ?l)] #'eshell-show-output)
+    (define-key map [(control ?a)] #'eshell-bol)
+    map))
 
-(defvar-keymap eshell-command-map
-  :prefix 'eshell-command-map
-  "M-o" #'eshell-mark-output
-  "M-d" #'eshell-toggle-direct-send
-  "C-a" #'move-beginning-of-line
-  "C-b" #'eshell-backward-argument
-  "C-e" #'eshell-show-maximum-output
-  "C-f" #'eshell-forward-argument
-  "C-m" #'eshell-copy-old-input
-  "C-o" #'eshell-kill-output
-  "C-r" #'eshell-show-output
-  "C-t" #'eshell-truncate-buffer
-  "C-u" #'eshell-kill-input
-  "C-w" #'backward-kill-word
-  "C-y" #'eshell-repeat-argument)
-
-(defvar-keymap eshell-command-repeat-map
-  :doc "Keymap to repeat eshell-command key sequences.  Used in `repeat-mode'."
-  :repeat t
-  "C-f" #'eshell-forward-argument
-  "C-b" #'eshell-backward-argument)
+(defvar eshell-command-map
+  (let ((map (define-prefix-command 'eshell-command-map)))
+    (define-key map [(meta ?o)] #'eshell-mark-output)
+    (define-key map [(meta ?d)] #'eshell-toggle-direct-send)
+    (define-key map [(control ?a)] #'eshell-bol)
+    (define-key map [(control ?b)] #'eshell-backward-argument)
+    (define-key map [(control ?e)] #'eshell-show-maximum-output)
+    (define-key map [(control ?f)] #'eshell-forward-argument)
+    (define-key map [(control ?m)] #'eshell-copy-old-input)
+    (define-key map [(control ?o)] #'eshell-kill-output)
+    (define-key map [(control ?r)] #'eshell-show-output)
+    (define-key map [(control ?t)] #'eshell-truncate-buffer)
+    (define-key map [(control ?u)] #'eshell-kill-input)
+    (define-key map [(control ?w)] #'backward-kill-word)
+    (define-key map [(control ?y)] #'eshell-repeat-argument)
+    map))
 
 ;;; User Functions:
 
@@ -321,12 +304,11 @@ and the hook `eshell-exit-hook'."
   "Emacs shell interactive mode."
   (setq-local eshell-mode t)
 
-  (when (and eshell-status-in-mode-line
-             (listp mode-line-format))
+  (when eshell-status-in-mode-line
     (make-local-variable 'eshell-command-running-string)
     (let ((fmt (copy-sequence mode-line-format)))
       (setq-local mode-line-format fmt))
-    (let ((mode-line-elt (cdr (memq 'mode-line-front-space mode-line-format))))
+    (let ((mode-line-elt (memq 'mode-line-modified mode-line-format)))
       (if mode-line-elt
 	  (setcar mode-line-elt 'eshell-command-running-string))))
 
@@ -354,6 +336,7 @@ and the hook `eshell-exit-hook'."
   (setq-local require-final-newline nil)
 
   (setq-local max-lisp-eval-depth (max 3000 max-lisp-eval-depth))
+  (setq-local max-specpdl-size (max 6000 max-lisp-eval-depth))
 
   (setq-local eshell-last-input-start (point-marker))
   (setq-local eshell-last-input-end (point-marker))
@@ -381,11 +364,7 @@ and the hook `eshell-exit-hook'."
       (unless module-shortname
 	(error "Invalid Eshell module name: %s" module-fullname))
       (unless (featurep (intern module-shortname))
-        (condition-case nil
-            (load module-shortname)
-          (error (lwarn 'eshell :error
-                        "Unable to load module `%s' (defined in `eshell-modules-list')"
-                        module-fullname))))))
+	(load module-shortname))))
 
   (unless (file-exists-p eshell-directory-name)
     (eshell-make-private-directory eshell-directory-name t))
@@ -447,13 +426,13 @@ and the hook `eshell-exit-hook'."
 (defun eshell-self-insert-command ()
   (interactive)
   (process-send-string
-   (eshell-head-process)
+   (eshell-interactive-process)
    (char-to-string (if (symbolp last-command-event)
 		       (get last-command-event 'ascii-character)
 		     last-command-event))))
 
 (defun eshell-intercept-commands ()
-  (when (and (eshell-interactive-process-p)
+  (when (and (eshell-interactive-process)
 	     (not (and (integerp last-input-event)
 		       (memq last-input-event '(?\C-x ?\C-c)))))
     (let ((possible-events (where-is-internal this-command))
@@ -488,7 +467,7 @@ and the hook `eshell-exit-hook'."
 (defun eshell-move-argument (limit func property arg)
   "Move forward ARG arguments."
   (catch 'eshell-incomplete
-    (eshell-parse-arguments (save-excursion (beginning-of-line) (point))
+    (eshell-parse-arguments (save-excursion (eshell-bol) (point))
 			    (line-end-position)))
   (let ((pos (save-excursion
 	       (funcall func 1)
@@ -521,7 +500,12 @@ and the hook `eshell-exit-hook'."
     (kill-ring-save begin (point))
     (yank)))
 
-(define-obsolete-function-alias 'eshell-bol #'beginning-of-line "30.1")
+(defun eshell-bol ()
+  "Go to the beginning of line, then skip past the prompt, if any."
+  (interactive)
+  (beginning-of-line)
+  (and eshell-skip-prompt-function
+       (funcall eshell-skip-prompt-function)))
 
 (defsubst eshell-push-command-mark ()
   "Push a mark at the end of the last input text."
@@ -537,11 +521,9 @@ Putting this function on `eshell-pre-command-hook' will mimic Plan 9's
 
 (custom-add-option 'eshell-pre-command-hook #'eshell-goto-input-start)
 
-(defun eshell-interactive-print (string)
+(defsubst eshell-interactive-print (string)
   "Print STRING to the eshell display buffer."
-  (when string
-    (eshell--mark-as-output 0 (length string) string)
-    (eshell-interactive-filter nil string)))
+  (eshell-output-filter nil string))
 
 (defsubst eshell-begin-on-new-line ()
   "This function outputs a newline if not at beginning of line."
@@ -580,7 +562,7 @@ will return the parsed command."
 		 (setq command (eshell-parse-command (cons beg end)
 						     args t)))))
 	(ignore
-         (message "Expecting completion of delimiter %s ..."
+	 (message "Expecting completion of delimiter %c ..."
 		  (if (listp delim)
 		      (car delim)
 		    delim)))
@@ -616,12 +598,13 @@ If NO-NEWLINE is non-nil, the input is sent without an implied final
 newline."
   (interactive "P")
   ;; Note that the input string does not include its terminal newline.
-  (let ((proc-running-p (and (eshell-head-process)
+  (let ((proc-running-p (and (eshell-interactive-process)
 			     (not queue-p)))
+	(inhibit-point-motion-hooks t)
 	(inhibit-modification-hooks t))
     (unless (and proc-running-p
 		 (not (eq (process-status
-			   (eshell-head-process))
+			   (eshell-interactive-process))
                           'run)))
       (if (or proc-running-p
 	      (>= (point) eshell-last-output-end))
@@ -633,22 +616,14 @@ newline."
 		  (and eshell-send-direct-to-subprocesses
 		       proc-running-p))
 	(insert-before-markers-and-inherit ?\n))
-      ;; Delete and reinsert input.  This seems like a no-op, except
-      ;; for the resulting entries in the undo list: undoing this
-      ;; insertion will delete the region, moving the process mark
-      ;; back to its original position.
-      (let ((text (buffer-substring eshell-last-output-end (point)))
-            (inhibit-read-only t))
-        (delete-region eshell-last-output-end (point))
-        (insert text))
       (if proc-running-p
 	  (progn
 	    (eshell-update-markers eshell-last-output-end)
 	    (if (or eshell-send-direct-to-subprocesses
 		    (= eshell-last-input-start eshell-last-input-end))
 		(unless no-newline
-		  (process-send-string (eshell-head-process) "\n"))
-	      (process-send-region (eshell-head-process)
+		  (process-send-string (eshell-interactive-process) "\n"))
+	      (process-send-region (eshell-interactive-process)
 				   eshell-last-input-start
 				   eshell-last-input-end)))
 	(if (= eshell-last-output-end (point))
@@ -685,30 +660,21 @@ newline."
 	       (run-hooks 'eshell-post-command-hook)
 	       (insert-and-inherit input)))))))))
 
-(defun eshell-send-eof-to-process ()
-  "Send EOF to the currently-running \"head\" process."
-  (interactive)
-  (require 'esh-mode)
-  (declare-function eshell-send-input "esh-mode"
-                    (&optional use-region queue-p no-newline))
-  (eshell-send-input nil nil t)
-  (when (eshell-head-process)
-    (process-send-eof (eshell-head-process))))
-
 (defsubst eshell-kill-new ()
   "Add the last input text to the kill ring."
   (kill-ring-save eshell-last-input-start eshell-last-input-end))
 
 (custom-add-option 'eshell-input-filter-functions 'eshell-kill-new)
 
-(defun eshell-interactive-filter (buffer string)
-  "Send output (STRING) to the interactive display, using BUFFER.
+(defun eshell-output-filter (process string)
+  "Send the output from PROCESS (STRING) to the interactive display.
 This is done after all necessary filtering has been done."
-  (unless buffer
-    (setq buffer (current-buffer)))
-  (when (and string (buffer-live-p buffer))
-    (let ((inhibit-modification-hooks t))
-      (with-current-buffer buffer
+  (let ((oprocbuf (if process (process-buffer process)
+                    (current-buffer)))
+        (inhibit-point-motion-hooks t)
+        (inhibit-modification-hooks t))
+    (when (and string oprocbuf (buffer-name oprocbuf))
+      (with-current-buffer oprocbuf
         (let ((functions eshell-preoutput-filter-functions))
           (while (and functions string)
             (setq string (funcall (car functions) string))
@@ -865,7 +831,7 @@ With a prefix argument, narrows region to last command output."
   (if (> (point) eshell-last-output-end)
       (kill-region eshell-last-output-end (point))
     (let ((here (point)))
-      (beginning-of-line)
+      (eshell-bol)
       (kill-region (point) here))))
 
 (defun eshell-show-maximum-output (&optional interactive)
@@ -893,18 +859,17 @@ If SCROLLBACK is non-nil, clear the scrollback contents."
     (erase-buffer)))
 
 (defun eshell-get-old-input (&optional use-current-region)
-  "Return the command input on the current line.
-If USE-CURRENT-REGION is non-nil, return the current region."
+  "Return the command input on the current line."
   (if use-current-region
       (buffer-substring (min (point) (mark))
 			(max (point) (mark)))
     (save-excursion
-      (let ((inhibit-field-text-motion t))
-        (end-of-line))
-      (let ((inhibit-field-text-motion)
-            (end (point)))
-        (beginning-of-line)
-        (buffer-substring-no-properties (point) end)))))
+      (beginning-of-line)
+      (and eshell-skip-prompt-function
+	   (funcall eshell-skip-prompt-function))
+      (let ((beg (point)))
+	(end-of-line)
+	(buffer-substring beg (point))))))
 
 (defun eshell-copy-old-input ()
   "Insert after prompt old input at point as new input to be edited."
@@ -954,9 +919,9 @@ Then send it to the process running in the current buffer."
   (interactive) ; Don't pass str as argument, to avoid snooping via C-x ESC ESC
   (let ((str (read-passwd
 	      (format "%s Password: "
-		      (process-name (eshell-head-process))))))
+		      (process-name (eshell-interactive-process))))))
     (if (stringp str)
-	(process-send-string (eshell-head-process)
+	(process-send-string (eshell-interactive-process)
 			     (concat str "\n"))
       (message "Warning: text will be echoed"))))
 
@@ -967,21 +932,14 @@ buffer's process if STRING contains a password prompt defined by
 `eshell-password-prompt-regexp'.
 
 This function could be in the list `eshell-output-filter-functions'."
-  (when (eshell-interactive-process-p)
+  (when (eshell-interactive-process)
     (save-excursion
       (let ((case-fold-search t))
 	(goto-char eshell-last-output-block-begin)
 	(beginning-of-line)
 	(if (re-search-forward eshell-password-prompt-regexp
 			       eshell-last-output-end t)
-            ;; Use `run-at-time' in order not to pause execution of
-            ;; the process filter with a minibuffer
-	    (run-at-time
-             0 nil
-             (lambda (current-buf)
-               (with-current-buffer current-buf
-                 (eshell-send-invisible)))
-             (current-buffer)))))))
+	    (eshell-send-invisible))))))
 
 (custom-add-option 'eshell-output-filter-functions
 		   'eshell-watch-for-password-prompt)
@@ -1053,8 +1011,6 @@ This function could be in the list `eshell-output-filter-functions'."
   "Default bookmark handler for Eshell buffers."
   (let ((default-directory (bookmark-prop-get bookmark 'location)))
     (eshell)))
-
-(put 'eshell-bookmark-jump 'bookmark-handler-type "Eshell")
 
 (provide 'esh-mode)
 ;;; esh-mode.el ends here

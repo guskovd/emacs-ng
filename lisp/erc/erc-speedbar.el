@@ -1,10 +1,10 @@
 ;;; erc-speedbar.el --- Speedbar support for ERC  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2001-2004, 2006-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2001-2004, 2006-2022 Free Software Foundation, Inc.
 
 ;; Author: Mario Lang <mlang@delysid.org>
 ;; Contributor: Eric M. Ludlam <zappo@gnu.org>
-;; Maintainer: Amin Bandali <bandali@gnu.org>, F. Jason Park <jp@neverwas.me>
+;; Maintainer: Amin Bandali <bandali@gnu.org>
 ;; URL: https://www.emacswiki.org/emacs/ErcSpeedbar
 
 ;; This file is part of GNU Emacs.
@@ -31,12 +31,12 @@
 ;; * Write intelligent update function:
 ;;   update-channel, update-nick, remove-nick-from-channel, ...
 ;; * Use indicator-strings for op/voice
-;; * Extract/convert face notes field from bbdb if available
+;; * Extract/convert face notes field from bbdb if available and show
+;;   it using sb-image.el
 ;;
 ;;; Code:
 
 (require 'erc)
-(require 'erc-goodies)
 (require 'speedbar)
 (condition-case nil (require 'dframe) (error nil))
 
@@ -139,7 +139,9 @@ This will add a speedbar major display mode."
 	t))))
 
 (defun erc-speedbar-expand-server (text server indent)
-  (cond ((string-search "+" text)
+  (cond ((if (>= emacs-major-version 28)
+             (string-search "+" text)
+           (string-match "\\+" text))
 	 (speedbar-change-expand-button-char ?-)
 	 (if (speedbar-with-writable
 	       (save-excursion
@@ -148,7 +150,9 @@ This will add a speedbar major display mode."
 	     (speedbar-change-expand-button-char ?-)
 	   (speedbar-change-expand-button-char ??)))
 	(;; we have to contract this node
-         (string-search "-" text)
+         (if (>= emacs-major-version 28)
+             (string-search "-" text)
+           (string-match "-" text))
 	 (speedbar-change-expand-button-char ?+)
 	 (speedbar-delete-subblock indent))
 	(t (error "Ooops... not sure what to do")))
@@ -185,7 +189,9 @@ This will add a speedbar major display mode."
   "For the line matching TEXT, in CHANNEL, expand or contract a line.
 INDENT is the current indentation level."
   (cond
-   ((string-search "+" text)
+   ((if (>= emacs-major-version 28)
+        (string-search "+" text)
+      (string-match "\\+" text))
     (speedbar-change-expand-button-char ?-)
     (speedbar-with-writable
      (save-excursion
@@ -234,7 +240,9 @@ INDENT is the current indentation level."
 	     (speedbar-with-writable
 	      (dolist (entry names)
 		(erc-speedbar-insert-user entry ?+ (1+ indent))))))))))
-   ((string-search "-" text)
+   ((if (>= emacs-major-version 28)
+        (string-search "-" text)
+      (string-match "-" text))
     (speedbar-change-expand-button-char ?+)
     (speedbar-delete-subblock indent))
    (t (error "Ooops... not sure what to do")))
@@ -285,7 +293,9 @@ The update is only done when the channel is actually expanded already."
 	(erc-speedbar-expand-channel "+" buffer 1)))))
 
 (defun erc-speedbar-expand-user (text token indent)
-  (cond ((string-search "+" text)
+  (cond ((if (>= emacs-major-version 28)
+             (string-search "+" text)
+           (string-match "\\+" text))
 	 (speedbar-change-expand-button-char ?-)
 	 (speedbar-with-writable
 	   (save-excursion
@@ -308,7 +318,9 @@ The update is only done when the channel is actually expanded already."
 		  nil nil nil nil
 		  info nil nil nil
 		  (1+ indent)))))))
-	((string-search "-" text)
+	((if (>= emacs-major-version 28)
+             (string-search "-" text)
+           (string-match "-" text))
 	 (speedbar-change-expand-button-char ?+)
 	 (speedbar-delete-subblock indent))
 	(t (error "Ooops... not sure what to do")))
@@ -344,7 +356,7 @@ The INDENT level is ignored."
   "Return the text for the item on the current line."
   (beginning-of-line)
   (when (re-search-forward "[]>] " nil t)
-    (buffer-substring-no-properties (point) (line-end-position))))
+    (buffer-substring-no-properties (point) (point-at-eol))))
 
 (defun erc-speedbar-item-info ()
   "Display information about the current buffer on the current line."

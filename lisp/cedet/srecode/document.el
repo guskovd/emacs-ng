@@ -1,6 +1,6 @@
 ;;; srecode/document.el --- Documentation (comment) generation  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2008-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2008-2022 Free Software Foundation, Inc.
 
 ;; Author: Eric M. Ludlam <zappo@gnu.org>
 
@@ -29,8 +29,7 @@
 ;;
 ;;; Origins:
 ;;
-;; Document was first written with cparse, a custom regexp based c
-;; parser.
+;; Document was first written w/ cparse, a custom regexp based c parser.
 ;;
 ;; Document was then ported to cedet/semantic using sformat (super
 ;; format) as the templating engine.
@@ -497,7 +496,7 @@ It is assumed that the comment occurs just after VAR-IN."
 
     ;; Find any existing doc strings.
     (goto-char (semantic-tag-end var-in))
-    (skip-syntax-forward "-" (line-end-position))
+    (skip-syntax-forward "-" (point-at-eol))
     (let ((lextok (semantic-doc-snarf-comment-for-tag 'lex))
 	  )
 
@@ -522,7 +521,7 @@ It is assumed that the comment occurs just after VAR-IN."
     (end-of-line)
     (delete-horizontal-space)
     (move-to-column comment-column t)
-    (when (< (point) (line-end-position)) (end-of-line))
+    (when (< (point) (point-at-eol)) (end-of-line))
 
     ;; Perform the insertion
     (let ((srecode-semantic-selected-tag var-in)
@@ -820,7 +819,7 @@ not account for verb parts."
   "Does TAG fit on one line with space on the end?"
   (save-excursion
     (semantic-go-to-tag tag)
-    (and (<= (semantic-tag-end tag) (line-end-position))
+    (and (<= (semantic-tag-end tag) (point-at-eol))
 	 (goto-char (semantic-tag-end tag))
 	 (< (current-column) 70))))
 

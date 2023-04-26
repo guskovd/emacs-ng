@@ -1,6 +1,6 @@
 ;;; env.el --- functions to manipulate environment variables  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1991-2023 Free Software Foundation, Inc.
+;; Copyright (C) 1991, 1994, 2000-2022 Free Software Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: processes, unix
@@ -204,7 +204,6 @@ parameter.
 Otherwise, this function searches `process-environment' for
 VARIABLE.  If it is not found there, then it continues the search
 in the environment list of the selected frame."
-  (declare (side-effect-free t))
   (interactive (list (read-envvar-name "Get environment variable: " t)))
   (let ((value (getenv-internal (if (multibyte-string-p variable)
 				    (encode-coding-string
@@ -226,7 +225,7 @@ VARIABLES is a list of variable settings of the form (VAR VALUE),
 where VAR is the name of the variable (a string) and VALUE
 is its value (also a string).
 
-The previous values will be restored upon exit."
+The previous values will be be restored upon exit."
   (declare (indent 1) (debug (sexp body)))
   (unless (consp variables)
     (error "Invalid VARIABLES: %s" variables))

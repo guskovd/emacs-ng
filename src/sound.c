@@ -1,6 +1,6 @@
 /* sound.c -- sound support.
 
-Copyright (C) 1998-1999, 2001-2023 Free Software Foundation, Inc.
+Copyright (C) 1998-1999, 2001-2022 Free Software Foundation, Inc.
 
 Author: Gerd Moellmann <gerd@gnu.org>
 
@@ -299,15 +299,11 @@ sound_perror (const char *msg)
   int saved_errno = errno;
 
   turn_on_atimers (1);
-#if defined (USABLE_SIGIO) || defined (USABLE_SIGPOLL)
+#ifdef USABLE_SIGIO
   {
     sigset_t unblocked;
     sigemptyset (&unblocked);
-#ifdef USABLE_SIGIO
     sigaddset (&unblocked, SIGIO);
-#else
-    sigaddset (&unblocked, SIGPOLL);
-#endif
     pthread_sigmask (SIG_UNBLOCK, &unblocked, 0);
   }
 #endif
@@ -361,10 +357,10 @@ parse_sound (Lisp_Object sound, Lisp_Object *attrs)
     return 0;
 
   sound = XCDR (sound);
-  attrs[SOUND_FILE] = plist_get (sound, QCfile);
-  attrs[SOUND_DATA] = plist_get (sound, QCdata);
-  attrs[SOUND_DEVICE] = plist_get (sound, QCdevice);
-  attrs[SOUND_VOLUME] = plist_get (sound, QCvolume);
+  attrs[SOUND_FILE] = Fplist_get (sound, QCfile);
+  attrs[SOUND_DATA] = Fplist_get (sound, QCdata);
+  attrs[SOUND_DEVICE] = Fplist_get (sound, QCdevice);
+  attrs[SOUND_VOLUME] = Fplist_get (sound, QCvolume);
 
 #ifndef WINDOWSNT
   /* File name or data must be specified.  */
@@ -702,7 +698,7 @@ static void
 vox_configure (struct sound_device *sd)
 {
   int val;
-#if defined (USABLE_SIGIO) || defined (USABLE_SIGPOLL)
+#ifdef USABLE_SIGIO
   sigset_t oldset, blocked;
 #endif
 
@@ -712,13 +708,9 @@ vox_configure (struct sound_device *sd)
      interrupted by a signal.  Block the ones we know to cause
      troubles.  */
   turn_on_atimers (0);
-#if defined (USABLE_SIGIO) || defined (USABLE_SIGPOLL)
-  sigemptyset (&blocked);
 #ifdef USABLE_SIGIO
+  sigemptyset (&blocked);
   sigaddset (&blocked, SIGIO);
-#else
-  sigaddset (&blocked, SIGPOLL);
-#endif
   pthread_sigmask (SIG_BLOCK, &blocked, &oldset);
 #endif
 
@@ -752,7 +744,7 @@ vox_configure (struct sound_device *sd)
     }
 
   turn_on_atimers (1);
-#if defined (USABLE_SIGIO) || defined (USABLE_SIGPOLL)
+#ifdef USABLE_SIGIO
   pthread_sigmask (SIG_SETMASK, &oldset, 0);
 #endif
 }
@@ -768,14 +760,10 @@ vox_close (struct sound_device *sd)
       /* On GNU/Linux, it seems that the device driver doesn't like to
 	 be interrupted by a signal.  Block the ones we know to cause
 	 troubles.  */
-#if defined (USABLE_SIGIO) || defined (USABLE_SIGPOLL)
+#ifdef USABLE_SIGIO
       sigset_t blocked, oldset;
       sigemptyset (&blocked);
-#ifdef USABLE_SIGIO
       sigaddset (&blocked, SIGIO);
-#else
-      sigaddset (&blocked, SIGPOLL);
-#endif
       pthread_sigmask (SIG_BLOCK, &blocked, &oldset);
 #endif
       turn_on_atimers (0);
@@ -784,7 +772,7 @@ vox_close (struct sound_device *sd)
       ioctl (sd->fd, SNDCTL_DSP_SYNC, NULL);
 
       turn_on_atimers (1);
-#if defined (USABLE_SIGIO) || defined (USABLE_SIGPOLL)
+#ifdef USABLE_SIGIO
       pthread_sigmask (SIG_SETMASK, &oldset, 0);
 #endif
 
@@ -1359,7 +1347,7 @@ Internal use only, use `play-sound' instead.  */)
   (Lisp_Object sound)
 {
   Lisp_Object attrs[SOUND_ATTR_SENTINEL];
-  specpdl_ref count = SPECPDL_INDEX ();
+  ptrdiff_t count = SPECPDL_INDEX ();
 
 #ifdef WINDOWSNT
   unsigned long ui_volume_tmp = UINT_MAX;

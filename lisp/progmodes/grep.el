@@ -1,6 +1,6 @@
 ;;; grep.el --- run `grep' and display the results  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1985-1987, 1993-1999, 2001-2023 Free Software
+;; Copyright (C) 1985-1987, 1993-1999, 2001-2022 Free Software
 ;; Foundation, Inc.
 
 ;; Author: Roland McGrath <roland@gnu.org>
@@ -48,8 +48,8 @@ to avoid computing them again.")
   "Set SYMBOL to VALUE, and update `grep-host-defaults-alist'.
 SYMBOL should be one of `grep-command', `grep-template',
 `grep-use-null-device', `grep-find-command' `grep-find-template',
-`grep-find-use-xargs', `grep-use-null-filename-separator',
-`grep-highlight-matches', or `grep-quoting-style'."
+`grep-find-use-xargs', `grep-use-null-filename-separator', or
+`grep-highlight-matches'."
   (when grep-host-defaults-alist
     (let* ((host-id
 	    (intern (or (file-remote-p default-directory) "localhost")))
@@ -66,7 +66,6 @@ SYMBOL should be one of `grep-command', `grep-template',
 		 integer)
   :version "22.1")
 
-;;;###autoload
 (defcustom grep-highlight-matches 'auto-detect
   "Use special markers to highlight grep matches.
 
@@ -126,21 +125,10 @@ include it when specifying `grep-command'.
 
 In interactive usage, the actual value of this variable is set up
 by `grep-compute-defaults'; to change the default value, use
-\\[customize] or call the function `grep-apply-setting'.
-
-Also see `grep-command-position'."
+\\[customize] or call the function `grep-apply-setting'."
   :type '(choice string
 		 (const :tag "Not Set" nil))
   :set #'grep-apply-setting)
-
-(defcustom grep-command-position nil
-  "Where to put point when prompting for a grep command.
-This controls the placement of point in the minibuffer when Emacs
-prompts for the grep command.  If nil, put point at the end of
-the suggested command.  If non-nil, this should be the one-based
-position in the minibuffer where to place point."
-  :type '(choice (const :tag "At the end" nil)
-                 natnum))
 
 (defcustom grep-template nil
   "The default command to run for \\[lgrep].
@@ -214,9 +202,6 @@ by `grep-compute-defaults'; to change the default value, use
   :set #'grep-apply-setting
   :version "22.1")
 
-(defvar grep-quoting-style nil
-  "Whether to use POSIX-like shell argument quoting.")
-
 (defcustom grep-files-aliases
   '(("all" .   "* .*")
     ("el" .    "*.el")
@@ -227,7 +212,6 @@ by `grep-compute-defaults'; to change the default value, use
     ("hh" .    "*.hxx *.hpp *.[Hh] *.HH *.h++")
     ("h" .     "*.h")
     ("l" .     "[Cc]hange[Ll]og*")
-    ("am" .    "Makefile.am GNUmakefile *.mk")
     ("m" .     "[Mm]akefile*")
     ("tex" .   "*.tex")
     ("texi" .  "*.texi")
@@ -285,16 +269,16 @@ See `compilation-error-screen-columns'."
 (defvar grep-mode-map
   (let ((map (make-sparse-keymap)))
     (set-keymap-parent map compilation-minor-mode-map)
-    (define-key map " " #'scroll-up-command)
-    (define-key map [?\S-\ ] #'scroll-down-command)
-    (define-key map "\^?" #'scroll-down-command)
-    (define-key map "\C-c\C-f" #'next-error-follow-minor-mode)
+    (define-key map " " 'scroll-up-command)
+    (define-key map [?\S-\ ] 'scroll-down-command)
+    (define-key map "\^?" 'scroll-down-command)
+    (define-key map "\C-c\C-f" 'next-error-follow-minor-mode)
 
-    (define-key map "\r" #'compile-goto-error)  ;; ?
-    (define-key map "{" #'compilation-previous-file)
-    (define-key map "}" #'compilation-next-file)
-    (define-key map "\t" #'compilation-next-error)
-    (define-key map [backtab] #'compilation-previous-error)
+    (define-key map "\r" 'compile-goto-error)  ;; ?
+    (define-key map "{" 'compilation-previous-file)
+    (define-key map "}" 'compilation-next-file)
+    (define-key map "\t" 'compilation-next-error)
+    (define-key map [backtab] 'compilation-previous-error)
     map)
   "Keymap for grep buffers.
 `compilation-minor-mode-map' is a cdr of this.")
@@ -338,33 +322,32 @@ See `compilation-error-screen-columns'."
 	  ;; FIXME: Nowadays the last button is not "help" but "search"!
 	  (help (last tool-bar-map))) ;; Keep Help last in tool bar
       (tool-bar-local-item
-       "left-arrow" #'previous-error-no-select #'previous-error-no-select map
+       "left-arrow" 'previous-error-no-select 'previous-error-no-select map
        :rtl "right-arrow"
        :help "Goto previous match")
       (tool-bar-local-item
-       "right-arrow" #'next-error-no-select #'next-error-no-select map
+       "right-arrow" 'next-error-no-select 'next-error-no-select map
        :rtl "left-arrow"
        :help "Goto next match")
       (tool-bar-local-item
-       "cancel" #'kill-compilation #'kill-compilation map
+       "cancel" 'kill-compilation 'kill-compilation map
        :enable '(let ((buffer (compilation-find-buffer)))
 		  (get-buffer-process buffer))
        :help "Stop grep")
       (tool-bar-local-item
-       "refresh" #'recompile #'recompile map
+       "refresh" 'recompile 'recompile map
        :help "Restart grep")
       (append map help))))
 
-(defalias 'kill-grep #'kill-compilation)
+(defalias 'kill-grep 'kill-compilation)
 
-;; override next-error-last-buffer
+;; override compilation-last-buffer
 (defvar grep-last-buffer nil
   "The most recent grep buffer.
 A grep buffer becomes most recent when you select Grep mode in it.
 Notice that using \\[next-error] or \\[compile-goto-error] modifies
-`next-error-last-buffer' rather than `grep-last-buffer'.")
+`compilation-last-buffer' rather than `grep-last-buffer'.")
 
-;;;###autoload
 (defvar grep-match-face	'match
   "Face name to use for grep matches.")
 
@@ -457,39 +440,12 @@ buffer `default-directory'."
   :type '(repeat (choice (const :tag "Default" nil)
 			 (string :tag "Directory"))))
 
-(defcustom grep-use-headings nil
-  "If non-nil, subdivide grep output into sections, one per file."
-  :type 'boolean
-  :version "30.1")
-
-(defface grep-heading `((t :inherit ,grep-hit-face))
-  "Face of headings when `grep-use-headings' is non-nil."
-  :version "30.1")
-
-(defvar grep-heading-regexp
-  (rx bol
-      (or
-       (group-n 2
-         (group-n 1 (+ (not (any 0 ?\n))))
-         0)
-       (group-n 2
-        (group-n 1 (+? nonl))
-        (any ?: ?- ?=)))
-      (+ digit)
-      (any ?: ?- ?=))
-  "Regexp used to create headings from grep output lines.
-It should be anchored at beginning of line.  The first capture
-group, if present, should match the heading associated to the
-line.  The buffer range of the second capture, if present, is
-made invisible (presumably because displaying it would be
-redundant).")
-
 (defvar grep-find-abbreviate-properties
   (let ((ellipsis (if (char-displayable-p ?…) "[…]" "[...]"))
         (map (make-sparse-keymap)))
-    (define-key map [down-mouse-2] #'mouse-set-point)
-    (define-key map [mouse-2] #'grep-find-toggle-abbreviation)
-    (define-key map "\C-m" #'grep-find-toggle-abbreviation)
+    (define-key map [down-mouse-2] 'mouse-set-point)
+    (define-key map [mouse-2] 'grep-find-toggle-abbreviation)
+    (define-key map "\C-m" 'grep-find-toggle-abbreviation)
     `(face nil display ,ellipsis mouse-face highlight
       help-echo "RET, mouse-2: show unabbreviated command"
       keymap ,map abbreviated-command t))
@@ -497,7 +453,7 @@ redundant).")
 
 (defvar grep-mode-font-lock-keywords
    '(;; Command output lines.
-     (": \\(.\\{,200\\}\\): \\(?:Permission denied\\|No such \\(?:file or directory\\|device or address\\)\\)$"
+     (": \\(.+\\): \\(?:Permission denied\\|No such \\(?:file or directory\\|device or address\\)\\)$"
       1 grep-error-face)
      ;; remove match from grep-regexp-alist before fontifying
      ("^Grep[/a-zA-Z]* started.*"
@@ -639,40 +595,6 @@ This function is called from `compilation-filter-hook'."
         (while (re-search-forward "\033\\[[0-9;]*[mK]" end 1)
           (replace-match "" t t))))))
 
-(defvar grep--heading-format
-  (eval-when-compile
-    (let ((title (propertize "%s"
-                             'font-lock-face 'grep-heading
-                             'outline-level 1)))
-      (propertize (concat title "\n") 'compilation-annotation t)))
-  "Format string of grep headings.
-This is passed to `format' with one argument, the text of the
-first capture group of `grep-heading-regexp'.")
-
-(defvar-local grep--heading-state nil
-  "Variable to keep track of the `grep--heading-filter' state.")
-
-(defun grep--heading-filter ()
-  "Filter function to add headings to output of a grep process."
-  (unless grep--heading-state
-    (setq grep--heading-state (cons (point-min-marker) nil)))
-  (save-excursion
-    (let ((limit (car grep--heading-state)))
-      ;; Move point to the old limit and update limit marker.
-      (move-marker limit (prog1 (pos-bol) (goto-char limit)))
-      (while (re-search-forward grep-heading-regexp limit t)
-        (unless (get-text-property (point) 'compilation-annotation)
-          (let ((heading (match-string-no-properties 1))
-                (start (match-beginning 2))
-                (end (match-end 2)))
-            (when start
-              (put-text-property start end 'invisible t))
-            (when (and heading (not (equal heading (cdr grep--heading-state))))
-              (save-excursion
-                (goto-char (pos-bol))
-                (insert-before-markers (format grep--heading-format heading)))
-              (setf (cdr grep--heading-state) heading))))))))
-
 (defun grep-probe (command args &optional func result)
   (let (process-file-side-effects)
     (equal (condition-case nil
@@ -694,8 +616,8 @@ first capture group of `grep-heading-regexp'.")
   "Compute the defaults for the `grep' command.
 The value depends on `grep-command', `grep-template',
 `grep-use-null-device', `grep-find-command', `grep-find-template',
-`grep-use-null-filename-separator', `grep-find-use-xargs',
-`grep-highlight-matches', and `grep-quoting-style'."
+`grep-use-null-filename-separator', `grep-find-use-xargs' and
+`grep-highlight-matches'."
   ;; Keep default values.
   (unless grep-host-defaults-alist
     (add-to-list
@@ -709,14 +631,13 @@ The value depends on `grep-command', `grep-template',
              (grep-use-null-filename-separator
               ,grep-use-null-filename-separator)
 	     (grep-find-use-xargs ,grep-find-use-xargs)
-	     (grep-highlight-matches ,grep-highlight-matches)
-             (grep-quoting-style ,grep-quoting-style)))))
-  (let* ((remote (file-remote-p default-directory))
-         (host-id (intern (or remote "localhost")))
+	     (grep-highlight-matches ,grep-highlight-matches)))))
+  (let* ((host-id
+	  (intern (or (file-remote-p default-directory) "localhost")))
 	 (host-defaults (assq host-id grep-host-defaults-alist))
 	 (defaults (assq nil grep-host-defaults-alist))
-         (quot-braces (shell-quote-argument "{}" remote))
-         (quot-scolon (shell-quote-argument ";" remote)))
+         (quot-braces (shell-quote-argument "{}"))
+         (quot-scolon (shell-quote-argument ";")))
     ;; There are different defaults on different hosts.  They must be
     ;; computed for every host once.
     (dolist (setting '(grep-command grep-template
@@ -870,11 +791,8 @@ The value depends on `grep-command', `grep-template',
                                  find-program gcmd null quot-braces))
                         (t
                          (format "%s -H <D> <X> -type f <F> -print | \"%s\" %s"
-                                 find-program xargs-program gcmd))))))
-
-        (setq grep-quoting-style (and remote 'posix))))
-
-    ;; Save defaults for this host.
+                                 find-program xargs-program gcmd))))))))
+     ;; Save defaults for this host.
     (setq grep-host-defaults-alist
 	  (delete (assq host-id grep-host-defaults-alist)
 		  grep-host-defaults-alist))
@@ -889,8 +807,7 @@ The value depends on `grep-command', `grep-template',
 	     (grep-use-null-filename-separator
 	      ,grep-use-null-filename-separator)
 	     (grep-find-use-xargs ,grep-find-use-xargs)
-	     (grep-highlight-matches ,grep-highlight-matches)
-             (grep-quoting-style ,grep-quoting-style))))))
+	     (grep-highlight-matches ,grep-highlight-matches))))))
 
 (defun grep-tag-default ()
   (or (and transient-mark-mode mark-active
@@ -903,8 +820,7 @@ The value depends on `grep-command', `grep-template',
 
 (defun grep-default-command ()
   "Compute the default grep command for \\[universal-argument] \\[grep] to offer."
-  (let ((tag-default
-         (shell-quote-argument (grep-tag-default) grep-quoting-style))
+  (let ((tag-default (shell-quote-argument (grep-tag-default)))
 	;; This a regexp to match single shell arguments.
 	;; Could someone please add comments explaining it?
 	(sh-arg-re
@@ -959,19 +875,6 @@ The value depends on `grep-command', `grep-template',
   (setq-local compilation-disable-input t)
   (setq-local compilation-error-screen-columns
               grep-error-screen-columns)
-  ;; We normally use a nul byte to separate the file name from the
-  ;; contents, but display it as ":".  That's fine, but when yanking
-  ;; to other buffers, it's annoying to have the nul byte there.
-  (unless kill-transform-function
-    (setq-local kill-transform-function #'identity))
-  (add-function :filter-return (local 'kill-transform-function)
-                (lambda (string)
-                  (string-replace "\0" ":" string)))
-  (when grep-use-headings
-    (add-hook 'compilation-filter-hook #'grep--heading-filter 80 t)
-    (setq-local outline-search-function #'outline-search-level
-                outline-level (lambda () (get-text-property
-                                          (point) 'outline-level))))
   (add-hook 'compilation-filter-hook #'grep-filter nil t))
 
 (defun grep--save-buffers ()
@@ -1008,15 +911,10 @@ list is empty)."
    (progn
      (grep-compute-defaults)
      (let ((default (grep-default-command)))
-       (list (read-shell-command
-              "Run grep (like this): "
-              (if current-prefix-arg
-                  default
-                (if grep-command-position
-                    (cons grep-command grep-command-position)
-                  grep-command))
-              'grep-history
-              (if current-prefix-arg nil default))))))
+       (list (read-shell-command "Run grep (like this): "
+                                 (if current-prefix-arg default grep-command)
+                                 'grep-history
+                                 (if current-prefix-arg nil default))))))
   ;; If called non-interactively, also compute the defaults if we
   ;; haven't already.
   (when (eq grep-highlight-matches 'auto-detect)
@@ -1054,7 +952,8 @@ easily repeat a find command."
       (grep command-args))))
 
 ;;;###autoload
-(defalias 'find-grep #'grep-find)
+(defalias 'find-grep 'grep-find)
+
 
 ;; User-friendly interactive API.
 
@@ -1064,7 +963,7 @@ easily repeat a find command."
     ("<F>" . files)
     ("<N>" . (null-device))
     ("<X>" . excl)
-    ("<R>" . (shell-quote-argument (or regexp "") grep-quoting-style)))
+    ("<R>" . (shell-quote-argument (or regexp ""))))
   "List of substitutions performed by `grep-expand-template'.
 If car of an element matches, the cdr is evalled in order to get the
 substitution string.
@@ -1111,7 +1010,7 @@ these include `opts', `dir', `files', `null-device', `excl' and
   ;; Instead of a `grep-read-files-function' variable, we used to lookup
   ;; mode-specific functions in the major mode's symbol properties, so preserve
   ;; this behavior for backward compatibility.
-  (let ((old-function (get major-mode #'grep-read-files))) ;Obsolete since 28.1
+  (let ((old-function (get major-mode 'grep-read-files))) ;Obsolete since 28.1
     (if old-function
 	(funcall old-function)
       (let ((file-name-at-point
@@ -1158,18 +1057,17 @@ REGEXP is used as a string in the prompt."
 	       default-extension
 	       (car grep-files-history)
 	       (car (car grep-files-aliases))))
-	 (defaults
-	   (delete-dups
-	    (delq nil
-		  (append (list default default-alias default-extension)
-			  (mapcar #'car grep-files-aliases)))))
-         (files (completing-read
-                 (format-prompt "Search for \"%s\" in files matching wildcard"
-                                default regexp)
-                 (completion-table-merge
-                  (lambda (_string _pred _action) defaults)
-                  #'read-file-name-internal)
-		 nil nil nil 'grep-files-history defaults)))
+	 (files (completing-read
+		 (concat "Search for \"" regexp
+			 "\" in files matching wildcard"
+			 (if default (concat " (default " default ")"))
+			 ": ")
+		 #'read-file-name-internal
+		 nil nil nil 'grep-files-history
+		 (delete-dups
+		  (delq nil
+                        (append (list default default-alias default-extension)
+				(mapcar #'car grep-files-aliases)))))))
     (and files
 	 (or (cdr (assoc files grep-files-aliases))
 	     files))))
@@ -1216,9 +1114,6 @@ command before it's run."
   (when (and (stringp regexp) (> (length regexp) 0))
     (unless (and dir (file-accessible-directory-p dir))
       (setq dir default-directory))
-    (unless (string-equal (file-remote-p dir) (file-remote-p default-directory))
-      (let ((default-directory dir))
-        (grep-compute-defaults)))
     (let ((command regexp))
       (if (null files)
 	  (if (string= command grep-command)
@@ -1241,13 +1136,11 @@ command before it's run."
 				    (mapconcat
                                      (lambda (ignore)
                                        (cond ((stringp ignore)
-                                              (shell-quote-argument
-                                               ignore grep-quoting-style))
+                                              (shell-quote-argument ignore))
                                              ((consp ignore)
                                               (and (funcall (car ignore) dir)
                                                    (shell-quote-argument
-                                                    (cdr ignore)
-                                                    grep-quoting-style)))))
+                                                    (cdr ignore))))))
 				     grep-find-ignored-files
 				     " --exclude=")))
 		       (and (eq grep-use-directories-skip t)
@@ -1267,7 +1160,7 @@ command before it's run."
            (if (and grep-use-null-device null-device (null-device))
 	       (concat command " " (null-device))
 	     command)
-	   #'grep-mode))
+	   'grep-mode))
 	;; Set default-directory if we started lgrep in the *grep* buffer.
 	(if (eq next-error-last-buffer (current-buffer))
 	    (setq default-directory dir))))))
@@ -1300,11 +1193,7 @@ When called programmatically and FILES is nil, REGEXP is expected
 to specify a command to run.
 
 If CONFIRM is non-nil, the user will be given an opportunity to edit the
-command before it's run.
-
-Interactively, the user can use the \\`M-c' command while entering
-the regexp to indicate whether the grep should be case sensitive
-or not."
+command before it's run."
   (interactive
    (progn
      (grep-compute-defaults)
@@ -1320,24 +1209,16 @@ or not."
 					  nil default-directory t))
 		(confirm (equal current-prefix-arg '(4))))
 	   (list regexp files dir confirm))))))
-  ;; If called non-interactively, also compute the defaults if we
-  ;; haven't already.
-  (unless grep-find-template
-    (grep-compute-defaults))
   (when (and (stringp regexp) (> (length regexp) 0))
     (unless (and dir (file-accessible-directory-p dir))
       (setq dir default-directory))
-    (unless (string-equal (file-remote-p dir) (file-remote-p default-directory))
-      (let ((default-directory dir))
-        (grep-compute-defaults)))
     (if (null files)
 	(if (not (string= regexp (if (consp grep-find-command)
 				     (car grep-find-command)
 				   grep-find-command)))
-	    (compilation-start regexp #'grep-mode))
+	    (compilation-start regexp 'grep-mode))
       (setq dir (file-name-as-directory (expand-file-name dir)))
-      (let* ((case-fold-search (read-regexp-case-fold-search regexp))
-             (command (rgrep-default-command regexp files nil)))
+      (let ((command (rgrep-default-command regexp files nil)))
 	(when command
 	  (if confirm
 	      (setq command
@@ -1346,7 +1227,7 @@ or not."
 	    (add-to-history 'grep-find-history command))
           (grep--save-buffers)
 	  (let ((default-directory dir))
-	    (compilation-start command #'grep-mode))
+	    (compilation-start command 'grep-mode))
 	  ;; Set default-directory if we started rgrep in the *grep* buffer.
 	  (if (eq next-error-last-buffer (current-buffer))
 	      (setq default-directory dir)))))))
@@ -1366,46 +1247,44 @@ or not."
   (grep-expand-template
    grep-find-template
    regexp
-   (concat (shell-quote-argument "(" grep-quoting-style)
+   (concat (shell-quote-argument "(")
            " " find-name-arg " "
            (mapconcat
-            (lambda (x) (shell-quote-argument x grep-quoting-style))
+            #'shell-quote-argument
             (split-string files)
             (concat " -o " find-name-arg " "))
            " "
-           (shell-quote-argument ")" grep-quoting-style))
+           (shell-quote-argument ")"))
    dir
    (concat
     (and grep-find-ignored-directories
          (concat "-type d "
-                 (shell-quote-argument "(" grep-quoting-style)
+                 (shell-quote-argument "(")
                  ;; we should use shell-quote-argument here
                  " -path "
-                 (mapconcat
-                  (lambda (d)
-                    (shell-quote-argument (concat "*/" d) grep-quoting-style))
-                  (rgrep-find-ignored-directories dir)
-                  " -o -path ")
+                 (mapconcat (lambda (d) (shell-quote-argument (concat "*/" d)))
+                            (rgrep-find-ignored-directories dir)
+                            " -o -path ")
                  " "
-                 (shell-quote-argument ")" grep-quoting-style)
+                 (shell-quote-argument ")")
                  " -prune -o "))
     (and grep-find-ignored-files
-         (concat (shell-quote-argument "!" grep-quoting-style) " -type d "
-                 (shell-quote-argument "(" grep-quoting-style)
+         (concat (shell-quote-argument "!") " -type d "
+                 (shell-quote-argument "(")
                  ;; we should use shell-quote-argument here
                  " -name "
                  (mapconcat
                   (lambda (ignore)
                     (cond ((stringp ignore)
-                           (shell-quote-argument ignore grep-quoting-style))
+                           (shell-quote-argument ignore))
                           ((consp ignore)
                            (and (funcall (car ignore) dir)
                                 (shell-quote-argument
-                                 (cdr ignore) grep-quoting-style)))))
+                                 (cdr ignore))))))
                   grep-find-ignored-files
                   " -o -name ")
                  " "
-                 (shell-quote-argument ")" grep-quoting-style)
+                 (shell-quote-argument ")")
                  " -prune -o ")))))
 
 (defun grep-find-toggle-abbreviation ()
@@ -1475,7 +1354,7 @@ The returned file name is relative."
     (caar (compilation--loc->file-struct loc))))
 
 ;;;###autoload
-(defalias 'rzgrep #'zrgrep)
+(defalias 'rzgrep 'zrgrep)
 
 (provide 'grep)
 

@@ -1,6 +1,6 @@
 ;;; latin-pre.el --- Quail packages for inputting various European characters  -*-coding: utf-8; lexical-binding: t -*-
 
-;; Copyright (C) 1997-2023 Free Software Foundation, Inc.
+;; Copyright (C) 1997-2022 Free Software Foundation, Inc.
 ;; Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005,
 ;;   2006, 2007, 2008, 2009, 2010, 2011
 ;;   National Institute of Advanced Industrial Science and Technology (AIST)
@@ -497,15 +497,7 @@ Key translation rules are:
    cedilla   |   \\=`    | \\=`c -> ç   \\=`e -> ?ę
     misc     | \\=' \\=` ~  | \\='d -> đ   \\=`l -> ł   \\=`z -> ż   ~o -> ő   ~u -> ű
    symbol    |   ~    | \\=`. -> ˙   ~~ -> ˘   ~. -> ?¸
-"
- '(("\C-?" . quail-delete-last-char)
-   (">" . quail-next-translation)
-   ("\C-f" . quail-next-translation)
-   ([right] . quail-next-translation)
-   ("<" . quail-prev-translation)
-   ("\C-b" . quail-prev-translation)
-   ([left] . quail-prev-translation))
- t nil nil nil nil nil nil nil nil t)
+" nil t nil nil nil nil nil nil nil nil t)
 
 (quail-define-rules
  ("'A" ?Á)
@@ -540,15 +532,15 @@ Key translation rules are:
  ("`C" ?Ç)
  ("`E" ?Ę)
  ("`L" ?Ł)
- ("`S" "ŞȘ")
- ("`T" "ŢȚ") ; the second variant is for Romanian
+ ("`S" ?Ş)
+ ("`T" ?Ţ)
  ("`Z" ?Ż)
  ("`a" ?ą)
  ("`l" ?ł)
  ("`c" ?ç)
  ("`e" ?ę)
- ("`s" "şș")
- ("`t" "ţț") ; the second variant is for Romanian
+ ("`s" ?ş)
+ ("`t" ?ţ)
  ("`z" ?ż)
  ("``" ?Ş)
  ("`." ?˙)
@@ -1104,32 +1096,14 @@ of characters from a single Latin-N charset.
    cedilla   |  , ~   | ,c -> ç  ~c -> ç
     caron    |   ~    | ~c -> č  ~g -> ğ
     breve    |   ~    | ~a -> ă
-    macron   |   -    | -a -> ā  -/e -> ǣ  -- -> ¯
   dot above  |   / .  | /g -> ġ   .g -> ġ
     misc     | \" ~ /  | \"s -> ß  ~d -> ð  ~t -> þ  /a -> å  /e -> æ  /o -> ø
    symbol    |   ~    | ~> -> »  ~< -> «  ~! -> ¡  ~? -> ¿  ~~ -> ¸
    symbol    |  _ /   | _o -> º  _a -> ª  // -> °  /\\ -> ×  _y -> ¥
-   symbol    |   ^    | ^r -> ®  ^t -> ™  ^c -> ©  ^1 -> ¹  ^2 -> ²  ^3 -> ³
+   symbol    |   ^    | ^r -> ®  ^c -> ©  ^1 -> ¹  ^2 -> ²  ^3 -> ³
 " nil t nil nil nil nil nil nil nil nil t)
 
 (quail-define-rules
- ("--" ?¯)
- ("-A" ?Ā)
- ("-a" ?ā)
- ("-E" ?Ē)
- ("-e" ?ē)
- ("-/E" ?Ǣ)
- ("-/e" ?ǣ)
- ("-G" ?Ḡ)
- ("-g" ?ḡ)
- ("-I" ?Ī)
- ("-i" ?ī)
- ("-O" ?Ō)
- ("-o" ?ō)
- ("-U" ?Ū)
- ("-u" ?ū)
- ("-Y" ?Ȳ)
- ("-y" ?ȳ)
  ("' " ?')
  ("''" ?´)
  ("'A" ?Á)
@@ -1215,16 +1189,9 @@ of characters from a single Latin-N charset.
  ("\"w" ?ẅ)
  ("\"y" ?ÿ)
  ("^ " ?^)
- ("^0" ?⁰)
  ("^1" ?¹)
  ("^2" ?²)
  ("^3" ?³)
- ("^4" ?⁴)
- ("^5" ?⁵)
- ("^6" ?⁶)
- ("^7" ?⁷)
- ("^8" ?⁸)
- ("^9" ?⁹)
  ("^A" ?Â)
  ("^C" ?Ĉ)
  ("^E" ?Ê)
@@ -1249,24 +1216,9 @@ of characters from a single Latin-N charset.
  ("^o" ?ô)
  ("^r" ?®)
  ("^s" ?ŝ)
- ("^t" ?™)
  ("^u" ?û)
  ("^w" ?ŵ)
  ("^y" ?ŷ)
- ("^+" ?⁺)
- ("^-" ?⁻)
- ("_0" ?₀)
- ("_1" ?₁)
- ("_2" ?₂)
- ("_3" ?₃)
- ("_4" ?₄)
- ("_5" ?₅)
- ("_6" ?₆)
- ("_7" ?₇)
- ("_8" ?₈)
- ("_9" ?₉)
- ("_++" ?₊)
- ("_-" ?₋)
  ("_+" ?±)
  ("_:" ?÷)
  ("_a" ?ª)

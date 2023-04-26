@@ -1,6 +1,6 @@
 ;;; em-alias.el --- creation and management of command aliases  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1999-2023 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2022 Free Software Foundation, Inc.
 
 ;; Author: John Wiegley <johnw@gnu.org>
 
@@ -183,9 +183,7 @@ file named by `eshell-aliases-file'.")
   (pcomplete-here (eshell-alias-completions pcomplete-stub)))
 
 (defun eshell-read-aliases-list ()
-  "Read in an aliases list from `eshell-aliases-file'.
-This is useful after manually editing the contents of the file."
-  (interactive)
+  "Read in an aliases list from `eshell-aliases-file'."
   (let ((file eshell-aliases-file))
     (when (file-readable-p file)
       (setq eshell-command-aliases-list
@@ -208,7 +206,7 @@ This is useful after manually editing the contents of the file."
       (let ((eshell-current-handles
 	     (eshell-create-handles eshell-aliases-file 'overwrite)))
 	(eshell/alias)
-	(eshell-close-handles 0 'nil))))
+	(eshell-close-handles 0))))
 
 (defsubst eshell-lookup-alias (name)
   "Check whether NAME is aliased.  Return the alias if there is one."

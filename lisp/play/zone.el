@@ -1,6 +1,6 @@
 ;;; zone.el --- idle display hacks  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2000-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2000-2022 Free Software Foundation, Inc.
 
 ;; Author: Victor Zandy <zandy@cs.wisc.edu>
 ;; Maintainer: Thien-Thi Nguyen <ttn@gnu.org>
@@ -103,24 +103,9 @@ If the element is a function or a list of a function and a number,
                  program))))
 
 ;;;###autoload
-(defun zone (&optional pgm)
-  "Zone out, completely.
-With a prefix argument the user is prompted for a program to run.
-When called from Lisp the optional argument PGM can be used to
-run a specific program.  The program must be a member of
-`zone-programs'."
-  (interactive
-   (and current-prefix-arg
-        (let ((choice (completing-read
-                       "Program: "
-                       (mapcar
-                        (lambda (prog)
-                          (substring (symbol-name prog) 9))
-                        zone-programs)
-                       nil t)))
-          (list (intern (concat "zone-pgm-" choice))))))
-  (unless pgm
-    (setq pgm (aref zone-programs (random (length zone-programs)))))
+(defun zone ()
+  "Zone out, completely."
+  (interactive)
   (save-window-excursion
     (let ((f (selected-frame))
           (outbuf (get-buffer-create "*zone*"))
@@ -139,8 +124,9 @@ run a specific program.  The program must be a member of
       (untabify (point-min) (point-max))
       (set-window-start (selected-window) (point-min))
       (set-window-point (selected-window) wp)
-      (sit-for 0.500)
-      (let ((ct (and f (frame-parameter f 'cursor-type)))
+      (sit-for 0 500)
+      (let ((pgm (elt zone-programs (random (length zone-programs))))
+            (ct (and f (frame-parameter f 'cursor-type)))
             (show-trailing-whitespace nil)
             restore)
         (when ct
@@ -218,7 +204,8 @@ run a specific program.  The program must be a member of
     (insert s)))
 
 (defun zone-shift-left ()
-  (let (s)
+  (let ((inhibit-point-motion-hooks t)
+        s)
     (while (not (eobp))
       (unless (eolp)
         (setq s (buffer-substring (point) (1+ (point))))
@@ -229,7 +216,8 @@ run a specific program.  The program must be a member of
 
 (defun zone-shift-right ()
   (goto-char (point-max))
-  (let (s)
+  (let ((inhibit-point-motion-hooks t)
+        s)
     (while (not (bobp))
       (unless (bolp)
         (setq s (buffer-substring (1- (point)) (point)))
@@ -249,7 +237,7 @@ run a specific program.  The program must be a member of
     (while (not (input-pending-p))
       (funcall (elt ops (random (length ops))))
       (goto-char (point-min))
-      (sit-for 0.01))))
+      (sit-for 0 10))))
 
 
 ;;;; whacking chars
@@ -262,7 +250,7 @@ run a specific program.  The program must be a member of
           (aset tbl i (+ 48 (random (- 123 48))))
           (setq i (1+ i)))
         (translate-region (point-min) (point-max) tbl)
-        (sit-for 0.002)))))
+        (sit-for 0 2)))))
 
 (put 'zone-pgm-whack-chars 'wc-tbl
      (let ((tbl (make-string 128 ?x))
@@ -290,7 +278,7 @@ run a specific program.  The program must be a member of
                   (delete-char 1)
                   (insert " ")))
             (forward-char 1))))
-      (sit-for 0.002))))
+      (sit-for 0 2))))
 
 (defun zone-pgm-dissolve ()
   (zone-remove-text)
@@ -312,7 +300,7 @@ run a specific program.  The program must be a member of
                 (insert " ")))
           (forward-char 1)))
       (setq i (1+ i))
-      (sit-for 0.002)))
+      (sit-for 0 2)))
   (zone-pgm-jitter))
 
 (defun zone-pgm-explode ()
@@ -320,7 +308,7 @@ run a specific program.  The program must be a member of
   (zone-pgm-jitter))
 
 
-;;;; putzing with case
+;;;; putzing w/ case
 
 ;; Faster than `zone-pgm-putz-with-case', but not as good: all
 ;; instances of the same letter have the same case, which produces a
@@ -347,7 +335,7 @@ run a specific program.  The program must be a member of
                 (upcase i)))
         (setq i (+ i (1+ (random 5)))))
       (translate-region (point-min) (point-max) tbl)
-      (sit-for 0.002))))
+      (sit-for 0 2))))
 
 (defun zone-pgm-putz-with-case ()
   (goto-char (point-min))
@@ -359,7 +347,7 @@ run a specific program.  The program must be a member of
                    'downcase-region) (1- np) np)
         (setq np (+ np (1+ (random 5))))))
     (goto-char (point-min))
-    (sit-for 0.002)))
+    (sit-for 0 2)))
 
 
 ;;;; rotating
@@ -460,7 +448,8 @@ run a specific program.  The program must be a member of
 
 (defun zone-fill-out-screen (width height)
   (let ((start (window-start))
-	(line (make-string width 32)))
+	(line (make-string width 32))
+	(inhibit-point-motion-hooks t))
     (goto-char start)
     ;; fill out rectangular ws block
     (while (progn (end-of-line)
@@ -675,7 +664,8 @@ If nil, `zone-pgm-random-life' chooses a value from 0-3 (inclusive).")
       (setq c (point))
       (move-to-column 9)
       (setq col (cons (buffer-substring (point) c) col))
-      (end-of-line 0)
+;      (let ((inhibit-point-motion-hooks t))
+        (end-of-line 0);)
       (forward-char -10))
     (let ((life-patterns (vector
                           (if (and col (search-forward "@" max t))

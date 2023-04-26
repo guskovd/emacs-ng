@@ -1,6 +1,6 @@
 ;;; handwrite.el --- turns your emacs buffer into a handwritten document  -*- lexical-binding: t -*-
 
-;; Copyright (C) 1996-2023 Free Software Foundation, Inc.
+;; Copyright (C) 1996, 2001-2022 Free Software Foundation, Inc.
 
 ;; Author: Danny Roozendaal (was: <danny@tvs.kun.nl>)
 ;; Maintainer: emacs-devel@gnu.org
@@ -29,42 +29,44 @@
 ;;
 ;; Other functions that may be useful are:
 ;;
-;;     `handwrite-10pt': set the font size to 10 and find corresponding
-;;                       values for the line spacing and the number of lines
-;;                       on a page.
-;;     `handwrite-11pt': which is similar
-;;     `handwrite-12pt': which is also similar
-;;     `handwrite-13pt': which is similar, too
+;;      handwrite-10pt: sets the font size to 10 and finds corresponding
+;;                      values for the line spacing and the number of lines
+;;                      on a page.
+;;      handwrite-11pt: which is similar
+;;      handwrite-12pt: which is also similar
+;;      handwrite-13pt: which is similar, too
 ;;
-;;     `handwrite-set-pagenumber': set and unset page numbering
+;;      handwrite-set-pagenumber: set and unset page numbering
 ;;
 ;;
 ;; If you are not satisfied with the type page there are a number of
 ;; variables you may want to set.
 ;;
-;; To use this, say `M-x handwrite' or type at your prompt
+;; To use this, say "M-x handwrite" or type at your prompt
 ;; "emacs -l handwrite.el".
 ;;
 ;; I tried to make it `iso_8859_1'-friendly, but there are some exotic
 ;; characters missing.
 ;;
 ;;
-;; Known bugs:
-;; - Page feeds do not work, and are ignored instead.
-;; - Tabs are not always properly displayed.
-;; - Handwrite may create corrupt PostScript if it encounters
-;;   unknown characters.
+;; Known bugs: -Page feeds do not do their work, but are ignored instead.
+;;             -Tabs are not always properly displayed.
+;;             -Handwrite may create corrupt PostScript if it encounters
+;;              unknown characters.
 ;;
 ;; Thanks to anyone who emailed me suggestions!
 
 ;;; Code:
 
-(require 'ps-print)
+;; From ps-print.el
+(defvar ps-printer-name)
+(defvar ps-lpr-command)
+(defvar ps-lpr-switches)
 
 ;; Variables
 
 (defgroup handwrite nil
-  "Turn your Emacs buffer into a handwritten document."
+  "Turns your Emacs buffer into a handwritten document."
   :prefix "handwrite-"
   :group 'games)
 
@@ -233,13 +235,20 @@ Variables: `handwrite-linespace'     (default 12)
     (while (search-forward "\f" nil t)
       (replace-match "" nil t) )
     (untabify textp (point-max))	; this may result in strange tabs
-    (when (y-or-n-p "Send this to the printer? ")
-      (let* ((coding-system-for-write 'raw-text-unix)
-	     (printer-name (or ps-printer-name printer-name))
-             (lpr-printer-switch ps-printer-name-option)
-             (print-region-function ps-print-region-function)
-             (lpr-command ps-lpr-command))
-        (lpr-print-region (point-min) (point-max) ps-lpr-switches nil)))
+    (if (y-or-n-p "Send this to the printer? ")
+	(progn
+	  (require 'ps-print)
+	  (let* ((coding-system-for-write 'raw-text-unix)
+		 (ps-printer-name (or ps-printer-name
+				      (and (boundp 'printer-name)
+					   printer-name)))
+		 (ps-lpr-switches
+		  (if (stringp ps-printer-name)
+		      (list (concat "-P" ps-printer-name)))))
+	    (apply (or (and (boundp 'ps-print-region-function)
+			    ps-print-region-function)
+		       'call-process-region)
+		   (point-min) (point-max) ps-lpr-command nil nil nil))))
     (message "")
     (bury-buffer ())
     (switch-to-buffer cur-buf)
@@ -255,8 +264,8 @@ Variables: `handwrite-linespace'     (default 12)
 
 (defun handwrite-10pt ()
   "Specify 10-point output for `handwrite'.
-Set `handwrite-fontsize' to 10 and find correct values for
-`handwrite-linespace' and `handwrite-numlines'."
+This sets `handwrite-fontsize' to 10 and finds correct
+values for `handwrite-linespace' and `handwrite-numlines'."
   (interactive)
   (setq handwrite-fontsize 10)
   (setq handwrite-linespace 11)
@@ -265,8 +274,8 @@ Set `handwrite-fontsize' to 10 and find correct values for
 
 (defun handwrite-11pt ()
   "Specify 11-point output for `handwrite'.
-Set `handwrite-fontsize' to 11 and find correct values for
-`handwrite-linespace' and `handwrite-numlines'."
+This sets `handwrite-fontsize' to 11 and finds correct
+values for `handwrite-linespace' and `handwrite-numlines'."
   (interactive)
   (setq handwrite-fontsize 11)
   (setq handwrite-linespace 12)
@@ -275,8 +284,8 @@ Set `handwrite-fontsize' to 11 and find correct values for
 
 (defun handwrite-12pt ()
   "Specify 12-point output for `handwrite'.
-Set `handwrite-fontsize' to 12 and find correct values for
-`handwrite-linespace' and `handwrite-numlines'."
+This sets `handwrite-fontsize' to 12 and finds correct
+values for `handwrite-linespace' and `handwrite-numlines'."
   (interactive)
   (setq handwrite-fontsize 12)
   (setq handwrite-linespace 13)
@@ -285,8 +294,8 @@ Set `handwrite-fontsize' to 12 and find correct values for
 
 (defun handwrite-13pt ()
   "Specify 13-point output for `handwrite'.
-Set `handwrite-fontsize' to 13 and find correct values for
-`handwrite-linespace' and `handwrite-numlines'."
+This sets `handwrite-fontsize' to 13 and finds correct
+values for `handwrite-linespace' and `handwrite-numlines'."
   (interactive)
   (setq handwrite-fontsize 13)
   (setq handwrite-linespace 14)

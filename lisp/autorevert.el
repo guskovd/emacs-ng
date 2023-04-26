@@ -1,6 +1,6 @@
 ;;; autorevert.el --- revert buffers when files on disk change  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1997-1999, 2001-2023 Free Software Foundation, Inc.
+;; Copyright (C) 1997-1999, 2001-2022 Free Software Foundation, Inc.
 
 ;; Author: Anders Lindgren
 ;; Keywords: convenience
@@ -297,10 +297,9 @@ You should set this variable through Custom."
 (defcustom auto-revert-notify-exclude-dir-regexp
   (concat
    ;; No mounted file systems.
-   mounted-file-systems
+   "^" (regexp-opt '("/afs/" "/media/" "/mnt" "/net/" "/tmp_mnt/"))
    ;; No remote files.
-   (unless auto-revert-remote-files
-     (rx (| "" (: bol "/" (not (any "/:|")) (1+ (not (any "/|"))) ":")))))
+   (unless auto-revert-remote-files "\\|^/[^/|:][^/|]+:"))
   "Regular expression of directories to be excluded from file notifications."
   :group 'auto-revert
   :type 'regexp
@@ -678,7 +677,7 @@ will use an up-to-date value of `auto-revert-interval'."
 ;;
 ;; We do this by reverting immediately in response to the first in a
 ;; flurry of notifications. Any notifications during the following
-;; `auto-revert--lockout-interval' seconds are noted but not acted upon
+;; `auto-revert-lockout-interval' seconds are noted but not acted upon
 ;; until the end of that interval.
 
 (defconst auto-revert--lockout-interval 2.5
@@ -693,7 +692,7 @@ system.")
 
 (defun auto-revert-notify-handler (event)
   "Handle an EVENT returned from file notification."
-  (with-demoted-errors "Error while auto-reverting: %S"
+  (with-demoted-errors
     (let* ((descriptor (car event))
 	   (action (nth 1 event))
 	   (file (nth 2 event))
@@ -718,7 +717,7 @@ system.")
                           (string-equal
                            (file-name-nondirectory file)
                            (file-name-nondirectory buffer-file-name)))
-                     ;; A buffer without a file, like dired.
+                     ;; A buffer w/o a file, like dired.
                      (null buffer-file-name))
                 (auto-revert-notify-rm-watch)
                 ;; Restart the timer if it wasn't running.
@@ -739,7 +738,7 @@ system.")
                               (string-equal
                                (file-name-nondirectory file1)
                                (file-name-nondirectory buffer-file-name)))))
-                   ;; A buffer without a file, like dired.
+                   ;; A buffer w/o a file, like dired.
                    (and (null buffer-file-name)
                         (memq action '(created renamed deleted))))
               ;; Mark buffer modified.
@@ -801,7 +800,7 @@ This is an internal function used by Auto-Revert Mode."
     (when revert
       (when (and auto-revert-verbose
                  (not (eq revert 'fast)))
-        (message "Reverting buffer `%s'" (buffer-name)))
+        (message "Reverting buffer `%s'." (buffer-name)))
       ;; If point (or a window point) is at the end of the buffer, we
       ;; want to keep it at the end after reverting.  This allows one
       ;; to tail a file.

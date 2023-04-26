@@ -1,6 +1,6 @@
 ;;; mspools.el --- show mail spools waiting to be read  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 1997, 2001-2023 Free Software Foundation, Inc.
+;; Copyright (C) 1997, 2001-2022 Free Software Foundation, Inc.
 
 ;; Author: Stephen Eglen <stephen@gnu.org>
 ;; Created: 22 Jan 1997
@@ -55,6 +55,7 @@
 ;; `mspools-using-vm' for details.
 
 ;;; Basic installation.
+;; (autoload 'mspools-show "mspools" "Show outstanding mail spools." t)
 ;; (setq mspools-folder-directory "~/MAIL/")
 ;;
 ;; If you use VM, mspools-folder-directory will default to vm-folder-directory
@@ -164,13 +165,17 @@ your primary spool is.  If this fails, set it to something like
 (defvar mspools-buffer "*spools*"
   "Name of buffer for displaying spool info.")
 
-(defvar-keymap mspools-mode-map
-  :doc "Keymap for the *spools* buffer."
-  "C-c C-c" #'mspools-visit-spool
-  "RET"     #'mspools-visit-spool
-  "SPC"     #'mspools-visit-spool
-  "n"       #'next-line
-  "p"       #'previous-line)
+(defvar mspools-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map "\C-c\C-c" #'mspools-visit-spool)
+    (define-key map "\C-m" #'mspools-visit-spool)
+    (define-key map " " #'mspools-visit-spool)
+    (define-key map "n" #'next-line)
+    (define-key map "p" #'previous-line)
+    map)
+  "Keymap for the *spools* buffer.")
+
+;;; Code
 
 ;;; VM Specific code
 (if mspools-using-vm
@@ -264,7 +269,7 @@ Buffer is not displayed if SHOW is non-nil."
 	      (delete-char 1))))
 
       (message "folder %s spool %s" folder-name spool-name)
-      (forward-line (if (eq (count-lines (point-min) (line-end-position))
+      (forward-line (if (eq (count-lines (point-min) (point-at-eol))
 	                    mspools-files-len)
 	                ;; FIXME: Why use `mspools-files-len' instead
                         ;; of looking if we're on the last line and
@@ -307,7 +312,7 @@ Buffer is not displayed if SHOW is non-nil."
 
 (defun mspools-get-spool-name ()
   "Return the name of the spool on the current line."
-  (let ((line-num (1- (count-lines (point-min) (line-end-position)))))
+  (let ((line-num (1- (count-lines (point-min) (point-at-eol)))))
     ;; FIXME: Why not extract the name directly from the current line's text?
     (car (nth line-num mspools-files))))
 

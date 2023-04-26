@@ -1,9 +1,9 @@
 ;;; erc-track.el --- Track modified channel buffers  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2002-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2002-2022 Free Software Foundation, Inc.
 
 ;; Author: Mario Lang <mlang@delysid.org>
-;; Maintainer: Amin Bandali <bandali@gnu.org>, F. Jason Park <jp@neverwas.me>
+;; Maintainer: Amin Bandali <bandali@gnu.org>
 ;; Keywords: comm
 ;; URL: https://www.emacswiki.org/emacs/ErcChannelTracking
 
@@ -46,7 +46,7 @@
 
 (defcustom erc-track-enable-keybindings 'ask
   "Whether to enable the ERC track keybindings, namely:
-\\`C-c C-SPC' and \\`C-c C-@', which both do the same thing.
+`C-c C-SPC' and `C-c C-@', which both do the same thing.
 
 The default is to check to see whether these keys are used
 already: if not, then enable the ERC track minor mode, which
@@ -353,6 +353,8 @@ of `erc-track-shorten-start' characters."
      (> (length s) erc-track-shorten-cutoff))
    erc-track-shorten-start))
 
+(defvar erc-default-recipients)
+
 (defun erc-all-buffer-names ()
   "Return all channel or query buffer names.
 Note that we cannot use `erc-channel-list' with a nil argument,
@@ -453,12 +455,12 @@ START is the minimum length of the name used."
 ;; Play nice with other IRC clients (and Emacs development rules) by
 ;; making this a minor mode
 
-(defvar erc-track-minor-mode-map
-  (let ((map (make-sparse-keymap)))
-    (define-key map (kbd "C-c C-@")   #'erc-track-switch-buffer)
-    (define-key map (kbd "C-c C-SPC") #'erc-track-switch-buffer)
-    map)
-  "Keymap for ERC track minor mode.")
+(defvar erc-track-minor-mode-map (make-sparse-keymap)
+  "Keymap for rcirc track minor mode.")
+
+(define-key erc-track-minor-mode-map (kbd "C-c C-@") #'erc-track-switch-buffer)
+(define-key erc-track-minor-mode-map (kbd "C-c C-SPC")
+  #'erc-track-switch-buffer)
 
 ;;;###autoload
 (define-minor-mode erc-track-minor-mode
@@ -521,9 +523,7 @@ keybindings will not do anything useful."
        (add-hook 'erc-disconnected-hook #'erc-modified-channels-update))
      ;; enable the tracking keybindings
      (add-hook 'erc-connect-pre-hook #'erc-track-minor-mode-maybe)
-     (erc-track-minor-mode-maybe))
-   (add-hook 'erc-networks--copy-server-buffer-functions
-             #'erc-track--replace-killed-buffer))
+     (erc-track-minor-mode-maybe)))
   ;; Disable:
   ((when (boundp 'erc-track-when-inactive)
      (erc-track-remove-from-mode-line)
@@ -541,9 +541,7 @@ keybindings will not do anything useful."
      ;; disable the tracking keybindings
      (remove-hook 'erc-connect-pre-hook #'erc-track-minor-mode-maybe)
      (when erc-track-minor-mode
-       (erc-track-minor-mode -1)))
-   (remove-hook 'erc-networks--copy-server-buffer-functions
-                #'erc-track--replace-killed-buffer)))
+       (erc-track-minor-mode -1)))))
 
 (defcustom erc-track-when-inactive nil
   "Enable channel tracking even for visible buffers, if you are inactive."
@@ -921,11 +919,7 @@ is relative to `erc-track-switch-direction'."
 	   (unless (eq major-mode 'erc-mode)
 	     (setq erc-track-last-non-erc-buffer (current-buffer)))
 	   ;; and jump to the next active channel
-           (if-let ((buf (erc-track-get-active-buffer arg))
-                    ((buffer-live-p buf)))
-               (funcall fun buf)
-             (erc-modified-channels-update)
-             (erc-track--switch-buffer fun arg)))
+	   (funcall fun (erc-track-get-active-buffer arg)))
 	  ;; if no active channels, switch back to what we were doing before
 	  ((and erc-track-last-non-erc-buffer
 	        erc-track-switch-from-erc
@@ -949,10 +943,6 @@ non-ERC buffer visited.  The order of buffers is defined by
 reverse it."
   (interactive "p")
   (erc-track--switch-buffer 'switch-to-buffer-other-window arg))
-
-(defun erc-track--replace-killed-buffer (existing)
-  (when-let ((found (assq existing erc-modified-channels-alist)))
-    (setcar found (current-buffer))))
 
 (provide 'erc-track)
 

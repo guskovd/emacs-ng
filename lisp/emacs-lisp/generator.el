@@ -1,6 +1,6 @@
 ;;; generator.el --- generators  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2015-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2015-2022 Free Software Foundation, Inc.
 
 ;; Author: Daniel Colascione <dancol@dancol.org>
 ;; Keywords: extensions, elisp
@@ -143,7 +143,8 @@ the CPS state machinery."
          (setf ,static-var ,dynamic-var)))))
 
 (defmacro cps--with-dynamic-binding (dynamic-var static-var &rest body)
-  "Run BODY's atomic evaluations run with DYNAMIC-VAR bound to STATIC-VAR."
+  "Evaluate BODY such that generated atomic evaluations run with
+DYNAMIC-VAR bound to STATIC-VAR."
   (declare (indent 2))
   `(cps--with-value-wrapper
        (cps--make-dynamic-binding-wrapper ,dynamic-var ,static-var)
@@ -290,28 +291,22 @@ the CPS state machinery."
                         (cps--transform-1 `(progn ,@rest)
                                           next-state)))
 
-    (`(,(or 'let 'let*) () . ,body)
-      (cps--transform-1 `(progn ,@body) next-state))
-
-    ;; Transform multi-variable `let' into `let*':
-    ;;    (let ((v1 e1) ... (vN eN)) BODY)
-    ;; -> (let* ((t1 e1) ... (tN-1 eN-1) (vN eN) (v1 t1) (vN-1 tN-1)) BODY)
+    ;; Process `let' in a helper function that transforms it into a
+    ;; let* with temporaries.
 
     (`(let ,bindings . ,body)
       (let* ((bindings (cl-loop for binding in bindings
                           collect (if (symbolp binding)
                                       (list binding nil)
                                     binding)))
-             (butlast-bindings (butlast bindings))
-             (temps (cl-loop for (var _value-form) in butlast-bindings
+             (temps (cl-loop for (var _value-form) in bindings
                        collect (cps--add-binding var))))
         (cps--transform-1
          `(let* ,(append
-                  (cl-loop for (_var value-form) in butlast-bindings
+                  (cl-loop for (_var value-form) in bindings
                      for temp in temps
                      collect (list temp value-form))
-                  (last bindings)
-                  (cl-loop for (var _binding) in butlast-bindings
+                  (cl-loop for (var _binding) in bindings
                      for temp in temps
                      collect (list var temp)))
             ,@body)
@@ -319,6 +314,9 @@ the CPS state machinery."
 
     ;; Process `let*' binding: process one binding at a time.  Flatten
     ;; lexical bindings.
+
+    (`(let* () . ,body)
+      (cps--transform-1 `(progn ,@body) next-state))
 
     (`(let* (,binding . ,more-bindings) . ,body)
       (let* ((var (if (symbolp binding) binding (car binding)))
@@ -644,11 +642,12 @@ modified copy."
                          (iter-close iterator)))))
          iterator))))
 
-(defun iter-yield (_value)
+(defun iter-yield (value)
   "When used inside a generator, yield control to caller.
 The caller of `iter-next' receives VALUE, and the next call to
 `iter-next' resumes execution with the form immediately following this
 `iter-yield' call."
+  (identity value)
   (error "`iter-yield' used outside a generator"))
 
 (defmacro iter-yield-from (value)
@@ -690,10 +689,8 @@ of values.  Callers can retrieve each value using `iter-next'."
   (declare (indent defun)
            (debug (&define lambda-list lambda-doc &rest sexp)))
   (cl-assert lexical-binding)
-  (pcase-let* ((`(,declarations . ,exps) (macroexp-parse-body body)))
-    `(lambda ,arglist
-       ,@declarations
-       ,(cps-generate-evaluator exps))))
+  `(lambda ,arglist
+     ,(cps-generate-evaluator body)))
 
 (defmacro iter-make (&rest body)
   "Return a new iterator."

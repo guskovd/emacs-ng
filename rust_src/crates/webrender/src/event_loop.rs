@@ -1,25 +1,33 @@
-use crate::select::handle_select;
-#[cfg(use_winit)]
-use crate::window_system::api::event_loop::EventLoopBuilder;
-use crate::window_system::clipboard::Clipboard;
-use crate::window_system::clipboard::ClipboardExt;
-use std::sync::OnceLock;
-use std::{
-    cell::RefCell,
-    ptr,
-    sync::{Arc, Mutex},
-    time::{Duration, Instant},
-};
+use std::{cell::RefCell, os::unix::prelude::AsRawFd, ptr, sync::Mutex, time::Instant};
 
-use crate::window_system::api::{
-    event::{Event, WindowEvent},
-    event_loop::ControlFlow,
-    event_loop::EventLoop,
+#[cfg(macos)]
+use copypasta::osx_clipboard::OSXClipboardContext;
+#[cfg(windows)]
+use copypasta::windows_clipboard::WindowsClipboardContext;
+use copypasta::ClipboardProvider;
+#[cfg(unix)]
+use copypasta::{
+    wayland_clipboard::create_clipboards_from_external,
+    x11_clipboard::{Clipboard, X11ClipboardContext},
+};
+use futures::future::FutureExt;
+#[cfg(unix)]
+use glutin::platform::unix::EventLoopWindowTargetExtUnix;
+use glutin::{
+    event::{Event, StartCause, WindowEvent},
+    event_loop::{ControlFlow, EventLoop, EventLoopProxy},
     monitor::MonitorHandle,
     platform::run_return::EventLoopExtRunReturn,
+    window::{WindowBuilder, WindowId},
+    ContextBuilder, ContextCurrentState, CreationError, NotCurrent, WindowedContext,
 };
-use emacs::bindings::{inhibit_window_system, thread_select};
 use libc::{c_void, fd_set, pselect, sigset_t, timespec};
+use once_cell::sync::Lazy;
+use tokio::{io::unix::AsyncFd, runtime::Runtime, time::Duration};
+
+use crate::future::batch_select;
+
+use emacs::bindings::{inhibit_window_system, thread_select};
 
 pub type GUIEvent = Event<'static, i32>;
 
@@ -35,7 +43,7 @@ pub enum Platform {
 unsafe impl Send for Platform {}
 
 pub struct WrEventLoop {
-    clipboard: Clipboard,
+    clipboard: Box<dyn ClipboardProvider>,
     el: EventLoop<i32>,
 }
 
@@ -43,8 +51,38 @@ unsafe impl Send for WrEventLoop {}
 unsafe impl Sync for WrEventLoop {}
 
 impl WrEventLoop {
-    pub fn el(&self) -> &EventLoop<i32> {
-        &self.el
+    pub fn build_window<'a, T: ContextCurrentState>(
+        &mut self,
+        window_builder: WindowBuilder,
+        context_builder: ContextBuilder<'a, T>,
+    ) -> Result<WindowedContext<NotCurrent>, CreationError> {
+        context_builder.build_windowed(window_builder, &self.el)
+    }
+
+    pub fn create_proxy(&self) -> EventLoopProxy<i32> {
+        self.el.create_proxy()
+    }
+
+    pub fn wait_for_window_resize(&mut self, target_window_id: WindowId) {
+        let deadline = Instant::now() + Duration::from_millis(100);
+        self.el.run_return(|e, _, control_flow| match e {
+            Event::NewEvents(StartCause::Init) => {
+                *control_flow = ControlFlow::WaitUntil(deadline);
+            }
+            Event::NewEvents(StartCause::ResumeTimeReached { .. }) => {
+                *control_flow = ControlFlow::Exit;
+            }
+
+            Event::WindowEvent {
+                event: WindowEvent::Resized(_),
+                window_id,
+            } => {
+                if target_window_id == window_id {
+                    *control_flow = ControlFlow::Exit;
+                }
+            }
+            _ => {}
+        });
     }
 
     pub fn get_available_monitors(&self) -> impl Iterator<Item = MonitorHandle> {
@@ -57,51 +95,47 @@ impl WrEventLoop {
             .unwrap_or_else(|| -> MonitorHandle { self.get_available_monitors().next().unwrap() })
     }
 
-    pub fn get_clipboard(&mut self) -> &mut Clipboard {
+    pub fn get_clipboard(&mut self) -> &mut Box<dyn ClipboardProvider> {
         &mut self.clipboard
     }
 }
 
-pub static EVENT_LOOP: OnceLock<Arc<Mutex<WrEventLoop>>> = OnceLock::new();
-impl WrEventLoop {
-    pub fn global() -> &'static Arc<Mutex<WrEventLoop>> {
-        EVENT_LOOP.get_or_init(|| {
-            log::trace!("wr event loop is being created...");
-            let (el, clipboard) = {
-                #[cfg(use_winit)]
-                let el = EventLoopBuilder::<i32>::with_user_event().build();
-                #[cfg(use_tao)]
-                let el = EventLoop::<i32>::with_user_event();
-
-                let clipboard = Clipboard::build(&el);
-                (el, clipboard)
-            };
-
-            Arc::new(Mutex::new(Self { clipboard, el }))
-        })
+fn build_clipboard(event_loop: &EventLoop<i32>) -> Box<dyn ClipboardProvider> {
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        if event_loop.is_wayland() {
+            let wayland_display = event_loop
+                .wayland_display()
+                .expect("Fetch Wayland display failed");
+            let (_, clipboard) = unsafe { create_clipboards_from_external(wayland_display) };
+            Box::new(clipboard)
+        } else {
+            Box::new(X11ClipboardContext::<Clipboard>::new().unwrap())
+        }
+    }
+    #[cfg(target_os = "windows")]
+    {
+        return Box::new(WindowsClipboardContext::new().unwrap());
+    }
+    #[cfg(target_os = "macos")]
+    {
+        return Box::new(OSXClipboardContext::new().unwrap());
     }
 }
 
-pub fn global_event_buffer() -> &'static Mutex<Vec<GUIEvent>> {
-    static EVENT_BUFFER: OnceLock<Mutex<Vec<GUIEvent>>> = OnceLock::new();
-    EVENT_BUFFER.get_or_init(|| Mutex::new(Vec::new()))
-}
+pub static EVENT_LOOP: Lazy<Mutex<WrEventLoop>> = Lazy::new(|| {
+    let el = glutin::event_loop::EventLoop::with_user_event();
+    let clipboard = build_clipboard(&el);
 
-pub fn flush_events() -> Vec<GUIEvent> {
-    let event_buffer = global_event_buffer().try_lock();
+    Mutex::new(WrEventLoop { clipboard, el })
+});
 
-    if event_buffer.is_err() {
-        return Vec::new();
-    }
+pub static TOKIO_RUNTIME: Lazy<Mutex<Runtime>> =
+    Lazy::new(|| Mutex::new(tokio::runtime::Runtime::new().unwrap()));
 
-    let mut event_buffer = event_buffer.ok().unwrap();
-    let events = event_buffer.clone();
-    event_buffer.clear();
-    events
-}
+pub static EVENT_BUFFER: Lazy<Mutex<Vec<GUIEvent>>> = Lazy::new(|| Mutex::new(Vec::new()));
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct FdSet(pub *mut fd_set);
+struct FdSet(*mut fd_set);
 
 unsafe impl Send for FdSet {}
 unsafe impl Sync for FdSet {}
@@ -114,20 +148,8 @@ impl FdSet {
     }
 }
 
-impl Drop for FdSet {
-    fn drop(&mut self) {
-        self.clear()
-    }
-}
-
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct Timespec(pub *mut timespec);
-
-unsafe impl Send for Timespec {}
-unsafe impl Sync for Timespec {}
-
 #[no_mangle]
-pub extern "C" fn winit_select(
+pub extern "C" fn wr_select(
     nfds: i32,
     readfds: *mut fd_set,
     writefds: *mut fd_set,
@@ -135,14 +157,7 @@ pub extern "C" fn winit_select(
     timeout: *mut timespec,
     _sigmask: *mut sigset_t,
 ) -> i32 {
-    log::trace!("winit select");
-    let lock_result = WrEventLoop::global().try_lock();
-
-    if lock_result.is_err() || unsafe { inhibit_window_system } {
-        if lock_result.is_err() {
-            log::debug!("Failed to grab a lock {:?}", lock_result.err());
-        }
-
+    if unsafe { inhibit_window_system } {
         return unsafe {
             thread_select(
                 Some(pselect),
@@ -156,110 +171,149 @@ pub extern "C" fn winit_select(
         };
     }
 
-    let mut event_loop = lock_result.unwrap();
+    let mut event_loop = EVENT_LOOP.lock().unwrap();
 
-    handle_select(
-        &mut event_loop.el,
-        nfds,
-        readfds,
-        writefds,
-        _exceptfds,
-        timeout,
-        _sigmask,
-    )
-}
+    let event_loop_proxy = event_loop.create_proxy();
 
-// Polling C-g when emacs is blocked
-pub fn poll_a_event(timeout: Duration) -> Option<GUIEvent> {
-    log::trace!("poll a event {:?}", timeout);
-    let result = WrEventLoop::global().try_lock();
-    if result.is_err() {
-        log::trace!("failed to grab a EVENT_LOOP lock");
-        return None;
-    }
-    let mut event_loop = result.unwrap();
-    let deadline = Instant::now() + timeout;
-    let result = RefCell::new(None);
-    event_loop.el.run_return(|e, _target, control_flow| {
-        *control_flow = ControlFlow::WaitUntil(deadline);
+    let read_fds = FdSet(readfds);
+    let write_fds = FdSet(writefds);
 
-        if let Event::WindowEvent { event, .. } = &e {
-            log::trace!("{:?}", event);
+    let timeout = unsafe { Duration::new((*timeout).tv_sec as u64, (*timeout).tv_nsec as u32) };
+
+    let (select_stop_sender, mut select_stop_receiver) = tokio::sync::mpsc::unbounded_channel();
+
+    // use tokio to mimic the pselect because it has cross platform supporting.
+    TOKIO_RUNTIME.lock().unwrap().spawn(async move {
+        tokio::select! {
+            (readables, writables) = tokio_select_fds(nfds, &read_fds , &write_fds) => {
+                let nfds = readables.len() + writables.len();
+
+                async_fds_to_fd_set(readables, &read_fds);
+                async_fds_to_fd_set(writables, &write_fds);
+
+                let _ = event_loop_proxy.send_event(nfds as i32);
+            }
+
+            // time out
+            _ = tokio::time::sleep(timeout) => {
+                read_fds.clear();
+                write_fds.clear();
+
+                let _ = event_loop_proxy.send_event(0);
+            }
+
+            // received stop command from winit event_loop
+            _ = select_stop_receiver.recv() => {
+                read_fds.clear();
+                write_fds.clear();
+
+                let _ = event_loop_proxy.send_event(1);
+            }
+
         }
+    });
+
+    let nfds_result = RefCell::new(0);
+
+    // We mush run winit in main thread, because the macOS platfrom limitation.
+    event_loop.el.run_return(|e, _, control_flow| {
+        *control_flow = ControlFlow::Wait;
 
         match e {
             Event::WindowEvent { ref event, .. } => match event {
                 WindowEvent::Resized(_)
                 | WindowEvent::KeyboardInput { .. }
+                | WindowEvent::ReceivedCharacter(_)
                 | WindowEvent::ModifiersChanged(_)
                 | WindowEvent::MouseInput { .. }
                 | WindowEvent::CursorMoved { .. }
                 | WindowEvent::Focused(_)
                 | WindowEvent::MouseWheel { .. }
                 | WindowEvent::CloseRequested => {
-                    result.replace(Some(e.to_static().unwrap()));
-                    *control_flow = ControlFlow::Exit;
-                }
-                #[cfg(use_tao)]
-                WindowEvent::ReceivedImeText(_) => {
-                    result.replace(Some(e.to_static().unwrap()));
-                    *control_flow = ControlFlow::Exit;
-                }
+                    EVENT_BUFFER.lock().unwrap().push(e.to_static().unwrap());
 
-                #[cfg(use_winit)]
-                WindowEvent::ReceivedCharacter(_) => {
-                    result.replace(Some(e.to_static().unwrap()));
-                    *control_flow = ControlFlow::Exit;
+                    // notify emacs's code that a keyboard event arrived.
+                    unsafe { libc::raise(libc::SIGIO) };
+
+                    // stop tokio select
+                    let _ = select_stop_sender.send(());
                 }
                 _ => {}
             },
-            Event::RedrawRequested(_) => {
-                result.replace(Some(e.to_static().unwrap()));
-                log::debug!("WindowEvent:: RedrawRequested");
-            }
-            Event::RedrawEventsCleared => {
+
+            Event::UserEvent(nfds) => {
+                nfds_result.replace(nfds);
                 *control_flow = ControlFlow::Exit;
             }
             _ => {}
         };
     });
-    result.into_inner()
+
+    return nfds_result.into_inner();
 }
 
-#[cfg(use_tao)]
-pub fn ensure_window(id: crate::window_system::api::window::WindowId) {
-    let now = std::time::Instant::now();
-    log::trace!("ensure window is created {:?}", id);
-    let result = WrEventLoop::global().try_lock();
-    if result.is_err() {
-        log::trace!("failed to grab a EVENT_LOOP lock");
+fn fd_set_to_async_fds(nfds: i32, fds: &FdSet) -> Vec<AsyncFd<i32>> {
+    if fds.0 == ptr::null_mut() {
+        return Vec::new();
+    }
+
+    let mut async_fds = Vec::new();
+
+    for fd in 0..nfds {
+        unsafe {
+            if libc::FD_ISSET(fd, fds.0) {
+                async_fds.push(AsyncFd::new(fd).unwrap())
+            }
+        }
+    }
+
+    async_fds
+}
+
+fn async_fds_to_fd_set(fds: Vec<i32>, fd_set: &FdSet) {
+    if fd_set.0 == ptr::null_mut() {
         return;
     }
-    let mut event_loop = result.unwrap();
-    event_loop.el.run_return(|e, _target, control_flow| {
-        *control_flow = ControlFlow::Wait;
-        if let Event::WindowEvent { event, .. } = &e {
-            log::trace!("{:?}", event);
+
+    unsafe { libc::FD_ZERO(fd_set.0) }
+
+    for f in fds {
+        unsafe { libc::FD_SET(f, fd_set.0) }
+    }
+}
+
+async fn tokio_select_fds(nfds: i32, readfds: &FdSet, writefds: &FdSet) -> (Vec<i32>, Vec<i32>) {
+    let read_fds = fd_set_to_async_fds(nfds, readfds);
+    let write_fds = fd_set_to_async_fds(nfds, writefds);
+
+    let mut fd_futures = Vec::new();
+
+    for f in read_fds.iter() {
+        fd_futures.push(f.readable().boxed())
+    }
+
+    for f in write_fds.iter() {
+        fd_futures.push(f.writable().boxed())
+    }
+
+    let read_fds_count = read_fds.len();
+
+    let readliness = batch_select(fd_futures).await;
+
+    let mut readable_result = Vec::new();
+    let mut writable_result = Vec::new();
+
+    for (result, index) in readliness {
+        if result.is_err() {
+            continue;
         }
 
-        match e {
-            Event::WindowEvent {
-                ref event,
-                window_id,
-                ..
-            } => match event {
-                WindowEvent::Focused(is_focused) => {
-                    if id == window_id {
-                        if *is_focused {
-                            *control_flow = ControlFlow::Exit;
-                        }
-                    }
-                }
-                _ => {}
-            },
-            _ => {}
+        if index < read_fds_count {
+            readable_result.push(read_fds[index].as_raw_fd())
+        } else {
+            writable_result.push(write_fds[index - read_fds_count].as_raw_fd())
         }
-    });
-    let elapsed = now.elapsed();
-    log::trace!("window creation takes for {:?} in {:?}", id, elapsed);
+    }
+
+    (readable_result, writable_result)
 }

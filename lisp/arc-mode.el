@@ -1,6 +1,6 @@
 ;;; arc-mode.el --- simple editing of archives  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 1995, 1997-1998, 2001-2023 Free Software Foundation,
+;; Copyright (C) 1995, 1997-1998, 2001-2022 Free Software Foundation,
 ;; Inc.
 
 ;; Author: Morten Welinder <terra@gnu.org>
@@ -101,7 +101,6 @@
 ;;; Code:
 
 (eval-when-compile (require 'cl-lib))
-(eval-when-compile (require 'subr-x))
 
 ;; -------------------------------------------------------------------------
 ;;; Section: Configuration.
@@ -125,6 +124,8 @@ A non-local file is one whose file name is not proper outside Emacs.
 A local copy of the archive will be used when updating."
   :type 'regexp)
 
+(define-obsolete-variable-alias 'archive-extract-hooks
+  'archive-extract-hook "24.3")
 (defcustom archive-extract-hook nil
   "Hook run when an archive member has been extracted."
   :type 'hook)
@@ -430,8 +431,12 @@ be added."
     ;; Let mouse-1 follow the link.
     (define-key map [follow-link] 'mouse-face)
 
-    (define-key map [remap advertised-undo] #'archive-undo)
-    (define-key map [remap undo] #'archive-undo)
+    (if (fboundp 'command-remapping)
+        (progn
+          (define-key map [remap advertised-undo] 'archive-undo)
+          (define-key map [remap undo] 'archive-undo))
+      (substitute-key-definition 'advertised-undo 'archive-undo map global-map)
+      (substitute-key-definition 'undo 'archive-undo map global-map))
 
     (define-key map [mouse-2] 'archive-extract)
 
@@ -616,8 +621,12 @@ OLDMODE will be modified accordingly just like chmod(2) would have done."
 
 (defun archive-unixdate (low high)
   "Stringify Unix (LOW HIGH) date."
-  (let ((system-time-locale "C"))
-    (format-time-string "%e-%b-%Y" (list high low))))
+  (let* ((time (list high low))
+	 (str (current-time-string time)))
+    (format "%s-%s-%s"
+	    (substring str 8 10)
+	    (substring str 4 7)
+	    (format-time-string "%Y" time))))
 
 (defun archive-unixtime (low high)
   "Stringify Unix (LOW HIGH) time."
@@ -644,49 +653,6 @@ Does not signal an error if optional argument NOERROR is non-nil."
 		(user-error "Entry is not a regular member of the archive"))))
       (if (not noerror)
           (error "Line does not describe a member of the archive")))))
-;; -------------------------------------------------------------------------
-;;; Section: Helper functions for requiring filename extensions
-
-(defun archive--act-files (command files)
-  (lambda (archive)
-    (apply #'call-process (car command)
-           nil nil nil (append (cdr command) (cons archive files)))))
-
-(defun archive--need-rename-p (&optional archive)
-  (let ((archive
-         (file-name-nondirectory (or archive buffer-file-name))))
-    (cl-case archive-subtype
-      ((zip) (not (seq-contains-p archive ?. #'eq))))))
-
-(defun archive--ensure-extension (archive ensure-extension)
-  (if ensure-extension
-      (make-temp-name (expand-file-name (concat archive "_tmp.")))
-    archive))
-
-(defun archive--maybe-rename (newname need-rename-p)
-  ;; Operating with archive as current buffer, and protect
-  ;; `default-directory' from being modified in `rename-visited-file'.
-  (when need-rename-p
-    (let ((default-directory default-directory))
-      (rename-visited-file newname))))
-
-(defun archive--with-ensure-extension (archive proc-fn)
-  (let ((saved default-directory))
-    (with-current-buffer (find-buffer-visiting archive)
-      (let ((ensure-extension (archive--need-rename-p))
-            (default-directory saved))
-        (unwind-protect
-            ;; Some archive programs (like zip) expect filenames to
-            ;; have an extension, so if necessary, temporarily rename
-            ;; an extensionless file for write accesses.
-            (let ((archive (archive--ensure-extension
-                            archive ensure-extension)))
-              (archive--maybe-rename archive ensure-extension)
-              (let ((exitcode (funcall proc-fn archive)))
-                (or (zerop exitcode)
-                    (error "Updating was unsuccessful (%S)" exitcode))))
-          (progn (archive--maybe-rename archive ensure-extension)
-                 (revert-buffer nil t)))))))
 ;; -------------------------------------------------------------------------
 ;;; Section: the mode definition
 
@@ -1105,8 +1071,7 @@ NEW-NAME."
            #'archive--file-desc-ext-file-name
            (or (archive-get-marked ?*) (list (archive-get-descr))))))
      (list names
-           (read-file-name (format "Copy %s to: " (string-join names ", "))
-                           nil default-directory))))
+           (read-file-name (format "Copy %s to: " (string-join names ", "))))))
   (unless (consp files)
     (setq files (list files)))
   (when (and (> (length files) 1)
@@ -1114,33 +1079,22 @@ NEW-NAME."
     (user-error "Can't copy a list of files to a single file"))
   (save-excursion
     (dolist (file files)
-      (let* ((write-to (if (file-directory-p new-name)
-                           (expand-file-name file new-name)
-                         new-name))
-             (write-to-dir (file-name-directory write-to)))
+      (let ((write-to (if (file-directory-p new-name)
+                          (expand-file-name file new-name)
+                        new-name)))
         (when (and (file-exists-p write-to)
                    (not (yes-or-no-p (format "%s already exists; overwrite? "
                                              write-to))))
           (user-error "Not overwriting %s" write-to))
-        (unless (file-directory-p write-to-dir)
-          (make-directory write-to-dir t))
         (archive-goto-file file)
         (let* ((descr (archive-get-descr))
                (archive (buffer-file-name))
                (extractor (archive-name "extract"))
-               (ename (archive--file-desc-ext-file-name descr))
-               ;; If the archive is remote, we have to copy it to a
-               ;; local file first to make extraction work.
-               (copy (archive-maybe-copy archive)))
-          (unwind-protect
-              (with-temp-buffer
-                (set-buffer-multibyte nil)
-                (archive--extract-file extractor copy ename)
-                (let ((coding-system-for-write
-                       (or coding-system-for-write 'no-conversion)))
-                  (write-region (point-min) (point-max) write-to)))
-            (unless (equal copy archive)
-              (delete-file copy))))))))
+               (ename (archive--file-desc-ext-file-name descr)))
+          (with-temp-buffer
+            (set-buffer-multibyte nil)
+            (archive--extract-file extractor archive ename)
+            (write-region (point-min) (point-max) write-to)))))))
 
 (defun archive-extract (&optional other-window-p event)
   "In archive mode, extract this entry of the archive into its own buffer."
@@ -1370,8 +1324,6 @@ NEW-NAME."
 ;;; Section: IO stuff
 
 (defun archive-write-file-member ()
-  (unless (buffer-live-p archive-superior-buffer)
-    (error "The archive buffer no longer exists; can't save"))
   (save-excursion
     (save-restriction
       (message "Updating archive...")
@@ -1396,8 +1348,7 @@ NEW-NAME."
   t)
 
 (defun archive-*-write-file-member (archive descr command)
-  (let* ((archive (expand-file-name archive))
-         (ename (archive--file-desc-ext-file-name descr))
+  (let* ((ename (archive--file-desc-ext-file-name descr))
          (tmpfile (expand-file-name ename archive-tmpdir))
          (top (directory-file-name (file-name-as-directory archive-tmpdir)))
 	 (default-directory (file-name-as-directory top)))
@@ -1421,9 +1372,15 @@ NEW-NAME."
 	  (setq ename
 		(encode-coding-string ename archive-file-name-coding-system))
           (let* ((coding-system-for-write 'no-conversion)
-                 (default-directory (file-name-as-directory archive-tmpdir)))
-            (archive--with-ensure-extension
-             archive (archive--act-files command (list ename)))))
+		 (exitcode (apply #'call-process
+				  (car command)
+				  nil
+				  nil
+				  nil
+				  (append (cdr command)
+					  (list archive ename)))))
+            (or (zerop exitcode)
+		(error "Updating was unsuccessful (%S)" exitcode))))
       (archive-delete-local tmpfile))))
 
 (defun archive-write-file (&optional file)
@@ -1546,7 +1503,9 @@ as a relative change like \"g+rw\" as for chmod(2)."
 	  (archive-resummarize))
       (error "Setting group is not supported for this archive type"))))
 
-(defun archive--expunge-maybe-force (force)
+(defun archive-expunge ()
+  "Do the flagged deletions."
+  (interactive)
   (let (files)
     (save-excursion
       (goto-char archive-file-list-start)
@@ -1560,8 +1519,7 @@ as a relative change like \"g+rw\" as for chmod(2)."
     (and files
 	 (or (not archive-read-only)
 	     (error "Archive is read-only"))
-         (or force
-             (yes-or-no-p (format "Really delete %d member%s? "
+	 (or (yes-or-no-p (format "Really delete %d member%s? "
 				  (length files)
 				  (if (null (cdr files)) "" "s")))
 	     (error "Operation aborted"))
@@ -1575,14 +1533,13 @@ as a relative change like \"g+rw\" as for chmod(2)."
 	       (archive-resummarize)
 	     (revert-buffer))))))
 
-(defun archive-expunge ()
-  "Do the flagged deletions."
-  (interactive)
-  (archive--expunge-maybe-force nil))
-
 (defun archive-*-expunge (archive files command)
-  (archive--with-ensure-extension
-   archive (archive--act-files command files)))
+  (apply #'call-process
+	 (car command)
+	 nil
+	 nil
+	 nil
+	 (append (cdr command) (cons archive files))))
 
 (defun archive-rename-entry (newname)
   "Change the name associated with this entry in the archive file."
@@ -1992,21 +1949,10 @@ This doesn't recover lost files, it just undoes changes in the buffer itself."
 ;; -------------------------------------------------------------------------
 ;;; Section: Zip Archives
 
-(declare-function w32-get-console-codepage "w32proc.c")
 (defun archive-zip-summarize ()
   (goto-char (- (point-max) (- 22 18)))
   (search-backward-regexp "[P]K\005\006")
   (let ((p (archive-l-e (+ (point) 16) 4))
-        (w32-fname-encoding
-         ;; On MS-Windows, both InfoZip's Zip and the system's
-         ;; built-in File Explorer use the console codepage for
-         ;; encoding file names.  Problem: the codepage of the system
-         ;; where the zip file was created cannot be known; we assume
-         ;; it is the same as the one of the current system.  Also,
-         ;; the zip file doesn't tell us the OS where the file was
-         ;; created, it only tells the filesystem.
-         (if (eq system-type 'windows-nt)
-             (intern (format "cp%d" (w32-get-console-codepage)))))
         files)
     (when (or (= p #xffffffff) (= p -1))
       ;; If the offset of end-of-central-directory is 0xFFFFFFFF, this
@@ -2036,15 +1982,7 @@ This doesn't recover lost files, it just undoes changes in the buffer itself."
              ;; (lheader (archive-l-e (+ p 42) 4))
              (efnname (let ((str (buffer-substring (+ p 46) (+ p 46 fnlen))))
 			(decode-coding-string
-			 str
-                         (or (if (and w32-fname-encoding
-                                      (memq creator
-                                            ;; This should be just 10 and
-                                            ;; 14, but InfoZip uses 0 and
-                                            ;; File Explorer uses 11(??).
-                                            '(0 10 11 14)))
-                                 w32-fname-encoding)
-                             archive-file-name-coding-system))))
+			 str archive-file-name-coding-system)))
              (ucsize  (if (and (or (= ucsize #xffffffff) (= ucsize -1))
                                (> exlen 0))
                           ;; APPNOTE.TXT, para 4.5.3: the Extra Field

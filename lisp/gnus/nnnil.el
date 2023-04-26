@@ -40,7 +40,7 @@
 (defun nnnil-open-server (_server &optional _definitions)
   t)
 
-(defun nnnil-close-server (&optional _server _defs)
+(defun nnnil-close-server (&optional _server)
   t)
 
 (defun nnnil-request-close ()

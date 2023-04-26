@@ -1,6 +1,6 @@
 ;;; mail-hist.el --- headers and message body history for outgoing mail  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 1994-2023 Free Software Foundation, Inc.
+;; Copyright (C) 1994, 2001-2022 Free Software Foundation, Inc.
 
 ;; Author: Karl Fogel <kfogel@red-bean.com>
 ;; Created: March, 1994
@@ -24,15 +24,21 @@
 
 ;;; Commentary:
 
-;; To use this package, add this to your init file:
+;; Thanks to Jim Blandy for mentioning ring.el.  It saved a lot of
+;; time.
 ;;
-;;     (require 'mail-hist)
+;; To use this package, put it in a directory in your load-path, and
+;; put this in your init file:
 ;;
-;; Or you could do it with hooks in your .emacs:
+;; (load "mail-hist" nil t)
 ;;
-;;     (add-hook 'mail-mode-hook 'mail-hist-define-keys)
-;;     (add-hook 'mail-send-hook 'mail-hist-put-headers-into-history)
-;;     (add-hook 'vm-mail-mode-hook 'mail-hist-define-keys) ;or rmail, etc
+;; Or you could do it with autoloads and hooks in your .emacs:
+;;
+;; (add-hook 'mail-mode-hook 'mail-hist-define-keys)
+;; (add-hook 'mail-send-hook 'mail-hist-put-headers-into-history)
+;; (add-hook 'vm-mail-mode-hook 'mail-hist-define-keys) ;or rmail, etc
+;; (autoload 'mail-hist-define-keys "mail-hist")
+;; (autoload 'mail-hist-put-headers-into-history "mail-hist")
 ;;
 ;; Once it's installed, use M-p and M-n from mail headers to recover
 ;; previous/next contents in the history for that header, or, in the
@@ -45,9 +51,6 @@
 ;; point, so that you can mix the histories of different messages
 ;; easily.  This might be confusing at times, but there should be no
 ;; problems that undo can't handle.
-;;
-;; Thanks to Jim Blandy for mentioning ring.el.  It saved a lot of
-;; time.
 
 ;;; Code:
 (require 'ring)
@@ -77,7 +80,7 @@ previous/next input.")
 (defcustom mail-hist-history-size (or kill-ring-max 1729)
   "The maximum number of elements in a mail field's history.
 Oldest elements are dumped first."
-  :type 'natnum)
+  :type 'integer)
 
 ;;;###autoload
 (defcustom mail-hist-keep-history t

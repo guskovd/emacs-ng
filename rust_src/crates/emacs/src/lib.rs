@@ -12,6 +12,8 @@
 #![feature(concat_idents)]
 #![feature(never_type)]
 #![feature(stmt_expr_attributes)]
+#![feature(untagged_unions)]
+#![feature(maybe_uninit_extra)]
 #![feature(async_closure)]
 
 #[rustfmt::skip]
@@ -35,8 +37,6 @@ pub mod frame;
 #[cfg(feature = "window-system")]
 pub mod glyph;
 pub mod keyboard;
-#[cfg(feature = "window-system")]
-pub mod lglyph;
 pub mod list;
 pub mod multibyte;
 pub mod number;

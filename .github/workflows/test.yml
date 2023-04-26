@@ -20,7 +20,7 @@ jobs:
                   path: |
                       ~/.cargo/registry/cache
                       ~/.cargo/git
-                      ./target
+                      ./rust_src/target
                   key: |
                       ${{ runner.os }}-${{ matrix.build }}-deno-v1.9.2-rust-${{ hashFiles('**/test.yml', '**/rust-toolchain', '**/rustfmt.toml') }}-${{ steps.rust-setup.outputs.week }}
                   restore-keys: |
@@ -66,8 +66,6 @@ jobs:
                       build: webrender
                     - os: macos-latest
                       build: general
-                    - os: macos-latest
-                      build: webrender
 
         steps:
             - uses: actions/checkout@v2
@@ -84,7 +82,7 @@ jobs:
                   path: |
                       ~/.cargo/registry/cache
                       ~/.cargo/git
-                      ./target
+                      ./rust_src/target
                   key: |
                       ${{ runner.os }}-${{ matrix.build }}-rust-deno-v1.9.2-${{ hashFiles('**/test.yml', '**/rust-toolchain', '**/Cargo.toml*') }}-${{ steps.rust-setup.outputs.week }}
                   restore-keys: |
@@ -110,7 +108,7 @@ jobs:
               run: |
                   ## Package Install
                   sudo apt update
-                  sudo apt install -y libxpm-dev libgtk2.0-dev libgif-dev libgnutls28-dev libx11-xcb-dev libxcb-render0-dev libxcb-shape0-dev  libxcb-xfixes0-dev clang llvm lld
+                  sudo apt install -y libxpm-dev libgtk2.0-dev libgif-dev libgnutls28-dev libxcb-render0-dev libxcb-shape0-dev  libxcb-xfixes0-dev clang llvm lld
                   # Already installed: automake autoconf texinfo libjpeg-dev libpng-dev libtiff-dev libx11-dev  libncurses-dev zlib1g-dev
                   # When use native-comp: libgccjit-9-dev
                   # When use gcc: build-essential
@@ -119,7 +117,7 @@ jobs:
               if: runner.os == 'macOS'
               run: |
                   ## Package Install
-                  brew install texinfo automake pkg-config
+                  brew install texinfo automake
                   # Already intalled: gnutls autoconf llvm
                   # Option: libx11 libxpm jpeg libpng giflib libtiff gtk+3 ncurses
                   # When use native-comp: libgccjit
@@ -144,6 +142,9 @@ jobs:
                   echo "CPP=clang -E" >> $GITHUB_ENV
                   echo "CFLAGS= -g1 -O2" >> $GITHUB_ENV
                   echo "CXXFLAGS= -g1 -O2" >> $GITHUB_ENV
+                  echo "AR=llvm-ar" >> $GITHUB_ENV
+                  echo "AS=llvm-as" >> $GITHUB_ENV
+                  echo "RANLIB=llvm-ranlib" >> $GITHUB_ENV
 
                   # Other Flags
                   echo "CARGO_INCREMENTAL=0" >> $GITHUB_ENV
@@ -180,7 +181,7 @@ jobs:
             - name: configure(webrender)
               if: ${{ matrix.build == 'webrender' }}
               run: |
-                  ./configure --enable-checking=glyphs --enable-rust-debug --with-webrender --with-winit
+                  ./configure --enable-checking=glyphs --enable-rust-debug --with-webrender
 
             - name: build
               run: |
@@ -193,6 +194,19 @@ jobs:
                   # `debug/` if your build script builds artifacts in release mode.
                   # https://bheisler.github.io/post/efficient-use-of-travis-ci-cache-for-rust/
                   # Delete loose files in the debug directory
-                  find ./target/debug -maxdepth 1 -type f -delete
+                  find ./rust_src/target/debug -maxdepth 1 -type f -delete
                   # Delete just meta data
-                  rm -f  ./target/.rustc_info.json
+                  rm -f  ./rust_src/target/.rustc_info.json
+
+            - name: js fmt
+              run: |
+                  cd test/js/
+                  ../../src/emacs --batch --eval '(deno "fmt" "--check")'
+                  cd ../../rust_src/crates/js/src/
+                  ../../../../src/emacs --batch --eval '(deno "fmt" "--check")'
+                  cd ../../../../
+
+            - name: run js tests
+              run: |
+                  cd test/js/
+                  ../../src/emacs --batch --eval '(deno "test" "main.js" "--allow-read" "--allow-write")'

@@ -1,5 +1,5 @@
 /* Code for doing intervals.
-   Copyright (C) 1993-1995, 1997-1998, 2001-2023 Free Software
+   Copyright (C) 1993-1995, 1997-1998, 2001-2022 Free Software
    Foundation, Inc.
 
 This file is part of GNU Emacs.
@@ -121,6 +121,7 @@ copy_properties (INTERVAL source, INTERVAL target)
 {
   if (DEFAULT_INTERVAL_P (source) && DEFAULT_INTERVAL_P (target))
     return;
+  eassume (source && target);
 
   COPY_INTERVAL_CACHE (source, target);
   set_interval_plist (target, Fcopy_sequence (source->plist));
@@ -165,11 +166,10 @@ merge_properties (register INTERVAL source, register INTERVAL target)
     }
 }
 
-/* Return true if the two intervals have the same properties.
-   If use_equal is true, use Fequal for comparisons instead of EQ.  */
+/* Return true if the two intervals have the same properties.  */
 
-static bool
-intervals_equal_1 (INTERVAL i0, INTERVAL i1, bool use_equal)
+bool
+intervals_equal (INTERVAL i0, INTERVAL i1)
 {
   Lisp_Object i0_cdr, i0_sym;
   Lisp_Object i1_cdr, i1_val;
@@ -204,8 +204,7 @@ intervals_equal_1 (INTERVAL i0, INTERVAL i1, bool use_equal)
       /* i0 and i1 both have sym, but it has different values in each.  */
       if (!CONSP (i1_val)
 	  || (i1_val = XCDR (i1_val), !CONSP (i1_val))
-	  || use_equal ? NILP (Fequal (XCAR (i1_val), XCAR (i0_cdr)))
-		       : !EQ (XCAR (i1_val), XCAR (i0_cdr)))
+	  || !EQ (XCAR (i1_val), XCAR (i0_cdr)))
 	return false;
 
       i0_cdr = XCDR (i0_cdr);
@@ -218,14 +217,6 @@ intervals_equal_1 (INTERVAL i0, INTERVAL i1, bool use_equal)
 
   /* Lengths of the two plists were equal.  */
   return (NILP (i0_cdr) && NILP (i1_cdr));
-}
-
-/* Return true if the two intervals have the same properties.  */
-
-bool
-intervals_equal (INTERVAL i0, INTERVAL i1)
-{
-  return intervals_equal_1 (i0, i1, false);
 }
 
 
@@ -1737,11 +1728,11 @@ lookup_char_property (Lisp_Object plist, Lisp_Object prop, bool textprop)
     {
       tail = XCDR (tail);
       for (; NILP (fallback) && CONSP (tail); tail = XCDR (tail))
-	fallback = plist_get (plist, XCAR (tail));
+	fallback = Fplist_get (plist, XCAR (tail));
     }
 
   if (textprop && NILP (fallback) && CONSP (Vdefault_text_properties))
-    fallback = plist_get (Vdefault_text_properties, prop);
+    fallback = Fplist_get (Vdefault_text_properties, prop);
   return fallback;
 }
 
@@ -1836,8 +1827,8 @@ adjust_for_invis_intang (ptrdiff_t pos, ptrdiff_t test_offs, ptrdiff_t adj,
 	     == (test_offs == 0 ? 1 : -1))
 	  /* Invisible property is from an overlay.  */
 	  : (test_offs == 0
-	     ? ! OVERLAY_FRONT_ADVANCE_P (invis_overlay)
-	     : OVERLAY_REAR_ADVANCE_P (invis_overlay))))
+	     ? XMARKER (OVERLAY_START (invis_overlay))->insertion_type == 0
+	     : XMARKER (OVERLAY_END (invis_overlay))->insertion_type == 1)))
     pos += adj;
 
   return pos;
@@ -2171,15 +2162,15 @@ get_property_and_range (ptrdiff_t pos, Lisp_Object prop, Lisp_Object *val,
 
 /* Return the proper local keymap TYPE for position POSITION in
    BUFFER; TYPE should be one of `keymap' or `local-map'.  Use the map
-   specified by the TYPE property, if any.  Otherwise, if TYPE is
-   `local-map', use BUFFER's local map.  */
+   specified by the PROP property, if any.  Otherwise, if TYPE is
+   `local-map' use BUFFER's local map.  */
 
 Lisp_Object
 get_local_map (ptrdiff_t position, struct buffer *buffer, Lisp_Object type)
 {
   Lisp_Object prop, lispy_position, lispy_buffer;
   ptrdiff_t old_begv, old_zv, old_begv_byte, old_zv_byte;
-  specpdl_ref count = SPECPDL_INDEX ();
+  ptrdiff_t count = SPECPDL_INDEX ();
 
   position = clip_to_bounds (BUF_BEGV (buffer), position, BUF_ZV (buffer));
 
@@ -2300,7 +2291,7 @@ compare_string_intervals (Lisp_Object s1, Lisp_Object s2)
 
       /* If we ever find a mismatch between the strings,
 	 they differ.  */
-      if (! intervals_equal_1 (i1, i2, true))
+      if (! intervals_equal (i1, i2))
 	return 0;
 
       /* Advance POS till the end of the shorter interval,
@@ -2333,9 +2324,6 @@ set_intervals_multibyte_1 (INTERVAL i, bool multi_flag,
 
   if (TOTAL_LENGTH (i) == 0)
     {
-      /* Delete the whole subtree.  */
-      i->left = NULL;
-      i->right = NULL;
       delete_interval (i);
       return;
     }

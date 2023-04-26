@@ -1,44 +1,44 @@
 //! wrterm.rs
 
-use crate::color::color_to_pixel;
-use crate::event_loop::WrEventLoop;
-use crate::font::register_ttfp_font_driver;
-use crate::window_system::{
-    clipboard::ClipboardExt, frame::LispFrameWinitExt, keysym_to_emacs_key_name,
-};
-use crate::winit_term_init;
-use emacs::bindings::gui_update_cursor;
-use emacs::bindings::Fredraw_frame;
-use emacs::frame::Lisp_Frame;
+include!(concat!(env!("OUT_DIR"), "/webrender_revision.rs"));
+
+use emacs::multibyte::LispStringRef;
 use std::ffi::CString;
 use std::ptr;
-use webrender::api::*;
 
-use crate::window_system::api::monitor::MonitorHandle;
 use emacs::bindings::output_method;
+use glutin::{event::VirtualKeyCode, monitor::MonitorHandle};
 
 use lisp_macros::lisp_fn;
 
-use crate::color::lookup_color_by_name_or_hex;
+use crate::event_loop::EVENT_LOOP;
+use crate::frame::frame_edges;
 use crate::frame::LispFrameExt;
-use crate::frame::LispFrameWindowSystemExt;
-use crate::output::OutputRef;
+use crate::{
+    color::lookup_color_by_name_or_hex,
+    font::{FontRef, FONT_DRIVER},
+    frame::create_frame,
+    input::winit_keycode_emacs_key_name,
+    output::OutputRef,
+    term::wr_term_init,
+};
 
 use emacs::{
     bindings::globals,
     bindings::resource_types::{RES_TYPE_NUMBER, RES_TYPE_STRING, RES_TYPE_SYMBOL},
     bindings::{
-        block_input, build_string, gui_display_get_arg, hashtest_eql, list3i, make_fixnum,
-        make_hash_table, make_monitor_attribute_list, unblock_input, Display, Emacs_Rectangle,
-        Fcons, Fcopy_alist, Fmake_vector, Fprovide, MonitorInfo, Vframe_list, Window, CHECK_STRING,
-        DEFAULT_REHASH_SIZE, DEFAULT_REHASH_THRESHOLD,
+        block_input, build_string, gui_display_get_arg, hashtest_eql, image as Emacs_Image, list3i,
+        make_fixnum, make_hash_table, make_monitor_attribute_list, register_font_driver,
+        unblock_input, Display, Emacs_Pixmap, Emacs_Rectangle, Fcons, Fcopy_alist, Fmake_vector,
+        Fprovide, MonitorInfo, Vframe_list, Window, CHECK_STRING, DEFAULT_REHASH_SIZE,
+        DEFAULT_REHASH_THRESHOLD,
     },
     definitions::EmacsInt,
     frame::{all_frames, window_frame_live_or_selected, LispFrameRef},
     globals::{
         Qbackground_color, Qfont, Qfont_backend, Qforeground_color, Qleft_fringe, Qminibuffer,
-        Qname, Qnil, Qparent_id, Qright_fringe, Qt, Qterminal, Qunbound, Qwinit, Qx_create_frame_1,
-        Qx_create_frame_2,
+        Qname, Qnil, Qparent_id, Qright_fringe, Qt, Qterminal, Qunbound, Qwr, Qx,
+        Qx_create_frame_1, Qx_create_frame_2,
     },
     lisp::{ExternalPtr, LispObject},
 };
@@ -51,74 +51,83 @@ pub type DisplayRef = ExternalPtr<Display>;
 pub static tip_frame: LispObject = Qnil;
 
 #[no_mangle]
-pub static mut winit_display_list: DisplayInfoRef = DisplayInfoRef::new(ptr::null_mut());
+pub static mut wr_display_list: DisplayInfoRef = DisplayInfoRef::new(ptr::null_mut());
+
+#[no_mangle]
+pub extern "C" fn wr_get_fontset(output: OutputRef) -> i32 {
+    output.fontset
+}
+
+#[no_mangle]
+pub extern "C" fn wr_get_font(output: OutputRef) -> FontRef {
+    output.font
+}
 
 #[allow(unused_variables)]
 #[no_mangle]
-pub extern "C" fn winit_get_window_desc(_: OutputRef) -> Window {
+pub extern "C" fn wr_get_window_desc(output: OutputRef) -> Window {
     0
 }
 
 #[no_mangle]
-pub extern "C" fn winit_get_display_info(output: OutputRef) -> DisplayInfoRef {
+pub extern "C" fn wr_get_display_info(output: OutputRef) -> DisplayInfoRef {
     output.display_info()
 }
 
 #[allow(unused_variables)]
 #[no_mangle]
-pub extern "C" fn winit_get_display(display_info: DisplayInfoRef) -> DisplayRef {
+pub extern "C" fn wr_get_display(display_info: DisplayInfoRef) -> DisplayRef {
     DisplayRef::new(ptr::null_mut())
-}
-
-#[no_mangle]
-pub extern "C" fn winit_set_background_color(
-    f: *mut Lisp_Frame,
-    arg: LispObject,
-    _old_val: LispObject,
-) {
-    let mut frame: LispFrameRef = f.into();
-
-    let color = lookup_color_by_name_or_hex(&format!("{}", arg.as_string().unwrap()))
-        .unwrap_or_else(|| ColorF::WHITE);
-
-    let pixel = color_to_pixel(color);
-
-    frame.background_pixel = pixel;
-    frame.set_background_color(color);
-
-    frame.update_face_from_frame_param(Qbackground_color, arg);
-
-    if frame.is_visible() {
-        unsafe { Fredraw_frame(frame.into()) };
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn winit_set_cursor_color(
-    f: *mut Lisp_Frame,
-    arg: LispObject,
-    _old_val: LispObject,
-) {
-    let frame: LispFrameRef = f.into();
-    let color_str: String = arg.into();
-
-    let color_str = format!("{}", color_str);
-    let color = lookup_color_by_name_or_hex(&color_str);
-
-    if let Some(color) = color {
-        frame.set_cursor_color(color);
-    }
-
-    if frame.is_visible() {
-        unsafe { gui_update_cursor(f, false) };
-        unsafe { gui_update_cursor(f, true) };
-    }
 }
 
 #[allow(unused_variables)]
 #[no_mangle]
+pub extern "C" fn wr_get_baseline_offset(output: OutputRef) -> i32 {
+    0
+}
+
+#[allow(unused_variables)]
+#[no_mangle]
+pub extern "C" fn wr_get_pixel(ximg: *mut Emacs_Image, x: i32, y: i32) -> i32 {
+    unimplemented!();
+}
+
+#[allow(unused_variables)]
+#[no_mangle]
+pub extern "C" fn wr_put_pixel(ximg: *mut Emacs_Image, x: i32, y: i32, pixel: u64) {
+    unimplemented!();
+}
+
+#[no_mangle]
+pub extern "C" fn wr_can_use_native_image_api(image_type: LispObject) -> bool {
+    crate::image::can_use_native_image_api(image_type)
+}
+
+#[no_mangle]
+pub extern "C" fn wr_load_image(
+    frame: LispFrameRef,
+    img: *mut Emacs_Image,
+    spec_file: LispObject,
+    spec_data: LispObject,
+) -> bool {
+    crate::image::load_image(frame, img, spec_file, spec_data)
+}
+
+#[no_mangle]
+pub extern "C" fn wr_transform_image(
+    frame: LispFrameRef,
+    img: *mut Emacs_Image,
+    width: i32,
+    height: i32,
+    rotation: f64,
+) {
+    crate::image::transform_image(frame, img, width, height, rotation);
+}
+
+#[no_mangle]
 pub extern "C" fn get_keysym_name(keysym: i32) -> *mut libc::c_char {
-    let name = keysym_to_emacs_key_name(keysym);
+    let name =
+        winit_keycode_emacs_key_name(unsafe { std::mem::transmute::<i32, VirtualKeyCode>(keysym) });
 
     name as *mut libc::c_char
 }
@@ -128,30 +137,30 @@ pub extern "C" fn check_x_display_info(obj: LispObject) -> DisplayInfoRef {
     if obj.is_nil() {
         let frame = window_frame_live_or_selected(obj);
 
-        if (frame.output_method() == output_method::output_winit) && frame.is_live() {
-            return frame.display_info();
+        if (frame.output_method() == output_method::output_wr) && frame.is_live() {
+            return frame.wr_display_info();
         }
 
-        if !unsafe { winit_display_list.is_null() } {
-            return unsafe { winit_display_list };
+        if !unsafe { wr_display_list.is_null() } {
+            return unsafe { wr_display_list };
         }
 
         error!("Webrender windows are not in use or not initialized");
     }
 
     if let Some(terminal) = obj.as_terminal() {
-        if terminal.type_ != output_method::output_winit {
+        if terminal.type_ != output_method::output_wr {
             error!("Terminal {} is not a webrender display", terminal.id);
         }
 
-        let dpyinfo = DisplayInfoRef::new(unsafe { terminal.display_info.winit as *mut _ });
+        let dpyinfo = DisplayInfoRef::new(unsafe { terminal.display_info.wr as *mut _ });
 
         return dpyinfo;
     }
 
     if let Some(display_name) = obj.as_string() {
         let display_name = display_name.to_string();
-        let mut dpyinfo = unsafe { winit_display_list };
+        let mut dpyinfo = unsafe { wr_display_list };
 
         while !dpyinfo.is_null() {
             if dpyinfo
@@ -171,15 +180,15 @@ pub extern "C" fn check_x_display_info(obj: LispObject) -> DisplayInfoRef {
 
         x_open_connection(obj, Qnil, Qnil);
 
-        if !unsafe { winit_display_list.is_null() } {
-            return unsafe { winit_display_list };
+        if !unsafe { wr_display_list.is_null() } {
+            return unsafe { wr_display_list };
         }
 
         error!("Display on {} not responding.", display_name);
     }
 
     let frame = window_frame_live_or_selected(obj);
-    return frame.display_info();
+    return frame.wr_display_info();
 }
 
 // Move the mouse to position pixel PIX_X, PIX_Y relative to frame F.
@@ -191,11 +200,29 @@ pub extern "C" fn frame_set_mouse_pixel_position(f: LispFrameRef, pix_x: i32, pi
     unsafe { unblock_input() };
 }
 
+#[no_mangle]
+pub extern "C" fn image_sync_to_pixmaps(_frame: LispFrameRef, _img: *mut Emacs_Image) {
+    unimplemented!();
+}
+
+#[no_mangle]
+pub extern "C" fn image_pixmap_draw_cross(
+    _frame: LispFrameRef,
+    _pixmap: Emacs_Pixmap,
+    _x: i32,
+    _y: i32,
+    _width: i32,
+    _height: u32,
+    _color: u64,
+) {
+    unimplemented!();
+}
+
 /// Hide the current tooltip window, if there is any.
 /// Value is t if tooltip was open, nil otherwise.
 #[lisp_fn]
-pub fn x_hide_tip() -> LispObject {
-    Qnil
+pub fn x_hide_tip() -> bool {
+    false
 }
 
 /// Make a new X window, which is called a "frame" in Emacs terms.
@@ -207,7 +234,7 @@ pub fn x_hide_tip() -> LispObject {
 ///
 /// This function is an internal primitive--use `make-frame' instead.
 #[lisp_fn]
-pub fn winit_create_frame(parms: LispObject) -> LispFrameRef {
+pub fn x_create_frame(parms: LispObject) -> LispFrameRef {
     // x_get_arg modifies parms.
     let parms = unsafe { Fcopy_alist(parms) };
 
@@ -289,11 +316,11 @@ pub fn winit_create_frame(parms: LispObject) -> LispFrameRef {
         )
     };
 
-    let mut frame = LispFrameRef::build(display, dpyinfo, tem, kb.into());
-    #[cfg(use_tao)]
-    crate::event_loop::ensure_window(frame.unique_id());
+    let mut frame = create_frame(display, dpyinfo, tem, kb.into());
 
-    register_ttfp_font_driver(frame.as_mut());
+    unsafe {
+        register_font_driver(&FONT_DRIVER.0 as *const _, frame.as_mut());
+    };
 
     frame.gui_default_parameter(
         parms,
@@ -348,10 +375,15 @@ pub fn winit_create_frame(parms: LispObject) -> LispFrameRef {
         RES_TYPE_NUMBER,
     );
 
-    let output = frame.output();
+    let output = frame.wr_output();
 
-    frame.text_width = frame.pixel_to_text_width(frame.pixel_width as i32);
-    frame.text_height = frame.pixel_to_text_height(frame.pixel_height as i32);
+    let output_size = output.get_inner_size();
+
+    frame.pixel_width = output_size.width as i32;
+    frame.pixel_height = output_size.height as i32;
+
+    frame.text_width = frame.pixel_to_text_width(output_size.width as i32);
+    frame.text_height = frame.pixel_to_text_height(output_size.height as i32);
 
     frame.set_can_set_window_size(true);
 
@@ -403,21 +435,21 @@ pub fn x_open_connection(
 
     unsafe { CHECK_STRING(display) };
 
-    let mut display_info = winit_term_init(display);
+    let mut display_info = wr_term_init(display);
 
     // Put this display on the chain.
     unsafe {
-        display_info.get_raw().next = winit_display_list.get_raw().as_mut();
-        winit_display_list = display_info;
+        display_info.get_raw().next = wr_display_list.get_raw().as_mut();
+        wr_display_list = display_info;
     }
     Qnil
 }
 
 /// Internal function called by `display-color-p', which see.
 #[lisp_fn(min = "0")]
-pub fn xw_display_color_p(_terminal: LispObject) -> LispObject {
+pub fn xw_display_color_p(_terminal: LispObject) -> bool {
     // webrender support color display
-    Qt
+    true
 }
 
 /// Return t if the X display supports shades of gray.
@@ -426,19 +458,9 @@ pub fn xw_display_color_p(_terminal: LispObject) -> LispObject {
 /// TERMINAL should be a terminal object, a frame or a display name (a string).
 /// If omitted or nil, that stands for the selected frame's display.
 #[lisp_fn(min = "0")]
-pub fn x_display_grayscale_p(_terminal: LispObject) -> LispObject {
+pub fn x_display_grayscale_p(_terminal: LispObject) -> bool {
     // webrender support shades of gray
-    Qt
-}
-
-/// Internal function called by `color-defined-p', which see.
-#[lisp_fn(min = "1")]
-pub fn xw_color_defined_p(color: LispObject, _frame: LispObject) -> LispObject {
-    let color_str = format!("{}", color.force_string());
-    match lookup_color_by_name_or_hex(&color_str) {
-        Some(_) => Qt,
-        None => Qnil,
-    }
+    true
 }
 
 /// Internal function called by `color-values', which see.
@@ -502,9 +524,9 @@ pub fn x_display_color_cells(obj: LispObject) -> LispObject {
     // FIXME: terminal object or display name (a string) is not implemented
     let frame = window_frame_live_or_selected(obj);
 
-    let dpyinfo = frame.display_info();
+    let output = frame.wr_output();
 
-    let mut color_bits = dpyinfo.get_color_bits();
+    let mut color_bits = output.get_color_bits();
 
     // Truncate color_bits to 24 to avoid integer overflow.
     // Some displays says 32, but only 24 bits are actually significant.
@@ -529,8 +551,10 @@ pub fn x_display_color_cells(obj: LispObject) -> LispObject {
 pub fn x_display_planes(obj: LispObject) -> LispObject {
     // FIXME: terminal object or display name (a string) is not implemented
     let frame = window_frame_live_or_selected(obj);
-    let dpyinfo = frame.display_info();
-    let color_bits = dpyinfo.get_color_bits();
+
+    let output = frame.wr_output();
+
+    let color_bits = output.get_color_bits();
 
     // color_bits as EmacsInt
     unsafe { make_fixnum(color_bits.into()) }
@@ -608,8 +632,8 @@ pub fn webrender_monitor_to_emacs_monitor(m: MonitorHandle) -> (MonitorInfo, Opt
 ///
 /// Internal use only, use `display-monitor-attributes-list' instead.
 #[lisp_fn(min = "0")]
-pub fn wr_display_monitor_attributes_list(_terminal: LispObject) -> LispObject {
-    let event_loop = WrEventLoop::global().try_lock().unwrap();
+pub fn x_display_monitor_attributes_list(_terminal: LispObject) -> LispObject {
+    let event_loop = EVENT_LOOP.lock().unwrap();
 
     let monitors: Vec<_> = event_loop.get_available_monitors().collect();
     let primary_monitor = event_loop.get_primary_monitor();
@@ -634,7 +658,9 @@ pub fn wr_display_monitor_attributes_list(_terminal: LispObject) -> LispObject {
     let mut monitor_frames = unsafe { Fmake_vector(n_monitors.into(), Qnil).as_vector_unchecked() };
 
     for frame in all_frames() {
-        let current_monitor = frame.current_monitor();
+        let output = frame.wr_output();
+
+        let current_monitor = output.get_window().current_monitor();
 
         if current_monitor.is_none() {
             continue;
@@ -675,8 +701,8 @@ pub fn wr_display_monitor_attributes_list(_terminal: LispObject) -> LispObject {
 /// physical monitors associated with TERMINAL.  To get information for
 /// each physical monitor, use `display-monitor-attributes-list'.
 #[lisp_fn(min = "0")]
-pub fn x_display_pixel_width(_terminal: LispObject) -> LispObject {
-    let event_loop = WrEventLoop::global().try_lock().unwrap();
+pub fn x_display_pixel_width(_terminal: LispObject) -> i32 {
+    let event_loop = EVENT_LOOP.lock().unwrap();
 
     let primary_monitor = event_loop.get_primary_monitor();
 
@@ -685,7 +711,7 @@ pub fn x_display_pixel_width(_terminal: LispObject) -> LispObject {
     let physical_size = primary_monitor.size();
     let logical_size = physical_size.to_logical::<i32>(dpi_factor);
 
-    unsafe { make_fixnum(logical_size.width as i64) }
+    logical_size.width
 }
 
 /// Return the height in pixels of the X display TERMINAL.
@@ -698,8 +724,8 @@ pub fn x_display_pixel_width(_terminal: LispObject) -> LispObject {
 /// physical monitors associated with TERMINAL.  To get information for
 /// each physical monitor, use `display-monitor-attributes-list'.
 #[lisp_fn(min = "0")]
-pub fn x_display_pixel_height(_terminal: LispObject) -> LispObject {
-    let event_loop = WrEventLoop::global().try_lock().unwrap();
+pub fn x_display_pixel_height(_terminal: LispObject) -> i32 {
+    let event_loop = EVENT_LOOP.lock().unwrap();
 
     let primary_monitor = event_loop.get_primary_monitor();
 
@@ -708,7 +734,7 @@ pub fn x_display_pixel_height(_terminal: LispObject) -> LispObject {
     let physical_size = primary_monitor.size();
     let logical_size = physical_size.to_logical::<i32>(dpi_factor);
 
-    unsafe { make_fixnum(logical_size.height as i64) }
+    logical_size.height
 }
 
 /// Assert an X selection of type SELECTION and value VALUE.
@@ -727,13 +753,13 @@ pub fn x_own_selection_internal(
     value: LispObject,
     _frame: LispObject,
 ) -> LispObject {
-    let mut event_loop = WrEventLoop::global().try_lock().unwrap();
+    let mut event_loop = EVENT_LOOP.lock().unwrap();
 
     let clipboard = event_loop.get_clipboard();
 
     let content = value.force_string().to_utf8();
 
-    clipboard.write(content);
+    clipboard.set_contents(content).unwrap();
 
     value
 }
@@ -758,10 +784,16 @@ pub fn x_get_selection_internal(
     _time_stamp: LispObject,
     _terminal: LispObject,
 ) -> LispObject {
-    let mut event_loop = WrEventLoop::global().try_lock().unwrap();
+    let mut event_loop = EVENT_LOOP.lock().unwrap();
 
     let clipboard = event_loop.get_clipboard();
-    let contents: &str = &clipboard.read();
+
+    let contents: &str = &clipboard.get_contents().unwrap_or_else(|_e| {
+        #[cfg(debug_assertions)]
+        message!("x_get_selection_internal: {}", _e);
+        "".to_owned()
+    });
+
     contents.into()
 }
 
@@ -814,26 +846,114 @@ pub fn x_selection_exists_p(_selection: LispObject, _terminal: LispObject) -> Li
 /// the inner edges of FRAME.  These edges exclude title bar, any borders,
 /// menu bar or tool bar of FRAME.
 #[lisp_fn(min = "0")]
-pub fn winit_frame_edges(frame: LispObject, type_: LispObject) -> LispObject {
-    let frame = window_frame_live_or_selected(frame);
-    frame.edges(type_)
+pub fn x_frame_edges(frame: LispObject, type_: LispObject) -> LispObject {
+    frame_edges(frame, type_)
 }
 
+/// Capture the contents of the current WebRender frame and
+/// save them to a folder relative to the current working directory.
+///
+/// If START-SEQUENCE is not nil, start capturing each WebRender frame to disk.
+/// If there is already a sequence capture in progress, stop it and start a new
+/// one, with the new path and flags.
 #[allow(unused_variables)]
-#[no_mangle]
-pub extern "C" fn wr_get_window_desc(output: OutputRef) -> Window {
-    0
+#[lisp_fn(min = "2")]
+pub fn wr_api_capture(path: LispStringRef, bits_raw: LispObject, start_sequence: LispObject) {
+    #[cfg(not(feature = "capture"))]
+    error!("Webrender capture not avaiable");
+    #[cfg(feature = "capture")]
+    {
+        use std::fs::{create_dir_all, File};
+        use std::io::Write;
+
+        let path = std::path::PathBuf::from(path.to_utf8());
+        match create_dir_all(&path) {
+            Ok(_) => {}
+            Err(err) => {
+                error!("Unable to create path '{:?}' for capture: {:?}", &path, err);
+            }
+        };
+        let bits_raw = unsafe {
+            emacs::bindings::check_integer_range(
+                bits_raw,
+                webrender::CaptureBits::SCENE.bits() as i64,
+                webrender::CaptureBits::all().bits() as i64,
+            )
+        };
+
+        let frame = window_frame_live_or_selected(Qnil);
+        let output = frame.wr_output();
+        let bits = webrender::CaptureBits::from_bits(bits_raw as _).unwrap();
+        let revision_file_path = path.join("wr.txt");
+        message!("Trying to save webrender capture under {:?}", &path);
+
+        // api call here can possibly make Emacs panic. For example there isn't
+        // enough disk space left. `panic::catch_unwind` isn't support here.
+        if start_sequence.is_nil() {
+            output.render_api.save_capture(path, bits);
+        } else {
+            output.render_api.start_capture_sequence(path, bits);
+        }
+
+        match File::create(revision_file_path) {
+            Ok(mut file) => {
+                if let Err(err) = write!(&mut file, "{}", WEBRENDER_HEAD_REV.unwrap_or("")) {
+                    error!("Unable to write webrender revision: {:?}", err)
+                }
+            }
+            Err(err) => error!(
+                "Capture triggered, creating webrender revision info skipped: {:?}",
+                err
+            ),
+        }
+    }
+}
+
+/// Stop a capture begun with `wr--capture'.
+#[lisp_fn(min = "0")]
+pub fn wr_api_stop_capture_sequence() {
+    #[cfg(not(feature = "capture"))]
+    error!("Webrender capture not avaiable");
+    #[cfg(feature = "capture")]
+    {
+        message!("Stop capturing WR state");
+        let frame = window_frame_live_or_selected(Qnil);
+        let output = frame.wr_output();
+        output.render_api.stop_capture_sequence();
+    }
+}
+
+fn syms_of_wrfont() {
+    unsafe {
+        register_font_driver(&FONT_DRIVER.0, ptr::null_mut());
+    }
 }
 
 #[no_mangle]
 #[allow(unused_doc_comments)]
-pub extern "C" fn syms_of_winit_term() {
-    def_lisp_sym!(Qwinit, "winit");
+pub extern "C" fn syms_of_wrterm() {
+    // pretend webrender as a X gui backend, so we can reuse the x-win.el logic
+    def_lisp_sym!(Qx, "x");
+    def_lisp_sym!(Qwr, "wr");
     unsafe {
-        Fprovide(Qwinit, Qnil);
+        Fprovide(Qx, Qnil);
+        Fprovide(Qwr, Qnil);
     }
 
-    let winit_keysym_table = unsafe {
+    #[cfg(feature = "capture")]
+    {
+        let wr_capture_sym =
+            CString::new("wr-capture").expect("Failed to create string for intern function call");
+        def_lisp_sym!(Qwr_capture, "wr-capture");
+        unsafe {
+            Fprovide(
+                emacs::bindings::intern_c_string(wr_capture_sym.as_ptr()),
+                Qnil,
+            );
+        }
+    }
+
+    let x_keysym_table = unsafe {
         make_hash_table(
             hashtest_eql.clone(),
             900,
@@ -844,9 +964,17 @@ pub extern "C" fn syms_of_winit_term() {
         )
     };
 
+    if let Some(webrender_head_rev) = WEBRENDER_HEAD_REV {
+        let webrender_head_rev = CString::new(webrender_head_rev).unwrap();
+        let webrender_head_rev = unsafe { build_string(webrender_head_rev.as_ptr()) };
+
+        #[rustfmt::skip]
+        defvar_lisp!(Vwebrender_head_rev, "webrender-head-rev", webrender_head_rev);
+    }
+
     // Hash table of character codes indexed by X keysym codes.
     #[rustfmt::skip]
-    defvar_lisp!(Vwinit_keysym_table, "winit-keysym-table", winit_keysym_table);
+    defvar_lisp!(Vx_keysym_table, "x-keysym-table", x_keysym_table);
 
     // Which toolkit scroll bars Emacs uses, if any.
     // A value of nil means Emacs doesn't use toolkit scroll bars.
@@ -879,6 +1007,11 @@ pub extern "C" fn syms_of_winit_term() {
     // clipboard manager if one is present.
     #[rustfmt::skip]
     defvar_lisp!(Vx_select_enable_clipboard_manager, "x-select-enable-clipboard-manager", Qt);
+
+    syms_of_wrfont();
 }
 
-include!(concat!(env!("OUT_DIR"), "/wrterm_exports.rs"));
+include!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/out/wrterm_exports.rs"
+));

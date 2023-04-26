@@ -1,7 +1,7 @@
 # acl.m4 - check for access control list (ACL) primitives
-# serial 27
+# serial 24
 
-# Copyright (C) 2002, 2004-2023 Free Software Foundation, Inc.
+# Copyright (C) 2002, 2004-2022 Free Software Foundation, Inc.
 # This file is free software; the Free Software Foundation
 # gives unlimited permission to copy and/or distribute it,
 # with or without modifications, as long as this notice is preserved.
@@ -17,7 +17,7 @@ AC_DEFUN([gl_FUNC_ACL_ARG],
 ])
 
 
-AC_DEFUN_ONCE([gl_FUNC_ACL],
+AC_DEFUN([gl_FUNC_ACL],
 [
   AC_REQUIRE([gl_FUNC_ACL_ARG])
   AC_CHECK_FUNCS_ONCE([fchmod])
@@ -139,9 +139,7 @@ int type = ACL_TYPE_EXTENDED;]])],
       AC_MSG_WARN([AC_PACKAGE_NAME will be built without ACL support.])
     fi
   fi
-  if test -n "$gl_need_lib_has_acl"; then
-    FILE_HAS_ACL_LIB=$LIB_ACL
-  fi
+  test -n "$gl_need_lib_has_acl" && LIB_HAS_ACL=$LIB_ACL
   AC_SUBST([LIB_ACL])
   AC_DEFINE_UNQUOTED([USE_ACL], [$use_acl],
     [Define to nonzero if you want access control list support.])
@@ -199,15 +197,15 @@ AC_DEFUN([gl_FILE_HAS_ACL],
          [gl_cv_getxattr_with_posix_acls=yes])])
   fi
   if test "$gl_cv_getxattr_with_posix_acls" = yes; then
-    FILE_HAS_ACL_LIB=
+    LIB_HAS_ACL=
     AC_DEFINE([GETXATTR_WITH_POSIX_ACLS], 1,
       [Define to 1 if getxattr works with XATTR_NAME_POSIX_ACL_ACCESS
        and XATTR_NAME_POSIX_ACL_DEFAULT.])
   else
     dnl Set gl_need_lib_has_acl to a nonempty value, so that any
-    dnl later gl_FUNC_ACL call will set FILE_HAS_ACL_LIB=$LIB_ACL.
+    dnl later gl_FUNC_ACL call will set LIB_HAS_ACL=$LIB_ACL.
     gl_need_lib_has_acl=1
-    FILE_HAS_ACL_LIB=$LIB_ACL
+    LIB_HAS_ACL=$LIB_ACL
   fi
-  AC_SUBST([FILE_HAS_ACL_LIB])
+  AC_SUBST([LIB_HAS_ACL])
 ])

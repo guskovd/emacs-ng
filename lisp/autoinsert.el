@@ -1,6 +1,7 @@
 ;;; autoinsert.el --- automatic mode-dependent insertion of text into new files  -*- lexical-binding: t -*-
 
-;; Copyright (C) 1985-2023 Free Software Foundation, Inc.
+;; Copyright (C) 1985-1987, 1994-1995, 1998, 2000-2022 Free Software
+;; Foundation, Inc.
 
 ;; Author: Charlie Martin <crm@cs.duke.edu>
 ;; Adapted-By: Daniel Pfeiffer <occitan@esperanto.org>
@@ -24,27 +25,27 @@
 
 ;;; Commentary:
 
-;; The following defines an association list for text to be
-;; automatically inserted when a new file is created, and a function
-;; which automatically inserts these files; the idea is to insert
-;; default text much as the mode is automatically set using
-;; auto-mode-alist.
+;;  The following defines an association list for text to be
+;;  automatically inserted when a new file is created, and a function
+;;  which automatically inserts these files; the idea is to insert
+;;  default text much as the mode is automatically set using
+;;  auto-mode-alist.
 ;;
-;; To use, add this to your Init file:
-;;
+;;  To use:
 ;;     (auto-insert-mode t)
-;;     (setq auto-insert-directory "~/some-dir")
+;;     setq auto-insert-directory to an appropriate slash-terminated value
 ;;
-;; You can also customize the variable `auto-insert-mode' to load the
-;; package.
+;;  You can also customize the variable `auto-insert-mode' to load the
+;;  package.  Alternatively, add the following to your init file:
+;;  (auto-insert-mode 1)
 ;;
-;; Author:  Charlie Martin
-;;          Department of Computer Science and
-;;          National Biomedical Simulation Resource
-;;          Box 3709
-;;          Duke University Medical Center
-;;          Durham, NC 27710
-;;           (crm@cs.duke.edu,mcnc!duke!crm)
+;;  Author:  Charlie Martin
+;;           Department of Computer Science and
+;;           National Biomedical Simulation Resource
+;;           Box 3709
+;;           Duke University Medical Center
+;;           Durham, NC 27710
+;;	      (crm@cs.duke.edu,mcnc!duke!crm)
 
 ;;; Code:
 
@@ -66,7 +67,7 @@ Possible values:
 	other	insert if possible, but mark as unmodified.
 Insertion is possible when something appropriate is found in
 `auto-insert-alist'.  When the insertion is marked as unmodified, you can
-save it with  \\[write-file] \\`RET'.
+save it with  \\[write-file] RET.
 This variable is used when the function `auto-insert' is called, e.g.
 when you do (add-hook \\='find-file-hook \\='auto-insert).
 With \\[auto-insert], this is always treated as if it were t."
@@ -74,9 +75,6 @@ With \\[auto-insert], this is always treated as if it were t."
                  (const :tag "Do nothing" nil)
                  (other :tag "insert if possible, mark as unmodified."
                         not-modified)))
-
-;;;###autoload
-(put 'auto-insert 'safe-local-variable #'null)
 
 (defcustom auto-insert-query 'function
   "Non-nil means ask user before auto-inserting.
@@ -91,10 +89,9 @@ If this contains a %s, that will be replaced by the matching rule."
   :type 'string
   :version "28.1")
 
-(declare-function sgml-tag "textmodes/sgml-mode" (&optional str arg))
 
 (defcustom auto-insert-alist
-  `((("\\.\\([Hh]\\|hh\\|hpp\\|hxx\\|h\\+\\+\\)\\'" . "C / C++ header")
+  '((("\\.\\([Hh]\\|hh\\|hpp\\|hxx\\|h\\+\\+\\)\\'" . "C / C++ header")
      (replace-regexp-in-string
       "[^A-Z0-9]" "_"
       (string-replace
@@ -116,7 +113,7 @@ If this contains a %s, that will be replaced by the matching rule."
 
     (("[Mm]akefile\\'" . "Makefile") . "makefile.inc")
 
-    (html-mode . ,(lambda () (sgml-tag "html")))
+    (html-mode . (lambda () (sgml-tag "html")))
 
     (plain-tex-mode . "tex-insert.tex")
     (bibtex-mode . "tex-insert.tex")
@@ -131,11 +128,11 @@ If this contains a %s, that will be replaced by the matching rule."
      "\n\\end{document}")
 
     (("/bin/.*[^/]\\'" . "Shell-Script mode magic number") .
-     ,(lambda ()
-	(if (eq major-mode (default-value 'major-mode))
-	    (sh-mode))))
+     (lambda ()
+       (if (eq major-mode (default-value 'major-mode))
+	   (sh-mode))))
 
-    (ada-mode . ada-skel-initial-string)
+    (ada-mode . ada-header)
 
     (("\\.[1-9]\\'" . "Man page skeleton")
      "Short description: "
@@ -168,13 +165,13 @@ If this contains a %s, that will be replaced by the matching rule."
 
     (".dir-locals.el"
      nil
-     ";;; Directory Local Variables         -*- no-byte-compile: t; -*-\n"
+     ";;; Directory Local Variables\n"
      ";;; For more information see (info \"(emacs) Directory Variables\")\n\n"
      "(("
      '(setq v1 (let (modes)
                  (mapatoms (lambda (mode)
                              (let ((name (symbol-name mode)))
-                               (when (string-match "-mode\\'" name)
+                               (when (string-match "-mode$" name)
                                  (push name modes)))))
                  (sort modes 'string<)))
      (completing-read "Local variables for mode: " v1 nil t)
@@ -213,8 +210,7 @@ If this contains a %s, that will be replaced by the matching rule."
 	   "\n"))
  ((let ((minibuffer-help-form v2))
     (completing-read "Keyword, C-h: " v1 nil t))
-    str ", ")
- & -2 "
+    str ", ") & -2 "
 
 \;; This program is free software; you can redistribute it and/or modify
 \;; it under the terms of the GNU General Public License as published by
@@ -347,7 +343,9 @@ described above, e.g. [\"header.insert\" date-and-author-update]."
 
 ;; Establish a default value for auto-insert-directory
 (defcustom auto-insert-directory "~/insert/"
-  "Directory from which auto-inserted files are taken."
+  "Directory from which auto-inserted files are taken.
+The value must be an absolute directory name;
+thus, on a GNU or Unix system, it must end in a slash."
   :type 'directory)
 
 
@@ -417,7 +415,6 @@ Matches the visited file name against the elements of `auto-insert-alist'."
   "Associate CONDITION with (additional) ACTION in `auto-insert-alist'.
 Optional AFTER means to insert action after all existing actions for CONDITION,
 or if CONDITION had no actions, after all other CONDITIONs."
-  (declare (indent defun))
   (let ((elt (assoc condition auto-insert-alist)))
     (if elt
 	(setcdr elt

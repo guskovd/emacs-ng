@@ -1,5 +1,3 @@
-;;; simple-shorthand-test.el ---   -*- lexical-binding: t; -*-
-
 (defun f-test ()
   (let ((read-symbol-shorthands '(("foo-" . "bar-"))))
     (with-temp-buffer

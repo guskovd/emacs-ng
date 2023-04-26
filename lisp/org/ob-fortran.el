@@ -1,11 +1,11 @@
 ;;; ob-fortran.el --- Babel Functions for Fortran    -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2011-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2011-2022 Free Software Foundation, Inc.
 
 ;; Authors: Sergey Litvinov
 ;;       Eric Schulte
 ;; Keywords: literate programming, reproducible research, fortran
-;; URL: https://orgmode.org
+;; Homepage: https://orgmode.org
 
 ;; This file is part of GNU Emacs.
 ;;
@@ -27,10 +27,6 @@
 ;; Org-Babel support for evaluating fortran code.
 
 ;;; Code:
-
-(require 'org-macs)
-(org-assert-version)
-
 (require 'ob)
 (require 'org-macs)
 (require 'cc-mode)

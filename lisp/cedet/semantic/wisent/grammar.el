@@ -1,6 +1,6 @@
 ;;; semantic/wisent/grammar.el --- Wisent's input grammar mode  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2002-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2002-2022 Free Software Foundation, Inc.
 ;;
 ;; Author: David Ponce <david@dponce.com>
 ;; Created: 26 Aug 2002
@@ -284,15 +284,13 @@ Return the expanded expression."
          (assocs       (wisent-grammar-assocs)))
     (cons terminals (cons assocs nonterminals))))
 
-(define-mode-local-override semantic-grammar-parsetable-builder
-  wisent-grammar-mode ()
+(defun wisent-grammar-parsetable-builder ()
   "Return the value of the parser table."
   `(wisent-compiled-grammar
     ,(wisent-grammar-grammar)
     ,(semantic-grammar-start)))
 
-(define-mode-local-override semantic-grammar-setupcode-builder
-  wisent-grammar-mode ()
+(defun wisent-grammar-setupcode-builder ()
   "Return the parser setup code."
   (format
    "(semantic-install-function-overrides\n\
@@ -324,7 +322,10 @@ Menu items are appended to the common grammar menu.")
 (define-derived-mode wisent-grammar-mode semantic-grammar-mode "WY"
   "Major mode for editing Wisent grammars."
   (semantic-grammar-setup-menu wisent-grammar-menu)
-  (setq-local semantic-grammar-require-form '(require 'semantic/wisent)))
+  (setq-local semantic-grammar-require-form '(require 'semantic/wisent))
+  (semantic-install-function-overrides
+   '((semantic-grammar-parsetable-builder . wisent-grammar-parsetable-builder)
+     (semantic-grammar-setupcode-builder  . wisent-grammar-setupcode-builder))))
 
 (defvar-mode-local wisent-grammar-mode semantic-grammar-macros
   '(

@@ -1,6 +1,7 @@
 ;;; mail-extr.el --- extract full name and address from email header  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 1991-2023 Free Software Foundation, Inc.
+;; Copyright (C) 1991-1994, 1997, 2001-2022 Free Software Foundation,
+;; Inc.
 
 ;; Author: Joe Wells <jbw@cs.bu.edu>
 ;; Maintainer: emacs-devel@gnu.org
@@ -239,7 +240,8 @@ we will act as though we couldn't find a full name in the address."
 ;; Matches a leading title that is not part of the name (does not
 ;; contribute to uniquely identifying the person).
 (defcustom mail-extr-full-name-prefixes
-  "\\(Prof\\|D[Rr]\\|Mrs?\\|Rev\\|Rabbi\\|SysOp\\|LCDR\\)\\.?[ \t\n]"
+  (purecopy
+   "\\(Prof\\|D[Rr]\\|Mrs?\\|Rev\\|Rabbi\\|SysOp\\|LCDR\\)\\.?[ \t\n]")
   "Matches prefixes to the full name that identify a person's position.
 These are stripped from the full name because they do not contribute to
 uniquely identifying the person."
@@ -277,42 +279,45 @@ by translating things like \"foo!bar!baz@host\" into \"baz@bar.UUCP\"."
 ;; Yes, there are weird people with digits in their names.
 ;; You will also notice the consideration for the
 ;; Swedish/Finnish/Norwegian character set.
-(defconst mail-extr-all-letters-but-separators "][[:alnum:]{|}'~`")
+(defconst mail-extr-all-letters-but-separators
+  (purecopy "][[:alnum:]{|}'~`"))
 
 ;; Any character that can occur in a name in an RFC 822 (or later)
 ;; address including the separator (hyphen and possibly period) for
 ;; multipart names.
 ;; #### should . be in here?
 (defconst mail-extr-all-letters
-  (concat mail-extr-all-letters-but-separators "-"))
+  (purecopy (concat mail-extr-all-letters-but-separators "-")))
 
 ;; Any character that can start a name.
 ;; Keep this set as minimal as possible.
-(defconst mail-extr-first-letters "[:alpha:]")
+(defconst mail-extr-first-letters (purecopy "[:alpha:]"))
 
 ;; Any character that can end a name.
 ;; Keep this set as minimal as possible.
-(defconst mail-extr-last-letters "[:alpha:]`'.")
+(defconst mail-extr-last-letters (purecopy "[:alpha:]`'."))
 
 (defconst mail-extr-leading-garbage "\\W+")
 
 ;; (defconst mail-extr-non-begin-name-chars
-;;   (concat "^" mail-extr-first-letters))
+;;   (purecopy (concat "^" mail-extr-first-letters)))
 ;; (defconst mail-extr-non-end-name-chars
-;;   (concat "^" mail-extr-last-letters))
+;;   (purecopy (concat "^" mail-extr-last-letters)))
 
 ;; Matches periods used instead of spaces.  Must not match the period
 ;; following an initial.
 (defconst mail-extr-bad-dot-pattern
-  (format "\\([%s][%s]\\)\\.+\\([%s]\\)"
-          mail-extr-all-letters
-          mail-extr-last-letters
-          mail-extr-first-letters))
+  (purecopy
+   (format "\\([%s][%s]\\)\\.+\\([%s]\\)"
+	   mail-extr-all-letters
+	   mail-extr-last-letters
+	   mail-extr-first-letters)))
 
 ;; Matches an embedded or leading nickname that should be removed.
 ;; (defconst mail-extr-nickname-pattern
-;;   (format "\\([ .]\\|\\`\\)[\"'`[(]\\([ .%s]+\\)[]\"')] "
-;;           mail-extr-all-letters))
+;;   (purecopy
+;;    (format "\\([ .]\\|\\`\\)[\"'`[(]\\([ .%s]+\\)[]\"')] "
+;;            mail-extr-all-letters)))
 
 ;; Matches the occurrence of a generational name suffix, and the last
 ;; character of the preceding name.  This is important because we want to
@@ -320,56 +325,59 @@ by translating things like \"foo!bar!baz@host\" into \"baz@bar.UUCP\"."
 ;; *** Perhaps this should be a user-customizable variable.  However, the
 ;; *** regular expression is fairly tricky to alter, so maybe not.
 (defconst mail-extr-full-name-suffix-pattern
-  (format
-   "\\(,? ?\\([JjSs][Rr]\\.?\\|V?I+V?\\)\\)\\([^%s]\\([^%s]\\|\\'\\)\\|\\'\\)"
-   mail-extr-all-letters mail-extr-all-letters))
+  (purecopy
+   (format
+    "\\(,? ?\\([JjSs][Rr]\\.?\\|V?I+V?\\)\\)\\([^%s]\\([^%s]\\|\\'\\)\\|\\'\\)"
+    mail-extr-all-letters mail-extr-all-letters)))
 
-(defconst mail-extr-roman-numeral-pattern "V?I+V?\\b")
+(defconst mail-extr-roman-numeral-pattern (purecopy "V?I+V?\\b"))
 
 ;; Matches a trailing uppercase (with other characters possible) acronym.
 ;; Must not match a trailing uppercase last name or trailing initial
 (defconst mail-extr-weird-acronym-pattern
-  "\\([A-Z]+[-_/]\\|[A-Z][A-Z][A-Z]?\\b\\)")
+  (purecopy "\\([A-Z]+[-_/]\\|[A-Z][A-Z][A-Z]?\\b\\)"))
 
 ;; Matches a mixed-case or lowercase name (not an initial).
 ;; #### Match Latin1 lower case letters here too?
 ;; (defconst mail-extr-mixed-case-name-pattern
-;;   (format
-;;    "\\b\\([a-z][%s]*[%s]\\|[%s][%s]*[a-z][%s]*[%s]\\|[%s][%s]*[a-z]\\)"
-;;    mail-extr-all-letters mail-extr-last-letters
-;;    mail-extr-first-letters mail-extr-all-letters mail-extr-all-letters
-;;    mail-extr-last-letters mail-extr-first-letters mail-extr-all-letters))
+;;   (purecopy
+;;    (format
+;;     "\\b\\([a-z][%s]*[%s]\\|[%s][%s]*[a-z][%s]*[%s]\\|[%s][%s]*[a-z]\\)"
+;;     mail-extr-all-letters mail-extr-last-letters
+;;     mail-extr-first-letters mail-extr-all-letters mail-extr-all-letters
+;;     mail-extr-last-letters mail-extr-first-letters mail-extr-all-letters)))
 
 ;; Matches a trailing alternative address.
 ;; #### Match Latin1 letters here too?
 ;; #### Match _ before @ here too?
 (defconst mail-extr-alternative-address-pattern
-  "\\(aka *\\)?[a-zA-Z.]+[!@][a-zA-Z.]")
+  (purecopy "\\(aka *\\)?[a-zA-Z.]+[!@][a-zA-Z.]"))
 
 ;; Matches a variety of trailing comments not including comma-delimited
 ;; comments.
 (defconst mail-extr-trailing-comment-start-pattern
-  " [-{]\\|--\\|[+@#></;]")
+  (purecopy " [-{]\\|--\\|[+@#></;]"))
 
 ;; Matches a name (not an initial).
 ;; This doesn't force a word boundary at the end because sometimes a
 ;; comment is separated by a `-' with no preceding space.
 (defconst mail-extr-name-pattern
-  (format "\\b[%s][%s]*[%s]"
-          mail-extr-first-letters
-          mail-extr-all-letters
-          mail-extr-last-letters))
+  (purecopy (format "\\b[%s][%s]*[%s]"
+		    mail-extr-first-letters
+		    mail-extr-all-letters
+		    mail-extr-last-letters)))
 
 (defconst mail-extr-initial-pattern
-  (format "\\b[%s]\\([. ]\\|\\b\\)" mail-extr-first-letters))
+  (purecopy (format "\\b[%s]\\([. ]\\|\\b\\)" mail-extr-first-letters)))
 
 ;; Matches a single name before a comma.
 ;; (defconst mail-extr-last-name-first-pattern
-;;   (concat "\\`" mail-extr-name-pattern ","))
+;;   (purecopy (concat "\\`" mail-extr-name-pattern ",")))
 
 ;; Matches telephone extensions.
 (defconst mail-extr-telephone-extension-pattern
-  "\\(\\([Ee]xt\\|[Tt]ph\\|[Tt]el\\|[Xx]\\)\\.?\\)? *\\+?[0-9][- 0-9]+")
+  (purecopy
+   "\\(\\([Ee]xt\\|[Tt]ph\\|[Tt]el\\|[Xx]\\)\\.?\\)? *\\+?[0-9][- 0-9]+"))
 
 ;; Matches ham radio call signs.
 ;; Help from: Mat Maessen N2NJZ <maessm@rpi.edu>, Mark Feit
@@ -378,7 +386,7 @@ by translating things like \"foo!bar!baz@host\" into \"baz@bar.UUCP\"."
 ;; KE9TV KF0NV N1API N3FU N3GZE N3IGS N4KCC N7IKQ N9HHU W4YHF W6ANK WA2SUH
 ;; WB7VZI N2NJZ NR3G KJ4KK AB4UM AL7NI KH6OH WN3KBT N4TMI W1A N0NZO
 (defconst mail-extr-ham-call-sign-pattern
-  "\\b\\(DX[0-9]+\\|[AKNW][A-Z]?[0-9][A-Z][A-Z]?[A-Z]?\\)")
+  (purecopy "\\b\\(DX[0-9]+\\|[AKNW][A-Z]?[0-9][A-Z][A-Z]?[A-Z]?\\)"))
 
 ;; Possible trailing suffixes: "\\(/\\(KT\\|A[AEG]\\|[R0-9]\\)\\)?"
 ;; /KT == Temporary Technician (has CSC but not "real" license)
@@ -392,29 +400,31 @@ by translating things like \"foo!bar!baz@host\" into \"baz@bar.UUCP\"."
 
 ;; Matches normal single-part name
 (defconst mail-extr-normal-name-pattern
-  (format "\\b[%s][%s]+[%s]"
-          mail-extr-first-letters
-          mail-extr-all-letters-but-separators
-          mail-extr-last-letters))
+  (purecopy (format "\\b[%s][%s]+[%s]"
+		    mail-extr-first-letters
+		    mail-extr-all-letters-but-separators
+		    mail-extr-last-letters)))
 
 ;; Matches a single word name.
 ;; (defconst mail-extr-one-name-pattern
-;;   (concat "\\`" mail-extr-normal-name-pattern "\\'"))
+;;   (purecopy (concat "\\`" mail-extr-normal-name-pattern "\\'")))
 
 ;; Matches normal two names with missing middle initial
 ;; The first name is not allowed to have a hyphen because this can cause
 ;; false matches where the "middle initial" is actually the first letter
 ;; of the second part of the first name.
 (defconst mail-extr-two-name-pattern
-  (concat "\\`\\(" mail-extr-normal-name-pattern
-          "\\|" mail-extr-initial-pattern
-          "\\) +\\(" mail-extr-name-pattern "\\)\\(,\\|\\'\\)"))
+  (purecopy
+   (concat "\\`\\(" mail-extr-normal-name-pattern
+	   "\\|" mail-extr-initial-pattern
+	   "\\) +\\(" mail-extr-name-pattern "\\)\\(,\\|\\'\\)")))
 
 (defconst mail-extr-listserv-list-name-pattern
-  "Multiple recipients of list \\([-A-Z]+\\)")
+  (purecopy "Multiple recipients of list \\([-A-Z]+\\)"))
 
 (defconst mail-extr-stupid-vms-date-stamp-pattern
-  "[0-9][0-9]-[JFMASOND][aepuco][nbrylgptvc]-[0-9][0-9][0-9][0-9] [0-9]+ *")
+  (purecopy
+   "[0-9][0-9]-[JFMASOND][aepuco][nbrylgptvc]-[0-9][0-9][0-9][0-9] [0-9]+ *"))
 
 ;;; HZ -- GB (PRC Chinese character encoding) in ASCII embedding protocol
 ;;
@@ -433,23 +443,25 @@ by translating things like \"foo!bar!baz@host\" into \"baz@bar.UUCP\"."
 ;; mode from GB back to ASCII.  (Note that the escape-from-GB code '~}'
 ;; ($7E7D) is outside the defined GB range.)
 (defconst mail-extr-hz-embedded-gb-encoded-chinese-pattern
-  "~{\\([^~].\\|~[^}]\\)+~}")
+  (purecopy "~{\\([^~].\\|~[^}]\\)+~}"))
 
 ;; The leading optional lowercase letters are for a bastardized version of
 ;; the encoding, as is the optional nature of the final slash.
 (defconst mail-extr-x400-encoded-address-pattern
-  "[a-z]?[a-z]?\\(/[A-Za-z]+\\(\\.[A-Za-z]+\\)?=[^/]+\\)+/?\\'")
+  (purecopy "[a-z]?[a-z]?\\(/[A-Za-z]+\\(\\.[A-Za-z]+\\)?=[^/]+\\)+/?\\'"))
 
 (defconst mail-extr-x400-encoded-address-field-pattern-format
-  "/%s=\\([^/]+\\)\\(/\\|\\'\\)")
+  (purecopy "/%s=\\([^/]+\\)\\(/\\|\\'\\)"))
 
 (defconst mail-extr-x400-encoded-address-surname-pattern
   ;; S stands for Surname (family name).
-  (format mail-extr-x400-encoded-address-field-pattern-format "[Ss]"))
+  (purecopy
+   (format mail-extr-x400-encoded-address-field-pattern-format "[Ss]")))
 
 (defconst mail-extr-x400-encoded-address-given-name-pattern
   ;; G stands for Given name.
-  (format mail-extr-x400-encoded-address-field-pattern-format "[Gg]"))
+  (purecopy
+   (format mail-extr-x400-encoded-address-field-pattern-format "[Gg]")))
 
 (defconst mail-extr-x400-encoded-address-full-name-pattern
   ;; PN stands for Personal Name.  When used it represents the combination
@@ -457,7 +469,8 @@ by translating things like \"foo!bar!baz@host\" into \"baz@bar.UUCP\"."
   ;; "The one system I used having this field asked it with the prompt
   ;; `Personal Name'.  But they mapped it into G and S on outgoing real
   ;; X.400 addresses.  As they mapped G and S into PN on incoming..."
-  (format mail-extr-x400-encoded-address-field-pattern-format "[Pp][Nn]"))
+  (purecopy
+   (format mail-extr-x400-encoded-address-field-pattern-format "[Pp][Nn]")))
 
 
 
@@ -703,6 +716,7 @@ to the results."
 	value-list)
 
     (with-current-buffer (get-buffer-create extraction-buffer)
+      (fundamental-mode)
       (buffer-disable-undo extraction-buffer)
       (set-syntax-table mail-extr-address-syntax-table)
       (widen)
@@ -724,6 +738,7 @@ to the results."
       (set-text-properties (point-min) (point-max) nil)
 
       (with-current-buffer (get-buffer-create canonicalization-buffer)
+	(fundamental-mode)
 	(buffer-disable-undo canonicalization-buffer)
 	(setq case-fold-search nil))
 

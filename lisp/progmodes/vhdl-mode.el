@@ -1,6 +1,6 @@
 ;;; vhdl-mode.el --- major mode for editing VHDL code  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 1992-2023 Free Software Foundation, Inc.
+;; Copyright (C) 1992-2022 Free Software Foundation, Inc.
 
 ;; Authors:     Reto Zimmermann <reto@gnu.org>
 ;;              Rodney J. Whitby <software.vhdl-mode@rwhitby.net>
@@ -286,7 +286,7 @@ Overrides local variable `indent-tabs-mode'."
     ;;    counter_rtl.vhd(29):Conditional signal assignment line__29
     ("ModelSim" "vcom" "-93 -work \\1" "make" "-f \\1"
      nil "vlib \\1; vmap \\2 \\1" "./" "work/" "Makefile" "modelsim"
-     ("^\\(ERROR\\|WARNING\\|\\*\\* Error\\|\\*\\* Warning\\)[^:]*:\\( *\\[[0-9]+]\\| ([^)]+)\\)? \\([^ \t\n]+\\)(\\([0-9]+\\)):" 3 4 nil)
+     ("\\(ERROR:\\|WARNING\\[[0-9]+\\]:\\|\\*\\* Error:\\|\\*\\* Warning: \\[[0-9]+\\]\\| +\\) \\([^ ]+\\)(\\([0-9]+\\)):" 2 3 nil)
      ("" 0)
      ("\\1/_primary.dat" "\\2/\\1.dat" "\\1/_primary.dat"
       "\\1/_primary.dat" "\\1/body.dat" downcase))
@@ -2507,10 +2507,11 @@ consistent searching."
 
 (defmacro vhdl-prepare-search-2 (&rest body)
   "Enable case insensitive search, switch to syntax table that includes `_',
-then execute BODY, and finally restore the old environment.
-Used for consistent searching."
+arrange to ignore `intangible' overlays, then execute BODY, and finally restore
+the old environment.  Used for consistent searching."
   (declare (debug t))
-  `(let ((case-fold-search t))		; case insensitive search
+  `(let ((case-fold-search t)		; case insensitive search
+         (inhibit-point-motion-hooks t))
      ;; use extended syntax table
      (with-syntax-table vhdl-mode-ext-syntax-table
        ;; execute BODY safely
@@ -7706,7 +7707,7 @@ non-nil, indentation is done before aligning."
        (save-excursion
 	 (goto-char begin)
 	 (let (element
-               (eol (line-end-position)))
+	       (eol (point-at-eol)))
 	   (setq element (nth 0 copy))
 	   (when (and (or (and (listp (car element))
 			       (memq major-mode (car element)))
@@ -7732,7 +7733,7 @@ space is inserted after the token in MATCH."
       ;; Determine the greatest whitespace distance to the alignment
       ;; character
       (goto-char begin)
-      (setq eol (line-end-position)
+      (setq eol (point-at-eol)
 	    bol (setq begin (progn (beginning-of-line) (point))))
       (while (< bol end)
 	(save-excursion
@@ -7749,13 +7750,13 @@ space is inserted after the token in MATCH."
 	      (setq max distance))))
 	(forward-line)
 	(setq bol (point)
-              eol (line-end-position))
+	      eol (point-at-eol))
 	(setq lines (1+ lines)))
       ;; Now insert enough maxs to push each assignment operator to
       ;; the same column.  We need to use 'lines' as a counter, since
       ;; the location of the mark may change
       (goto-char (setq bol begin))
-      (setq eol (line-end-position))
+      (setq eol (point-at-eol))
       (while (> lines 0)
   	(when (and (vhdl-re-search-forward match eol t)
 		   (save-excursion
@@ -7775,7 +7776,7 @@ space is inserted after the token in MATCH."
 	(beginning-of-line)
 	(forward-line)
 	(setq bol (point)
-              eol (line-end-position))
+	      eol (point-at-eol))
 	(setq lines (1- lines))))))
 
 (defun vhdl-align-region-groups (beg end &optional spacing
@@ -8646,7 +8647,7 @@ buffer."
 	   (forward-char)
 	   (vhdl-forward-syntactic-ws))
 	 (goto-char end)
-         (when (> pos (line-end-position))
+	 (when (> pos (point-at-eol))
 	   (error "ERROR:  Not within a generic/port clause"))
 	 ;; delete closing parenthesis on separate line (not supported style)
 	 (when (save-excursion (beginning-of-line) (looking-at "^\\s-*);"))
@@ -8788,10 +8789,7 @@ project is defined."
 (defun vhdl-electric-period (count) "`..' --> ` => '"
   (interactive "p")
   (if (and vhdl-stutter-mode (= count 1) (not (vhdl-in-literal)))
-      ;; We use this-command-keys below to account for translation of
-      ;; kp-decimal into '.'; vhdl-last-input-event doesn't catch
-      ;; that.
-      (cond ((eq (preceding-char) (aref (this-command-keys) 0))
+      (cond ((= (preceding-char) vhdl-last-input-event)
 	     (progn (delete-char -1)
 		    (unless (eq (preceding-char) ? ) (insert " "))
 		    (insert "=> ")))
@@ -10689,9 +10687,8 @@ Include a library specification, if not already there."
 	 (replace-match "" t t)
 	 (vhdl-template-insert-date))
        (goto-char beg)
-       (let ((year (format-time-string "%Y")))
-	 (while (search-forward "<year>" end t)
-	   (replace-match year t t)))
+       (while (search-forward "<year>" end t)
+	 (replace-match (format-time-string "%Y" nil) t t))
        (goto-char beg)
        (when file-title
 	 (while (search-forward "<title string>" end t)
@@ -12837,7 +12834,7 @@ expressions (e.g. for index ranges of types and signals)."
   "Return the line number of the line containing point."
   (save-restriction
     (widen)
-    (1+ (count-lines (point-min) (line-beginning-position)))))
+    (1+ (count-lines (point-min) (point-at-bol)))))
 
 (defun vhdl-line-kill-entire (&optional arg)
   "Delete entire line."
@@ -12854,7 +12851,7 @@ expressions (e.g. for index ranges of types and signals)."
   "Copy current line."
   (interactive "p")
   (save-excursion
-    (let ((position (line-beginning-position)))
+    (let ((position (point-at-bol)))
       (forward-line (or arg 1))
       (copy-region-as-kill position (point)))))
 
@@ -14957,8 +14954,8 @@ otherwise use cached data."
 
 (defun vhdl-speedbar-insert-hierarchy ( ent-alist-arg conf-alist-arg
                                         package-alist ent-inst-list depth)
-  "Insert hierarchy of ENT-ALIST-ARG, CONF-ALIST-ARG, and PACKAGE-ALIST."
-  (if (not (or ent-alist-arg conf-alist-arg package-alist))
+  "Insert hierarchy of ENT-ALIST, CONF-ALIST, and PACKAGE-ALIST."
+  (if (not (or ent-alist conf-alist package-alist))
       (vhdl-speedbar-make-title-line "No VHDL design units!" depth)
     (let ((ent-alist ent-alist-arg)
           (conf-alist conf-alist-arg)
@@ -16751,7 +16748,7 @@ current project/directory."
   (let ((ent-alist ent-alist-arg)
 	(conf-alist conf-alist-arg)
 	(margin (current-indentation))
-        (beg (line-beginning-position))
+	(beg (point-at-bol))
 	ent-entry inst-entry inst-path inst-prev-path tmp-alist) ;; cons-key
     ;; insert block configuration (for architecture)
     (vhdl-insert-keyword "FOR ") (insert arch-name "\n")

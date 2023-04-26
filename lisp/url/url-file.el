@@ -1,6 +1,6 @@
 ;;; url-file.el --- File retrieval code  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1996-1999, 2004-2023 Free Software Foundation, Inc.
+;; Copyright (C) 1996-1999, 2004-2022 Free Software Foundation, Inc.
 
 ;; Keywords: comm, data, processes
 
@@ -26,13 +26,8 @@
 (require 'mailcap)
 (require 'url-vars)
 (require 'url-parse)
+(require 'url-dired)
 (declare-function mm-disable-multibyte "mm-util" ())
-
-(defvar url-allow-non-local-files nil
-  "If non-nil, allow URL to fetch non-local files.
-By default, this is not allowed, since that would allow rendering
-HTML to fetch files on other systems if given a <img
-src=\"/ssh:host...\"> element, which can be disturbing.")
 
 (defconst url-file-default-port 21 "Default FTP port.")
 (defconst url-file-asynchronous-p t "FTP transfers are asynchronous.")
@@ -41,10 +36,10 @@ src=\"/ssh:host...\"> element, which can be disturbing.")
 (defun url-file-find-possibly-compressed-file (fname &rest _)
   "Find the exact file referenced by `fname'.
 This tries the common compression extensions, because things like
-ange-ftp is not quite smart enough to realize when a server can
-do automatic decompression for them, and won't find `foo' if
-`foo.gz' exists, even though the FTP server would happily serve
-it up to them."
+ange-ftp and efs are not quite smart enough to realize when a server
+can do automatic decompression for them, and won't find `foo' if
+`foo.gz' exists, even though the FTP server would happily serve it up
+to them."
   (let ((scratch nil)
 	(compressed-extensions '("" ".gz" ".z" ".Z" ".bz2" ".xz"))
 	(found nil))
@@ -75,15 +70,18 @@ it up to them."
 	    buff func
 	    func args
 	    args efs))
-  (with-current-buffer buff
-    (goto-char (point-max))
-    (insert-file-contents-literally name)
-    (insert (format "Content-length: %d\n\n" (buffer-size)))
-    (if (not (url-file-host-is-local-p (url-host url-current-object)))
-	(condition-case ()
-	    (delete-file name)
-	  (error nil)))
-    (apply func args)))
+  (let ((size (file-attribute-size (file-attributes name))))
+    (with-current-buffer buff
+      (goto-char (point-max))
+      (if (/= -1 size)
+	  (insert (format "Content-length: %d\n" size)))
+      (insert "\n")
+      (insert-file-contents-literally name)
+      (if (not (url-file-host-is-local-p (url-host url-current-object)))
+	  (condition-case ()
+	      (delete-file name)
+	    (error nil)))
+      (apply func args))))
 
 (declare-function ange-ftp-set-passwd "ange-ftp" (host user passwd))
 (declare-function ange-ftp-copy-file-internal "ange-ftp"
@@ -113,8 +111,7 @@ it up to them."
 			  (memq system-type '(ms-dos windows-nt)))
 		     (substring file 1))
 		    ;; file: URL with a file:/bar:/foo-like spec.
-		    ((and (not url-allow-non-local-files)
-                          (string-match "\\`/[^/]+:/" file))
+		    ((string-match "\\`/[^/]+:/" file)
 		     (concat "/:" file))
 		    (t
 		     file))))
@@ -150,6 +147,7 @@ it up to them."
 	 (uncompressed-filename nil)
 	 (content-type nil)
 	 (content-encoding nil)
+	 (coding-system-for-read 'binary)
 	 (filename (url-file-build-filename url)))
     (or filename (error "File does not exist: %s" (url-recreate-url url)))
     ;; Need to figure out the content-type from the real extension,
@@ -172,7 +170,7 @@ it up to them."
 
     (if (file-directory-p filename)
 	;; A directory is done the same whether we are local or remote
-	(find-file filename)
+	(url-find-file-dired filename)
       (with-current-buffer
 	  (setq buffer (generate-new-buffer " *url-file*"))
         (require 'mm-util)

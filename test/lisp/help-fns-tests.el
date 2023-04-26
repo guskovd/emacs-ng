@@ -1,6 +1,6 @@
 ;;; help-fns-tests.el --- tests for help-fns.el  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2014-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2014-2022 Free Software Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
 
@@ -25,7 +25,6 @@
 
 (require 'ert)
 (require 'help-fns)
-(require 'subr-x)
 
 (autoload 'help-fns-test--macro "foo" nil nil t)
 
@@ -64,13 +63,13 @@ Return first line of the output of (describe-function-1 FUNC)."
 
 (ert-deftest help-fns-test-lisp-defun ()
   (let ((regexp (if (featurep 'native-compile)
-                    "a native-compiled Lisp function in .+subr\\.el"
-                  "a byte-compiled Lisp function in .+subr\\.el"))
+                    "a native compiled Lisp function in .+subr\\.el"
+                  "a compiled Lisp function in .+subr\\.el"))
         (result (help-fns-tests--describe-function 'last)))
     (should (string-match regexp result))))
 
 (ert-deftest help-fns-test-lisp-defsubst ()
-  (let ((regexp "a byte-compiled Lisp function in .+subr\\.el")
+  (let ((regexp "a compiled Lisp function in .+subr\\.el")
         (result (help-fns-tests--describe-function 'posn-window)))
     (should (string-match regexp result))))
 
@@ -149,7 +148,7 @@ Return first line of the output of (describe-function-1 FUNC)."
 (ert-deftest help-fns-test-describe-keymap/value ()
   (describe-keymap minibuffer-local-must-match-map)
   (with-current-buffer "*Help*"
-    (should (looking-at "\nKey"))))
+    (should (looking-at "^key"))))
 
 (ert-deftest help-fns-test-describe-keymap/not-keymap ()
   (should-error (describe-keymap nil))
@@ -159,7 +158,7 @@ Return first line of the output of (describe-function-1 FUNC)."
   (let ((foobar minibuffer-local-must-match-map))
     (describe-keymap foobar)
     (with-current-buffer "*Help*"
-      (should (looking-at "\nKey")))))
+      (should (looking-at "^key")))))
 
 (ert-deftest help-fns-test-describe-keymap/dynamically-bound-no-file ()
   (setq help-fns-test--describe-keymap-foo minibuffer-local-must-match-map)
@@ -177,10 +176,5 @@ Return first line of the output of (describe-function-1 FUNC)."
     (put help-fns--test-var 'variable-documentation 1)
     (should-not (find-lisp-object-file-name help-fns--test-var 'defface))
     (should-not (find-lisp-object-file-name help-fns--test-var 1))))
-
-(ert-deftest help-fns--analyze-function-recursive ()
-  (defalias 'help-fns--a 'help-fns--b)
-  (should (equal (help-fns--analyze-function 'help-fns--a)
-                 '(help-fns--a help-fns--b t help-fns--b))))
 
 ;;; help-fns-tests.el ends here

@@ -1,6 +1,6 @@
 ;;; wisent-python.el --- Semantic support for Python  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2002-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2002, 2004, 2006-2022 Free Software Foundation, Inc.
 
 ;; Author: Richard Kim <emacs18@gmail.com>
 ;; Created: June 2002
@@ -27,7 +27,9 @@
 
 ;;; Code:
 
-(require 'python)
+;; Try to load python support, but fail silently since it is only used
+;; for optional functionality
+(require 'python nil t)
 
 (require 'semantic/wisent)
 (require 'semantic/wisent/python-wy)

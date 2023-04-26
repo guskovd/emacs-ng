@@ -1,6 +1,6 @@
 ;;; conf-mode-tests.el --- Test suite for conf mode  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2016-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2016-2022 Free Software Foundation, Inc.
 
 ;; Author: J. Alexander Branham <alex.branham@gmail.com>
 ;; Keywords: internal
@@ -74,7 +74,8 @@ PersistMoniker=file://Folder.htt")
 (ert-deftest conf-test-javaprop-mode ()
   (with-temp-buffer
     ;; From `conf-javaprop-mode' docstring
-    (insert "# comment
+    (insert "// another kind of comment
+/* yet another */
 
 name:value
 name=value
@@ -89,6 +90,8 @@ x.2.y.1.z.2.zz =")
     (should (equal (face-at-point) 'font-lock-comment-delimiter-face))
     (forward-char 3)
     (should (equal (face-at-point) 'font-lock-comment-face))
+    (search-forward "*")
+    (should (equal (face-at-point) 'font-lock-comment-delimiter-face))
     (while (search-forward "nam" nil t)
       (should (equal (face-at-point) 'font-lock-variable-name-face))
       (search-forward "val")

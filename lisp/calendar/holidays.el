@@ -1,6 +1,6 @@
 ;;; holidays.el --- holiday functions for the calendar package  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1989-1990, 1992-1994, 1997, 2001-2023 Free Software
+;; Copyright (C) 1989-1990, 1992-1994, 1997, 2001-2022 Free Software
 ;; Foundation, Inc.
 
 ;; Author: Edward M. Reingold <reingold@cs.uiuc.edu>
@@ -30,7 +30,7 @@
 ;;; Code:
 
 (require 'calendar)
-(load "holiday-loaddefs" nil t)
+(load "hol-loaddefs" nil t)
 
 (defgroup holidays nil
   "Holidays support in calendar."
@@ -400,36 +400,6 @@ This function is suitable for execution in an init file."
            (displayed-year (calendar-extract-year date)))
       (calendar-list-holidays))))
 
-(defun holiday-available-holiday-lists ()
-  "Return a list of all holiday lists.
-This is used by `list-holidays', and you can customize the return
-value by using `add-function'."
-  (delq
-   nil
-   (list
-    (cons "All" calendar-holidays)
-    (cons "Equinoxes/Solstices"
-          (list (list 'solar-equinoxes-solstices)))
-    (if holiday-general-holidays
-        (cons "General" holiday-general-holidays))
-    (if holiday-local-holidays
-        (cons "Local" holiday-local-holidays))
-    (if holiday-other-holidays
-        (cons "Other" holiday-other-holidays))
-    (if holiday-christian-holidays
-        (cons "Christian" holiday-christian-holidays))
-    (if holiday-hebrew-holidays
-        (cons "Hebrew" holiday-hebrew-holidays))
-    (if holiday-islamic-holidays
-        (cons "Islamic" holiday-islamic-holidays))
-    (if holiday-bahai-holidays
-        (cons "Bahá’í" holiday-bahai-holidays))
-    (if holiday-oriental-holidays
-        (cons "Oriental" holiday-oriental-holidays))
-    (if holiday-solar-holidays
-        (cons "Solar" holiday-solar-holidays))
-    (cons "Ask" nil))))
-
 ;; rms: "Emacs commands to display a list of something generally start
 ;; with `list-'.  Please make `list-holidays' the principal name."
 ;;;###autoload
@@ -451,12 +421,7 @@ documentation of `calendar-holidays' for a list of the variables
 that control the choices, as well as a description of the format
 of a holiday list.
 
-The optional LABEL is used to label the buffer created.
-
-The list of holiday lists is computed by the
-`holiday-available-holiday-lists' and you can alter the results
-by redefining that function, or use `add-function' to add
-values."
+The optional LABEL is used to label the buffer created."
   (interactive
    (let* ((start-year (calendar-read-sexp
                        "Starting year of holidays (>0)"
@@ -468,7 +433,30 @@ values."
                      start-year
                      start-year))
           (completion-ignore-case t)
-          (lists (holiday-available-holiday-lists))
+          (lists
+           (list
+            (cons "All" calendar-holidays)
+            (cons "Equinoxes/Solstices"
+                  (list (list 'solar-equinoxes-solstices)))
+            (if holiday-general-holidays
+                (cons "General" holiday-general-holidays))
+            (if holiday-local-holidays
+                (cons "Local" holiday-local-holidays))
+            (if holiday-other-holidays
+                (cons "Other" holiday-other-holidays))
+            (if holiday-christian-holidays
+                (cons "Christian" holiday-christian-holidays))
+            (if holiday-hebrew-holidays
+                (cons "Hebrew" holiday-hebrew-holidays))
+            (if holiday-islamic-holidays
+                (cons "Islamic" holiday-islamic-holidays))
+            (if holiday-bahai-holidays
+                (cons "Bahá’í" holiday-bahai-holidays))
+            (if holiday-oriental-holidays
+                (cons "Oriental" holiday-oriental-holidays))
+            (if holiday-solar-holidays
+                (cons "Solar" holiday-solar-holidays))
+            (cons "Ask" nil)))
           (choice (capitalize
                    (completing-read "List (TAB for choices): " lists nil t)))
           (which (if (string-equal choice "Ask")

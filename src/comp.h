@@ -1,6 +1,6 @@
 /* Elisp native compiler definitions
 
-Copyright (C) 2019-2023 Free Software Foundation, Inc.
+Copyright (C) 2019-2022 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -53,8 +53,6 @@ struct Lisp_Native_Comp_Unit
 
 #ifdef HAVE_NATIVE_COMP
 
-INLINE_HEADER_BEGIN
-
 INLINE bool
 NATIVE_COMP_UNITP (Lisp_Object a)
 {
@@ -100,8 +98,6 @@ void unload_comp_unit (struct Lisp_Native_Comp_Unit *cu)
 {}
 
 extern void syms_of_comp (void);
-
-INLINE_HEADER_END
 
 #endif /* #ifdef HAVE_NATIVE_COMP */
 

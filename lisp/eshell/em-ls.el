@@ -1,6 +1,6 @@
 ;;; em-ls.el --- implementation of ls in Lisp  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1999-2023 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2022 Free Software Foundation, Inc.
 
 ;; Author: John Wiegley <johnw@gnu.org>
 
@@ -62,27 +62,24 @@ This is useful for enabling human-readable format (-h), for example."
 This is useful for enabling human-readable format (-h), for example."
   :type '(repeat :tag "Arguments" string))
 
-(defun eshell-ls-enable-in-dired ()
-  "Use `eshell-ls' to read directories in Dired."
-  (require 'dired)
-  (advice-add 'insert-directory :around #'eshell-ls--insert-directory)
-  (advice-add 'dired :around #'eshell-ls--dired))
-
-(defun eshell-ls-disable-in-dired ()
-  "Stop using `eshell-ls' to read directories in Dired."
-  (advice-remove 'insert-directory #'eshell-ls--insert-directory)
-  (advice-remove 'dired #'eshell-ls--dired))
-
 (defcustom eshell-ls-use-in-dired nil
   "If non-nil, use `eshell-ls' to read directories in Dired.
 Changing this without using customize has no effect."
   :set (lambda (symbol value)
-         (if value
-             (eshell-ls-enable-in-dired)
-           (eshell-ls-disable-in-dired))
+	 (cond (value
+                (require 'dired)
+                (advice-add 'insert-directory :around
+                            #'eshell-ls--insert-directory)
+                (advice-add 'dired :around #'eshell-ls--dired))
+               (t
+                (advice-remove 'insert-directory
+                               #'eshell-ls--insert-directory)
+                (advice-remove 'dired #'eshell-ls--dired)))
          (set symbol value))
   :type 'boolean
   :require 'em-ls)
+(add-hook 'eshell-ls-unload-hook #'eshell-ls-unload-function)
+
 
 (defcustom eshell-ls-default-blocksize 1024
   "The default blocksize to use when display file sizes with -s."
@@ -103,14 +100,15 @@ faster and conserves more memory."
   :type 'boolean)
 
 (defface eshell-ls-directory
-  '((t (:inherit font-lock-function-name-face)))
-  "The face used for highlighting directories."
-  :version "29.1")
+  '((((class color) (background light)) (:foreground "Blue" :weight bold))
+    (((class color) (background dark)) (:foreground "SkyBlue" :weight bold))
+    (t (:weight bold)))
+  "The face used for highlighting directories.")
 
 (defface eshell-ls-symlink
-  '((t (:inherit font-lock-keyword-face)))
-  "The face used for highlighting symbolic links."
-  :version "29.1")
+  '((((class color) (background light)) (:foreground "Dark Cyan" :weight bold))
+    (((class color) (background dark)) (:foreground "Cyan" :weight bold)))
+  "The face used for highlighting symbolic links.")
 
 (defface eshell-ls-executable
   '((((class color) (background light)) (:foreground "ForestGreen" :weight bold))
@@ -803,7 +801,7 @@ to use, and each member of which is the width of that column
              (+ 2 (length (car file))))
 	   files))
 	 ;; must account for the added space...
-	 (max-width (+ (window-body-width nil 'remap) 2))
+	 (max-width (+ (window-width) 2))
 	 (best-width 0)
 	 col-widths)
 
@@ -848,7 +846,7 @@ to use, and each member of which is the width of that column
            (lambda (file)
              (+ 2 (length (car file))))
 	   files))
-	 (max-width (+ (window-body-width nil 'remap) 2))
+	 (max-width (+ (window-width) 2))
 	 col-widths
 	 colw)
 
@@ -957,8 +955,10 @@ to use, and each member of which is the width of that column
 				 (car file)))))
   (car file))
 
-(defun em-ls-unload-function ()
-  (eshell-ls-disable-in-dired))
+(defun eshell-ls-unload-function ()
+  (advice-remove 'insert-directory #'eshell-ls--insert-directory)
+  (advice-remove 'dired #'eshell-ls--dired)
+  nil)
 
 (provide 'em-ls)
 

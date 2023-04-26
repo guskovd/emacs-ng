@@ -1,6 +1,6 @@
 ;;; dictionary.el --- Client for rfc2229 dictionary servers  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2021-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2021-2022 Free Software Foundation, Inc.
 
 ;; Author: Torsten Hilbrich <torsten.hilbrich@gmx.net>
 ;; Keywords: interface, dictionary
@@ -59,7 +59,7 @@ the existing connection."
 
 (defgroup dictionary nil
   "Client for accessing the dictd server based dictionaries."
-  :group 'applications)
+  :group 'hypermedia)
 
 (defgroup dictionary-proxy nil
   "Proxy configuration options for the dictionary client."
@@ -89,7 +89,7 @@ You can specify here:
 This port is probably always 2628 so there should be no need to modify it."
   :group 'dictionary
   :set #'dictionary-set-server-var
-  :type 'natnum
+  :type 'number
   :version "28.1")
 
 (defcustom dictionary-identification
@@ -119,7 +119,7 @@ one dictionary yields matches."
   "exact"
   "The default strategy for listing matching words within a popup window.
 
-The following algorithms (defined by the dictd server) are supported
+The following algorithm (defined by the dictd server) are supported
 by the choice value:
 
 - Exact match
@@ -130,7 +130,7 @@ by the choice value:
 
   The found word sounds similar to the searched word.  For this match type
   the soundex algorithm defined by Donald E. Knuth is used.  It will only
-  work with English words and the algorithm is not very reliable (i.e.,
+  works with english words and the algorithm is not very reliable (i.e.,
   the soundex algorithm is quite simple).
 
 - Levenshtein distance one
@@ -206,7 +206,7 @@ where the current word was found."
   "The port of the proxy server, used only when `dictionary-use-http-proxy' is set."
   :group 'dictionary-proxy
   :set #'dictionary-set-server-var
-  :type 'natnum
+  :type 'number
   :version "28.1")
 
 (defcustom dictionary-use-single-buffer
@@ -326,23 +326,26 @@ is utf-8"
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Global variables
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defvar-keymap dictionary-mode-map
-  :doc "Keymap for the dictionary mode."
-  :suppress t :parent button-buffer-map
-  "q"     #'dictionary-close
-  "h"     #'describe-mode
-  "s"     #'dictionary-search
-  "d"     #'dictionary-lookup-definition
-  "D"     #'dictionary-select-dictionary
-  "M"     #'dictionary-select-strategy
-  "m"     #'dictionary-match-words
-  "l"     #'dictionary-previous
-  "n"     #'forward-button
-  "p"     #'backward-button
-  "SPC"   #'scroll-up-command
-  "S-SPC" #'scroll-down-command
-  "M-SPC" #'scroll-down-command
-  "DEL"   #'scroll-down-command)
+(defvar dictionary-mode-map
+  (let ((map (make-sparse-keymap)))
+    (suppress-keymap map)
+    (set-keymap-parent map button-buffer-map)
+
+    (define-key map "q" #'dictionary-close)
+    (define-key map "h" #'dictionary-help)
+    (define-key map "s" #'dictionary-search)
+    (define-key map "d" #'dictionary-lookup-definition)
+    (define-key map "D" #'dictionary-select-dictionary)
+    (define-key map "M" #'dictionary-select-strategy)
+    (define-key map "m" #'dictionary-match-words)
+    (define-key map "l" #'dictionary-previous)
+    (define-key map "n" #'forward-button)
+    (define-key map "p" #'backward-button)
+    (define-key map " " #'scroll-up-command)
+    (define-key map [?\S-\ ] #'scroll-down-command)
+    (define-key map (read-kbd-macro "M-SPC") #'scroll-down-command)
+    map)
+  "Keymap for the dictionary mode.")
 
 (defvar dictionary-connection
   nil
@@ -358,7 +361,7 @@ is utf-8"
 
 (defvar dictionary-color-support
   (condition-case nil
-      (display-color-p)
+      (x-display-color-p)
     (error nil))
   "Determines if the Emacs has support to display color.")
 
@@ -380,7 +383,7 @@ protocol defined in RFC 2229.
 This is a quick reference to this mode describing the default key bindings:
 \\<dictionary-mode-map>
 * \\[dictionary-close] close the dictionary buffer
-* \\[describe-mode] display this help information
+* \\[dictionary-help] display this help information
 * \\[dictionary-search] ask for a new word to search
 * \\[dictionary-lookup-definition] search the word at point
 * \\[forward-button] or TAB place point to the next link
@@ -390,7 +393,7 @@ This is a quick reference to this mode describing the default key bindings:
 * \\[dictionary-select-dictionary] select the default dictionary
 * \\[dictionary-select-strategy] select the default search strategy
 
-* \\`RET' or \\`<mouse-2>' visit that link"
+* RET or <mouse-2> visit that link"
 
   (unless (eq major-mode 'dictionary-mode)
     (cl-incf dictionary-instances))
@@ -756,31 +759,31 @@ of matching words."
       (progn
         (insert-button "[Back]" :type 'dictionary-button
                        'callback 'dictionary-restore-state
-                       'help-echo "Mouse-2 to go backwards in history")
+                       'help-echo (purecopy "Mouse-2 to go backwards in history"))
 	(insert " ")
         (insert-button "[Search definition]" :type 'dictionary-button
                        'callback 'dictionary-search
-                       'help-echo "Mouse-2 to look up a new word")
+                       'help-echo (purecopy "Mouse-2 to look up a new word"))
 	(insert "         ")
 
 	(insert-button "[Matching words]" :type 'dictionary-button
                        'callback 'dictionary-match-words
-                       'help-echo "Mouse-2 to find matches for a pattern")
+                       'help-echo (purecopy "Mouse-2 to find matches for a pattern"))
 	(insert "        ")
 
 	(insert-button "[Quit]" :type 'dictionary-button
                        'callback 'dictionary-close
-                       'help-echo "Mouse-2 to close this window")
+                       'help-echo (purecopy "Mouse-2 to close this window"))
 
 	(insert "\n       ")
 
         (insert-button "[Select dictionary]" :type 'dictionary-button
                        'callback 'dictionary-select-dictionary
-                       'help-echo "Mouse-2 to select dictionary for future searches")
+                       'help-echo (purecopy "Mouse-2 to select dictionary for future searches"))
 	(insert "         ")
         (insert-button "[Select match strategy]" :type 'dictionary-button
                        'callback 'dictionary-select-strategy
-                       'help-echo "Mouse-2 to select matching algorithm")
+                       'help-echo (purecopy "Mouse-2 to select matching algorithm"))
 	(insert "\n\n")))
   (setq dictionary-marker (point-marker)))
 
@@ -929,13 +932,13 @@ If PATTERN is omitted, it defaults to \"[ \\f\\t\\n\\r\\v]+\"."
           (insert-button (concat dictionary ": " translated) :type 'dictionary-link
                          'callback 'dictionary-set-dictionary
                          'data (cons dictionary description)
-                         'help-echo "Mouse-2 to select this dictionary")
+                         'help-echo (purecopy "Mouse-2 to select this dictionary"))
           (unless (dictionary-special-dictionary dictionary)
             (insert " ")
             (insert-button "(Details)" :type 'dictionary-link
                            'callback 'dictionary-set-dictionary
                            'list-data (list (cons dictionary description) t)
-                           'help-echo "Mouse-2 to get more information"))
+                           'help-echo (purecopy "Mouse-2 to get more information")))
 	  (insert "\n")))))
 
 (defun dictionary-set-dictionary (param &optional more)
@@ -973,7 +976,7 @@ If PATTERN is omitted, it defaults to \"[ \\f\\t\\n\\r\\v]+\"."
           (insert-button description :type 'dictionary-link
                          'callback 'dictionary-set-dictionary
                          'data (cons dictionary description)
-                         'help-echo "Mouse-2 to select this dictionary")
+                         'help-echo (purecopy "Mouse-2 to select this dictionary"))
 	  (insert "\n\n")
 	  (setq reply (dictionary-read-answer))
 	  (insert reply)
@@ -1024,7 +1027,7 @@ If PATTERN is omitted, it defaults to \"[ \\f\\t\\n\\r\\v]+\"."
           (insert-button description :type 'dictionary-link
                          'callback 'dictionary-set-strategy
                          'data strategy
-                         'help-echo "Mouse-2 to select this matching algorithm")
+                         'help-echo (purecopy "Mouse-2 to select this matching algorithm"))
 	  (insert "\n")))))
 
 (defun dictionary-set-strategy (strategy &rest _ignored)
@@ -1125,7 +1128,7 @@ If PATTERN is omitted, it defaults to \"[ \\f\\t\\n\\r\\v]+\"."
                     (insert-button word :type 'dictionary-link
                                    'callback 'dictionary-new-search
                                    'data (cons word dictionary)
-                                   'help-echo "Mouse-2 to lookup word")
+                                   'help-echo (purecopy "Mouse-2 to lookup word"))
 		    (insert "\n")) (reverse word-list))
 	    (insert "\n")))
 	list))
@@ -1151,7 +1154,9 @@ It presents the selection or word at point as default input and
 allows editing it."
   (interactive
    (list (let ((default (dictionary-search-default)))
-           (read-string (format-prompt "Search word" default)
+           (read-string (if default
+                            (format "Search word (%s): " default)
+                          "Search word: ")
                         nil 'dictionary-word-history default))
 	 (if current-prefix-arg
 	     (read-string (if dictionary-default-dictionary
@@ -1172,10 +1177,7 @@ allows editing it."
 (defun dictionary-lookup-definition ()
   "Unconditionally lookup the word at point."
   (interactive)
-  (let ((word (current-word)))
-    (unless word
-      (error "No word at point"))
-    (dictionary-new-search (cons word dictionary-default-dictionary))))
+  (dictionary-new-search (cons (current-word) dictionary-default-dictionary)))
 
 (defun dictionary-previous ()
   "Go to the previous location in the current buffer."
@@ -1186,8 +1188,7 @@ allows editing it."
 
 (defun dictionary-help ()
   "Display a little help."
-  (declare (obsolete describe-mode "29.1"))
-  (interactive nil dictionary-mode)
+  (interactive)
   (describe-function 'dictionary-mode))
 
 ;;;###autoload

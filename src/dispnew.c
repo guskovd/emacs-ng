@@ -1,6 +1,6 @@
 /* Updating of data structures for redisplay.
 
-Copyright (C) 1985-1988, 1993-1995, 1997-2023 Free Software Foundation,
+Copyright (C) 1985-1988, 1993-1995, 1997-2022 Free Software Foundation,
 Inc.
 
 This file is part of GNU Emacs.
@@ -1810,11 +1810,8 @@ allocate_matrices_for_window_redisplay (struct window *w)
 	  if (w->desired_matrix == NULL)
 	    {
 	      w->desired_matrix = new_glyph_matrix (NULL);
-	      eassert (w->current_matrix == NULL);
+	      w->current_matrix = new_glyph_matrix (NULL);
 	    }
-
-	  if (w->current_matrix == NULL)
-	    w->current_matrix = new_glyph_matrix (NULL);
 
 	  dim.width = required_matrix_width (w);
 	  dim.height = required_matrix_height (w);
@@ -1840,18 +1837,7 @@ adjust_frame_glyphs (struct frame *f)
   if (FRAME_WINDOW_P (f))
     adjust_frame_glyphs_for_window_redisplay (f);
   else
-    {
-      adjust_frame_glyphs_for_frame_redisplay (f);
-      eassert (FRAME_INITIAL_P (f)
-	       || noninteractive
-	       || !initialized
-	       || (f->current_matrix
-		   && f->current_matrix->nrows > 0
-		   && f->current_matrix->rows
-		   && f->desired_matrix
-		   && f->desired_matrix->nrows > 0
-		   && f->desired_matrix->rows));
-    }
+    adjust_frame_glyphs_for_frame_redisplay (f);
 
   /* Don't forget the buffer for decode_mode_spec.  */
   adjust_decode_mode_spec_buffer (f);
@@ -2129,19 +2115,6 @@ adjust_frame_glyphs_for_frame_redisplay (struct frame *f)
       else
 	{
 	  adjust_glyph_matrix (NULL, f->desired_matrix, 0, 0, matrix_dim);
-	  adjust_glyph_matrix (NULL, f->current_matrix, 0, 0, matrix_dim);
-	  SET_FRAME_GARBAGED (f);
-	}
-    }
-  else if (!FRAME_INITIAL_P (f) && !noninteractive && initialized)
-    {
-      if (!f->desired_matrix->nrows || !f->desired_matrix->rows)
-	{
-	  adjust_glyph_matrix (NULL, f->desired_matrix, 0, 0, matrix_dim);
-	  SET_FRAME_GARBAGED (f);
-	}
-      if (!f->current_matrix->nrows || !f->current_matrix->rows)
-	{
 	  adjust_glyph_matrix (NULL, f->current_matrix, 0, 0, matrix_dim);
 	  SET_FRAME_GARBAGED (f);
 	}
@@ -2735,24 +2708,11 @@ set_frame_matrix_frame (struct frame *f)
    operations in window matrices of frame_matrix_frame.  */
 
 static void
-make_current (struct glyph_matrix *desired_matrix,
-	      struct glyph_matrix *current_matrix, int row)
+make_current (struct glyph_matrix *desired_matrix, struct glyph_matrix *current_matrix, int row)
 {
   struct glyph_row *current_row = MATRIX_ROW (current_matrix, row);
   struct glyph_row *desired_row = MATRIX_ROW (desired_matrix, row);
   bool mouse_face_p = current_row->mouse_face_p;
-
-  /* If we aborted redisplay of this window, a row in the desired
-     matrix might not have its hash computed.  But update_window
-     relies on each row having its correct hash, so do it here if
-     needed.  */
-  if (!desired_row->hash
-      /* A glyph row that is not completely empty is unlikely to have
-	 a zero hash value.  */
-      && !(!desired_row->used[0]
-	   && !desired_row->used[1]
-	   && !desired_row->used[2]))
-    desired_row->hash = row_hash (desired_row);
 
   /* Do current_row = desired_row.  This exchanges glyph pointers
      between both rows, and does a structure assignment otherwise.  */
@@ -3152,19 +3112,10 @@ redraw_frame (struct frame *f)
   update_begin (f);
   if (FRAME_MSDOS_P (f))
     FRAME_TERMINAL (f)->set_terminal_modes_hook (FRAME_TERMINAL (f));
-
-  if (FRAME_WINDOW_P (f))
-    /* Garbage the frame now.  Otherwise, platforms that support
-       double buffering will display the blank contents of the frame
-       even though the frame should be redrawn at some point in the
-       future.  */
-    SET_FRAME_GARBAGED (f);
-
   clear_frame (f);
   clear_current_matrices (f);
   update_end (f);
   fset_redisplay (f);
-
   /* Mark all windows as inaccurate, so that every window will have
      its redisplay done.  */
   mark_window_display_accurate (FRAME_ROOT_WINDOW (f), 0);
@@ -3188,7 +3139,7 @@ DEFUN ("redraw-display", Fredraw_display, Sredraw_display, 0, 0, "",
   Lisp_Object tail, frame;
 
   FOR_EACH_FRAME (tail, frame)
-    if (FRAME_REDISPLAY_P (XFRAME (frame)))
+    if (FRAME_VISIBLE_P (XFRAME (frame)))
       redraw_frame (XFRAME (frame));
 
   return Qnil;
@@ -3899,9 +3850,6 @@ gui_update_window_end (struct window *w, bool cursor_on_p,
 				w->output_cursor.hpos, w->output_cursor.vpos,
 				w->output_cursor.x, w->output_cursor.y);
 
-      if (cursor_in_mouse_face_p (w) && cursor_on_p)
-	mouse_face_overwritten_p = 1;
-
       if (draw_window_fringes (w, true))
 	{
 	  if (WINDOW_RIGHT_DIVIDER_WIDTH (w))
@@ -3956,8 +3904,7 @@ update_marginal_area (struct window *w, struct glyph_row *updated_row,
    Value is true if display has changed.  */
 
 static bool
-update_text_area (struct window *w, struct glyph_row *updated_row, int vpos,
-		  bool *partial_p)
+update_text_area (struct window *w, struct glyph_row *updated_row, int vpos)
 {
   struct glyph_row *current_row = MATRIX_ROW (w->current_matrix, vpos);
   struct glyph_row *desired_row = MATRIX_ROW (w->desired_matrix, vpos);
@@ -3978,13 +3925,9 @@ update_text_area (struct window *w, struct glyph_row *updated_row, int vpos,
 	 However, it causes excessive flickering when mouse is moved
 	 across the mode line.  Luckily, turning it off for the mode
 	 line doesn't seem to hurt anything. -- cyd.
-         But it is still needed for the header line. -- kfs.
-         The header line vpos is 1 if a tab line is enabled.  (18th
-         Apr 2022) */
+         But it is still needed for the header line. -- kfs.  */
       || (current_row->mouse_face_p
-	  && !(current_row->mode_line_p
-	       && (vpos > (w->current_matrix->tab_line_p
-			   && w->current_matrix->header_line_p))))
+	  && !(current_row->mode_line_p && vpos > 0))
       || current_row->x != desired_row->x)
     {
       output_cursor_to (w, vpos, 0, desired_row->y, desired_row->x);
@@ -4063,13 +4006,6 @@ update_text_area (struct window *w, struct glyph_row *updated_row, int vpos,
 		{
 		  x += desired_glyph->pixel_width;
 		  ++desired_glyph, ++current_glyph, ++i;
-
-		  /* Say that only a partial update was performed of
-		     the current row (i.e. not all the glyphs were
-		     drawn).  This is used to preserve the stipple_p
-		     flag of the current row inside
-		     update_window_line.  */
-		  *partial_p = true;
 		}
 
 	      /* Consider the case that the current row contains "xxx
@@ -4141,14 +4077,8 @@ update_text_area (struct window *w, struct glyph_row *updated_row, int vpos,
 	      rif->write_glyphs (w, updated_row, start,
 				 TEXT_AREA, i - start_hpos);
 	      changed_p = 1;
-	      *partial_p = true;
 	    }
 	}
-
-      /* This means we will draw from the start, so no partial update
-	 is being performed.  */
-      if (!i)
-	*partial_p = false;
 
       /* Write the rest.  */
       if (i < desired_row->used[TEXT_AREA])
@@ -4222,9 +4152,7 @@ update_window_line (struct window *w, int vpos, bool *mouse_face_overwritten_p)
   struct glyph_row *current_row = MATRIX_ROW (w->current_matrix, vpos);
   struct glyph_row *desired_row = MATRIX_ROW (w->desired_matrix, vpos);
   struct redisplay_interface *rif = FRAME_RIF (XFRAME (WINDOW_FRAME (w)));
-
-  /* partial_p is true if not all of desired_row was drawn.  */
-  bool changed_p = 0, partial_p = 0, was_stipple;
+  bool changed_p = 0;
 
   /* A row can be completely invisible in case a desired matrix was
      built with a vscroll and then make_cursor_line_fully_visible shifts
@@ -4248,7 +4176,7 @@ update_window_line (struct window *w, int vpos, bool *mouse_face_overwritten_p)
 	}
 
       /* Update the display of the text area.  */
-      if (update_text_area (w, desired_row, vpos, &partial_p))
+      if (update_text_area (w, desired_row, vpos))
 	{
 	  changed_p = 1;
 	  if (current_row->mouse_face_p)
@@ -4277,17 +4205,7 @@ update_window_line (struct window *w, int vpos, bool *mouse_face_overwritten_p)
     }
 
   /* Update current_row from desired_row.  */
-  was_stipple = current_row->stipple_p;
   make_current (w->desired_matrix, w->current_matrix, vpos);
-
-  /* If only a partial update was performed, any stipple already
-     displayed in MATRIX_ROW (w->current_matrix, vpos) might still be
-     there, so don't hurry to clear that flag if it's not in
-     desired_row.  */
-
-  if (partial_p && was_stipple)
-    current_row->stipple_p = true;
-
   return changed_p;
 }
 
@@ -4309,11 +4227,11 @@ set_window_cursor_after_update (struct window *w)
       /* If we are showing a message instead of the mini-buffer,
 	 show the cursor for the message instead.  */
       && XWINDOW (minibuf_window) == w
-      && BASE_EQ (minibuf_window, echo_area_window)
+      && EQ (minibuf_window, echo_area_window)
       /* These cases apply only to the frame that contains
 	 the active mini-buffer window.  */
       && FRAME_HAS_MINIBUF_P (f)
-      && BASE_EQ (FRAME_MINIBUF_WINDOW (f), echo_area_window))
+      && EQ (FRAME_MINIBUF_WINDOW (f), echo_area_window))
     {
       cx = cy = vpos = hpos = 0;
 
@@ -4467,6 +4385,7 @@ add_row_entry (struct glyph_row *row)
   return entry;
 }
 
+
 /* Try to reuse part of the current display of W by scrolling lines.
    HEADER_LINE_P means W has a header line.
 
@@ -4512,14 +4431,6 @@ scrolling_window (struct window *w, int tab_line_p)
       struct glyph_row *d = MATRIX_ROW (desired_matrix, i);
       struct glyph_row *c = MATRIX_ROW (current_matrix, i);
 
-      /* If there is a row with a stipple currently on the glass, give
-	 up.  Stipples look different depending on where on the
-	 display they are drawn, so scrolling the display will produce
-	 incorrect results.  */
-
-      if (c->stipple_p)
-	return 0;
-
       if (c->enabled_p
 	  && d->enabled_p
 	  && !d->redraw_fringe_bitmaps_p
@@ -4535,6 +4446,16 @@ scrolling_window (struct window *w, int tab_line_p)
 	break;
     }
 
+#ifdef HAVE_XWIDGETS
+  /* Currently this seems needed to detect xwidget movement reliably.
+     This is most probably because an xwidget glyph is represented in
+     struct glyph's 'union u' by a pointer to a struct, which takes 8
+     bytes in 64-bit builds, and thus the comparison of u.val values
+     done by GLYPH_EQUAL_P doesn't work reliably, since it assumes the
+     size of the union is 4 bytes.  FIXME.  */
+    return 0;
+#endif
+
   /* Can't scroll the display of w32 GUI frames when position of point
      is indicated by the system caret, because scrolling the display
      will then "copy" the pixels used by the caret.  */
@@ -4548,16 +4469,6 @@ scrolling_window (struct window *w, int tab_line_p)
     return -1;
 
   first_old = first_new = i;
-
-  while (i < current_matrix->nrows - 1)
-    {
-      /* If there is a stipple after the first change, give up as
-	 well.  */
-      if (MATRIX_ROW (current_matrix, i)->stipple_p)
-	return 0;
-
-      ++i;
-    }
 
   /* Set last_new to the index + 1 of the row that reaches the
      bottom boundary in the desired matrix.  Give up if we find a
@@ -4941,9 +4852,7 @@ update_frame_1 (struct frame *f, bool force_p, bool inhibit_id_p,
     {
       if (MATRIX_ROW_ENABLED_P (desired_matrix, i))
 	{
-	  /* Note that output_buffer_size being 0 means that we want the
-	     old default behavior of flushing output every now and then.  */
-	  if (FRAME_TERMCAP_P (f) && FRAME_TTY (f)->output_buffer_size == 0)
+	  if (FRAME_TERMCAP_P (f))
 	    {
 	      /* Flush out every so many lines.
 		 Also flush out if likely to have more than 1k buffered
@@ -4975,13 +4884,13 @@ update_frame_1 (struct frame *f, bool force_p, bool inhibit_id_p,
 	   /* If we are showing a message instead of the mini-buffer,
 	      show the cursor for the message instead of for the
 	      (now hidden) mini-buffer contents.  */
-	   || (BASE_EQ (minibuf_window, selected_window)
-	       && BASE_EQ (minibuf_window, echo_area_window)
+	   || (EQ (minibuf_window, selected_window)
+	       && EQ (minibuf_window, echo_area_window)
 	       && !NILP (echo_area_buffer[0])))
 	  /* These cases apply only to the frame that contains
 	     the active mini-buffer window.  */
 	  && FRAME_HAS_MINIBUF_P (f)
-	  && BASE_EQ (FRAME_MINIBUF_WINDOW (f), echo_area_window))
+	  && EQ (FRAME_MINIBUF_WINDOW (f), echo_area_window))
 	{
 	  int top = WINDOW_TOP_EDGE_LINE (XWINDOW (FRAME_MINIBUF_WINDOW (f)));
 	  int col;
@@ -5008,10 +4917,6 @@ update_frame_1 (struct frame *f, bool force_p, bool inhibit_id_p,
 		}
 	    }
 	  while (row > top && col == 0);
-
-	  /* We exit the loop with COL at the glyph _after_ the last one.  */
-	  if (col > 0)
-	    col--;
 
 	  /* Make sure COL is not out of range.  */
 	  if (col >= FRAME_CURSOR_X_LIMIT (f))
@@ -6248,7 +6153,7 @@ sit_for (Lisp_Object timeout, bool reading, int display_option)
     wrong_type_argument (Qnumberp, timeout);
 
 
-#if defined (USABLE_SIGIO) || defined (USABLE_SIGPOLL)
+#ifdef USABLE_SIGIO
   gobble_input ();
 #endif
 
@@ -6278,13 +6183,15 @@ Return t if redisplay was performed, nil if redisplay was preempted
 immediately by pending input.  */)
   (Lisp_Object force)
 {
+  ptrdiff_t count;
+
   swallow_events (true);
   if ((detect_input_pending_run_timers (1)
        && NILP (force) && !redisplay_dont_pause)
       || !NILP (Vexecuting_kbd_macro))
     return Qnil;
 
-  specpdl_ref count = SPECPDL_INDEX ();
+  count = SPECPDL_INDEX ();
   if (!NILP (force) && !redisplay_dont_pause)
     specbind (Qredisplay_dont_pause, Qt);
   redisplay_preserve_echo_area (2);
@@ -6337,7 +6244,7 @@ pass nil for VARIABLE.  */)
     {
       if (idx == ASIZE (state))
 	goto changed;
-      if (!BASE_EQ (AREF (state, idx++), frame))
+      if (!EQ (AREF (state, idx++), frame))
 	goto changed;
       if (idx == ASIZE (state))
 	goto changed;
@@ -6352,7 +6259,7 @@ pass nil for VARIABLE.  */)
 	continue;
       if (idx == ASIZE (state))
 	goto changed;
-      if (!BASE_EQ (AREF (state, idx++), buf))
+      if (!EQ (AREF (state, idx++), buf))
 	goto changed;
       if (idx == ASIZE (state))
 	goto changed;
@@ -6522,6 +6429,9 @@ init_display_interactive (void)
   if (!inhibit_window_system && display_arg)
     {
       Vinitial_window_system = Qx;
+#ifdef HAVE_X11
+      Vwindow_system_version = make_fixnum (11);
+#endif
 #ifdef USE_NCURSES
       /* In some versions of ncurses,
 	 tputs crashes if we have not called tgetent.
@@ -6536,6 +6446,7 @@ init_display_interactive (void)
   if (!inhibit_window_system)
     {
       Vinitial_window_system = Qw32;
+      Vwindow_system_version = make_fixnum (1);
       return;
     }
 #endif /* HAVE_NTGUI */
@@ -6544,33 +6455,19 @@ init_display_interactive (void)
   if (!inhibit_window_system && !will_dump_p ())
     {
       Vinitial_window_system = Qns;
+      Vwindow_system_version = make_fixnum (10);
       return;
     }
 #endif
 
-#ifdef HAVE_PGTK
-  if (!inhibit_window_system && !will_dump_p ())
-    {
-      Vinitial_window_system = Qpgtk;
-      return;
-    }
-#endif
-
-#ifdef HAVE_HAIKU
-  if (!inhibit_window_system && !will_dump_p ())
-    {
-      Vinitial_window_system = Qhaiku;
-      return;
-    }
-#endif
-
-#ifdef HAVE_WINIT
+#ifdef USE_WEBRENDER
   if (!inhibit_window_system)
     {
-      Vinitial_window_system = Qwinit;
+      Vinitial_window_system = Qx; /* pretend webrender as a X gui backend, so we can reuse the x-win.el logic */
+      Vwindow_system_version = make_fixnum (1);
       return;
     }
-#endif /* HAVE_WINIT */
+#endif /* USE_WEBRENDER */
 
   /* If no window system has been specified, try to use the terminal.  */
   if (! isatty (STDIN_FILENO))
@@ -6763,8 +6660,6 @@ The value is a symbol:
  `w32' for an Emacs frame that is a window on MS-Windows display,
  `ns' for an Emacs frame on a GNUstep or Macintosh Cocoa display,
  `pc' for a direct-write MS-DOS frame.
- `pgtk' for an Emacs frame using pure GTK facilities.
- `haiku' for an Emacs frame running in Haiku.
 
 Use of this variable as a boolean is deprecated.  Instead,
 use `display-graphic-p' or any of the other `display-*-p'
@@ -6778,12 +6673,14 @@ The value is a symbol:
  `w32' for an Emacs frame that is a window on MS-Windows display,
  `ns' for an Emacs frame on a GNUstep or Macintosh Cocoa display,
  `pc' for a direct-write MS-DOS frame.
- `pgtk' for an Emacs frame using pure GTK facilities.
- `haiku' for an Emacs frame running in Haiku.
 
 Use of this variable as a boolean is deprecated.  Instead,
 use `display-graphic-p' or any of the other `display-*-p'
 predicates which report frame's specific UI-related capabilities.  */);
+
+  DEFVAR_LISP ("window-system-version", Vwindow_system_version,
+	       doc: /* The version number of the window system in use.
+For X windows, this is 11.  */);
 
   DEFVAR_BOOL ("cursor-in-echo-area", cursor_in_echo_area,
 	       doc: /* Non-nil means put cursor in minibuffer, at end of any message there.  */);
@@ -6816,10 +6713,6 @@ See `buffer-display-table' for more information.  */);
      beginning of the next redisplay).  */
   redisplay_dont_pause = true;
 
-  DEFVAR_LISP ("x-show-tooltip-timeout", Vx_show_tooltip_timeout,
-	      doc: /* The default timeout (in seconds) for `x-show-tip'.  */);
-  Vx_show_tooltip_timeout = make_fixnum (5);
-
   DEFVAR_LISP ("tab-bar-position", Vtab_bar_position,
 	       doc: /* Specify on which side from the tool bar the tab bar shall be.
 Possible values are t (below the tool bar), nil (above the tool bar).
@@ -6832,4 +6725,5 @@ static void
 syms_of_display_for_pdumper (void)
 {
   Vinitial_window_system = Qnil;
+  Vwindow_system_version = Qnil;
 }

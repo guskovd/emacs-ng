@@ -106,6 +106,9 @@ Lisp_Object O;
 - W->column_number_displayed
 + WVAR (W, column_number_displayed)
 |
+- W->redisplay_end_trigger
++ WVAR (W, redisplay_end_trigger)
+|
 - W->combination_limit
 + WVAR (W, combination_limit)
 |
@@ -221,6 +224,9 @@ Lisp_Object O;
 |
 - XWINDOW (O)->column_number_displayed
 + WVAR (XWINDOW (O), column_number_displayed)
+|
+- XWINDOW (O)->redisplay_end_trigger
++ WVAR (XWINDOW (O), redisplay_end_trigger)
 |
 - XWINDOW (O)->combination_limit
 + WVAR (XWINDOW (O), combination_limit)

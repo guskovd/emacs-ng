@@ -1,6 +1,6 @@
 /* update-game-score.c --- Update a score file
 
-Copyright (C) 2002-2023 Free Software Foundation, Inc.
+Copyright (C) 2002-2022 Free Software Foundation, Inc.
 
 Author: Colin Walters <walters@debian.org>
 
@@ -184,6 +184,8 @@ main (int argc, char **argv)
   bool reverse = false;
   ptrdiff_t scorecount, scorealloc;
   ptrdiff_t max_scores = MAX_SCORES;
+
+  srand (time (0));
 
   while ((c = getopt (argc, argv, "hrm:d:")) != -1)
     switch (c)
@@ -483,8 +485,8 @@ lock_file (const char *filename, void **state)
 	    return -1;
 	  attempts = 0;
 	}
-      else
-	sleep (1);
+
+      sleep ((rand () & 1) + 1);
     }
 
   close (fd);

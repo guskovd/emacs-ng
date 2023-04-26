@@ -1,11 +1,11 @@
 ;;; ob-groovy.el --- Babel Functions for Groovy      -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2013-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2013-2022 Free Software Foundation, Inc.
 
-;; Author: Miro Bezjak <bezjak.miro@gmail.com>
-;; Maintainer: Palak Mathur <palakmathur@gmail.com>
+;; Author: Miro Bezjak
+;; Maintainer: Palak Mathur
 ;; Keywords: literate programming, reproducible research
-;; URL: https://orgmode.org
+;; Homepage: https://orgmode.org
 
 ;; This file is part of GNU Emacs.
 
@@ -31,10 +31,6 @@
 ;;   https://github.com/russel/Emacs-Groovy-Mode
 
 ;;; Code:
-
-(require 'org-macs)
-(org-assert-version)
-
 (require 'ob)
 
 (defvar org-babel-tangle-lang-exts) ;; Autoloaded
@@ -52,7 +48,7 @@ parameters may be used, like groovy -v"
 (defun org-babel-execute:groovy (body params)
   "Execute a block of Groovy code with org-babel.
 This function is called by `org-babel-execute-src-block'."
-  (message "Executing Groovy source code block")
+  (message "executing Groovy source code block")
   (let* ((processed-params (org-babel-process-params params))
          (session (org-babel-groovy-initiate-session (nth 0 processed-params)))
          (result-params (nth 2 processed-params))

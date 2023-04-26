@@ -1,10 +1,10 @@
 ;;; org-archive.el --- Archiving for Org             -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2004-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2004-2022 Free Software Foundation, Inc.
 
 ;; Author: Carsten Dominik <carsten.dominik@gmail.com>
 ;; Keywords: outlines, hypermedia, calendar, wp
-;; URL: https://orgmode.org
+;; Homepage: https://orgmode.org
 ;;
 ;; This file is part of GNU Emacs.
 ;;
@@ -28,18 +28,12 @@
 
 ;;; Code:
 
-(require 'org-macs)
-(org-assert-version)
-
 (require 'org)
 (require 'cl-lib)
 
 (declare-function org-element-type "org-element" (element))
 (declare-function org-datetree-find-date-create "org-datetree" (date &optional keep-restriction))
 (declare-function org-inlinetask-remove-END-maybe "org-inlinetask" ())
-
-;; From org-element.el
-(defvar org-element--cache-avoid-synchronous-headline-re-parsing)
 
 (defcustom org-archive-default-command 'org-archive-subtree
   "The default archiving command."
@@ -239,7 +233,7 @@ direct children of this heading."
 	     (tr-org-odd-levels-only org-odd-levels-only)
 	     (this-buffer (current-buffer))
 	     (time (format-time-string
-                    (org-time-stamp-format 'with-time 'no-brackets)))
+		    (substring (cdr org-time-stamp-formats) 1 -1)))
 	     (file (abbreviate-file-name
 		    (or (buffer-file-name (buffer-base-buffer))
 			(error "No file associated to buffer"))))
@@ -259,9 +253,7 @@ direct children of this heading."
 	      (if (local-variable-p 'org-odd-levels-only (current-buffer))
 		  org-odd-levels-only
 		tr-org-odd-levels-only))
-	     level datetree-date datetree-subheading-p
-             ;; Suppress on-the-fly headline updates.
-             (org-element--cache-avoid-synchronous-headline-re-parsing t))
+	     level datetree-date datetree-subheading-p)
 	(when (string-match "\\`datetree/\\(\\**\\)" heading)
 	  ;; "datetree/" corresponds to 3 levels of headings.
 	  (let ((nsub (length (match-string 1 heading))))
@@ -327,7 +319,7 @@ direct children of this heading."
 		  (org-todo-regexp tr-org-todo-regexp)
 		  (org-todo-line-regexp tr-org-todo-line-regexp))
 	      (goto-char (point-min))
-	      (org-fold-show-all '(headings blocks))
+	      (org-show-all '(headings blocks))
 	      (if (and heading (not (and datetree-date (not datetree-subheading-p))))
 		  (progn
 		    (if (re-search-forward
@@ -342,7 +334,7 @@ direct children of this heading."
 		      (insert (if datetree-date "" "\n") heading "\n")
 		      (end-of-line 0))
 		    ;; Make the subtree visible
-		    (org-fold-show-subtree)
+		    (outline-show-subtree)
 		    (if org-archive-reversed-order
 			(progn
 			  (org-back-to-heading t)
@@ -420,7 +412,7 @@ direct children of this heading."
 		 (if (eq this-buffer buffer)
 		     (concat "under heading: " heading)
 		   (concat "in file: " (abbreviate-file-name afile)))))))
-    (org-fold-reveal)
+    (org-reveal)
     (if (looking-at "^[ \t]*$")
 	(outline-next-visible-heading 1))))
 
@@ -456,8 +448,6 @@ Archiving time is retained in the ARCHIVE_TIME node property."
 	(setq leader (match-string 0)
 	      level (funcall outline-level))
 	(setq pos (point-marker))
-        ;; Advance POS upon insertion in front of it.
-        (set-marker-insertion-type pos t)
 	(condition-case nil
 	    (outline-up-heading 1 t)
 	  (error (setq e (point-max)) (goto-char (point-min))))
@@ -490,15 +480,15 @@ Archiving time is retained in the ARCHIVE_TIME node property."
 	(org-set-property
 	 "ARCHIVE_TIME"
 	 (format-time-string
-          (org-time-stamp-format 'with-time 'no-brackets)))
+	  (substring (cdr org-time-stamp-formats) 1 -1)))
 	(outline-up-heading 1 t)
-	(org-fold-subtree t)
+	(org-flag-subtree t)
 	(org-cycle-show-empty-lines 'folded)
 	(when org-provide-todo-statistics
 	  ;; Update TODO statistics of parent.
 	  (org-update-parent-todo-statistics))
 	(goto-char pos)))
-    (org-fold-reveal)
+    (org-reveal)
     (if (looking-at "^[ \t]*$")
 	(outline-next-visible-heading 1))))
 
@@ -607,7 +597,7 @@ the children that do not contain any open TODO items."
 	(save-excursion
 	  (org-back-to-heading t)
 	  (setq set (org-toggle-tag org-archive-tag))
-	  (when set (org-fold-subtree t)))
+	  (when set (org-flag-subtree t)))
 	(and set (beginning-of-line 1))
 	(message "Subtree %s" (if set "archived" "unarchived"))))))
 

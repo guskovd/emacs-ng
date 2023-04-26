@@ -1,6 +1,6 @@
 ;;; whitespace.el --- minor mode to visualize TAB, (HARD) SPACE, NEWLINE -*- lexical-binding: t -*-
 
-;; Copyright (C) 2000-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2000-2022 Free Software Foundation, Inc.
 
 ;; Author: Vinicius Jose Latorre <viniciusjl.gnu@gmail.com>
 ;; Keywords: data, wp
@@ -272,126 +272,120 @@
     indentation empty space-after-tab
     space-mark tab-mark newline-mark
     missing-newline-at-eof)
-  "Determine the kinds of whitespace are visualized.
+  "Specify which kind of blank is visualized.
 
-The value is a list containing one or more of the following symbols:
+It's a list containing some or all of the following values:
 
-   face                 visualize by using faces (see below).
+   face			enable all visualization via faces (see below).
 
-   trailing             visualize trailing blanks via faces.
-                        This has effect only if `face' (see above)
-                        is present in `whitespace-style'.
+   trailing		trailing blanks are visualized via faces.
+			It has effect only if `face' (see above)
+			is present in `whitespace-style'.
 
-   tabs                 visualize TABs via faces.
-                        This has effect only if `face' (see above)
-                        is present in `whitespace-style'.
+   tabs			TABs are visualized via faces.
+			It has effect only if `face' (see above)
+			is present in `whitespace-style'.
 
-   spaces               visualize SPACEs and HARD SPACEs via
-                        faces.
-                        This has effect only if `face' (see above)
-                        is present in `whitespace-style'.
+   spaces		SPACEs and HARD SPACEs are visualized via
+			faces.
+			It has effect only if `face' (see above)
+			is present in `whitespace-style'.
 
-   lines                highlight lines which have columns beyond
-                        `whitespace-line-column' via faces.
-                        Whole line is highlighted.
-                        This has precedence over `lines-tail' and
-                        `lines-char' (see below).
-                        This has effect only if `face' (see above)
-                        is present in `whitespace-style'.
+   lines		lines which have columns beyond
+			`whitespace-line-column' are highlighted via
+			faces.
+			Whole line is highlighted.
+			It has precedence over `lines-tail' (see
+			below).
+			It has effect only if `face' (see above)
+			is present in `whitespace-style'.
 
-   lines-tail           highlighted lines which have columns beyond
-                        `whitespace-line-column' via faces.
-                        Only the part of line which goes beyond
-                        `whitespace-line-column' column.
-                        This has effect only if `lines' (see above)
-                        is NOT present in `whitespace-style',
-                        and if `face' (see above) IS present in
-                        `whitespace-style'.
+   lines-tail		lines which have columns beyond
+			`whitespace-line-column' are highlighted via
+			faces.
+			But only the part of line which goes
+			beyond `whitespace-line-column' column.
+			It has effect only if `lines' (see above)
+			is not present in `whitespace-style'
+			and if `face' (see above) is present in
+			`whitespace-style'.
 
-   lines-char           lines which have columns beyond
-                        `whitespace-line-column' are highlighted via
-                        putting a face on the first character that goes
-                        beyond the `whitespace-line-column' column.
-                        It has effect only if `lines' or
-                        `lines-tail' (see above) is not present
-                        in `whitespace-style' and if `face' (see
-                        above) is present in `whitespace-style'.
+   newline		NEWLINEs are visualized via faces.
+			It has effect only if `face' (see above)
+			is present in `whitespace-style'.
 
-   newline              visualize NEWLINEs via faces.
-                        This has effect only if `face' (see above)
-                        is present in `whitespace-style'.
+   missing-newline-at-eof Missing newline at the end of the file is
+                        visualized via faces.
+			It has effect only if `face' (see above)
+			is present in `whitespace-style'.
 
-   missing-newline-at-eof visualize missing newline at the end of
-                        the file via faces.
-                        This has effect only if `face' (see above)
-                        is present in `whitespace-style'.
+   empty		empty lines at beginning and/or end of buffer
+			are visualized via faces.
+			It has effect only if `face' (see above)
+			is present in `whitespace-style'.
 
-   empty                visualize empty lines at beginning and/or
-                        end of buffer via faces.
-                        This has effect only if `face' (see above)
-                        is present in `whitespace-style'.
+   indentation::tab	`tab-width' or more SPACEs at beginning of line
+			are visualized via faces.
+			It has effect only if `face' (see above)
+			is present in `whitespace-style'.
 
-   indentation::tab     visualize `tab-width' or more SPACEs at
-                        beginning of line via faces.
-                        This has effect only if `face' (see above)
-                        is present in `whitespace-style'.
+   indentation::space	TABs at beginning of line are visualized via
+			faces.
+			It has effect only if `face' (see above)
+			is present in `whitespace-style'.
 
-   indentation::space   visualize TABs at beginning of line via
-                        faces.
-                        This has effect only if `face' (see above)
-                        is present in `whitespace-style'.
+   indentation		`tab-width' or more SPACEs at beginning of line
+			are visualized, if `indent-tabs-mode' (which
+			see) is non-nil; otherwise, TABs at beginning
+			of line are visualized via faces.
+			It has effect only if `face' (see above)
+			is present in `whitespace-style'.
 
-   indentation          visualize `tab-width' or more SPACEs at
-                        beginning of line, if `indent-tabs-mode' (which
-                        see) is non-nil; otherwise, visualize TABs
-                        at beginning of line via faces.
-                        This has effect only if `face' (see above)
-                        is present in `whitespace-style'.
+   big-indent		Big indentations are visualized via faces.
+			It has effect only if `face' (see above)
+			is present in `whitespace-style'.
 
-   big-indent           visualize big indentations via faces.
-                        This has effect only if `face' (see above)
-                        is present in `whitespace-style'.
+   space-after-tab::tab		`tab-width' or more SPACEs after a TAB
+				are visualized via faces.
+				It has effect only if `face' (see above)
+				is present in `whitespace-style'.
 
-   space-after-tab::tab         visualize `tab-width' or more SPACEs
-                                after a TAB via faces.
-                                This has effect only if `face' (see above)
-                                is present in `whitespace-style'.
+   space-after-tab::space	TABs are visualized when `tab-width' or
+				more SPACEs occur after a TAB, via
+				faces.
+				It has effect only if `face' (see above)
+				is present in `whitespace-style'.
 
-   space-after-tab::space       visualize TABs when `tab-width' or
-                                more SPACEs occur after a TAB, via
-                                faces.
-                                This has effect only if `face' (see above)
-                                is present in `whitespace-style'.
+   space-after-tab		`tab-width' or more SPACEs after a TAB
+				are visualized, if `indent-tabs-mode'
+				(which see) is non-nil; otherwise,
+				the TABs are visualized via faces.
+				It has effect only if `face' (see above)
+				is present in `whitespace-style'.
 
-   space-after-tab              visualize `tab-width' or more SPACEs
-                                after a TAB, if `indent-tabs-mode'
-                                (which see) is non-nil; otherwise,
-                                visualize the TABs via faces.
-                                This has effect only if `face' (see above)
-                                is present in `whitespace-style'.
+   space-before-tab::tab	SPACEs before TAB are visualized via
+				faces.
+				It has effect only if `face' (see above)
+				is present in `whitespace-style'.
 
-   space-before-tab::tab        visualize SPACEs before TAB via faces.
-                                This has effect only if `face' (see above)
-                                is present in `whitespace-style'.
+   space-before-tab::space	TABs are visualized when SPACEs occur
+				before TAB, via faces.
+				It has effect only if `face' (see above)
+				is present in `whitespace-style'.
 
-   space-before-tab::space      visualize TABs when SPACEs occur
-                                before TAB, via faces.
-                                This has effect only if `face' (see above)
-                                is present in `whitespace-style'.
+   space-before-tab		SPACEs before TAB are visualized, if
+				`indent-tabs-mode' (which see) is
+				non-nil; otherwise, the TABs are
+				visualized via faces.
+				It has effect only if `face' (see above)
+				is present in `whitespace-style'.
 
-   space-before-tab             visualize SPACEs before TAB, if
-                                `indent-tabs-mode' (which see) is
-                                non-nil; otherwise, visualize TABs
-                                via faces.
-                                This has effect only if `face' (see above)
-                                is present in `whitespace-style'.
+   space-mark		SPACEs and HARD SPACEs are visualized via
+			display table.
 
-   space-mark           visualize SPACEs and HARD SPACEs via
-                        display table.
+   tab-mark		TABs are visualized via display table.
 
-   tab-mark             visualize TABs via display table.
-
-   newline-mark         visualize NEWLINEs via display table.
+   newline-mark		NEWLINEs are visualized via display table.
 
 Any other value is ignored.
 
@@ -401,7 +395,8 @@ via display table.
 There is an evaluation order for some values, if they are
 included in `whitespace-style' list.  For example, if
 indentation, indentation::tab and/or indentation::space are
-included in `whitespace-style' list, the evaluation order is:
+included in `whitespace-style' list.  The evaluation order for
+these values is:
 
  * For indentation:
    1. indentation
@@ -436,7 +431,6 @@ See also `whitespace-display-mappings' for documentation."
               (const :tag "(Face) SPACEs and HARD SPACEs" spaces)
               (const :tag "(Face) Lines" lines)
               (const :tag "(Face) Lines, only overlong part" lines-tail)
-              (const :tag "(Face) Lines, only first character" lines-char)
               (const :tag "(Face) NEWLINEs" newline)
               (const :tag "(Face) Missing newlines at EOB"
                      missing-newline-at-eof)
@@ -473,9 +467,7 @@ Used when `whitespace-style' includes the value `spaces'.")
     (((class color) (background light))
      :background "LightYellow" :foreground "lightgray")
     (t :inverse-video t))
-  "Face used to visualize SPACE.
-
-See `whitespace-space-regexp'."
+  "Face used to visualize SPACE."
   :group 'whitespace)
 
 
@@ -490,9 +482,7 @@ Used when `whitespace-style' includes the value `spaces'.")
     (((class color) (background light))
      :background "LemonChiffon3" :foreground "lightgray")
     (t :inverse-video t))
-  "Face used to visualize HARD SPACE.
-
-See `whitespace-hspace-regexp'."
+  "Face used to visualize HARD SPACE."
   :group 'whitespace)
 
 
@@ -508,9 +498,7 @@ Used when `whitespace-style' includes the value `tabs'.")
     (((class color) (background light))
      :background "beige"  :foreground "lightgray")
     (t :inverse-video t))
-  "Face used to visualize TAB.
-
-See `whitespace-tab-regexp'."
+  "Face used to visualize TAB."
   :group 'whitespace)
 
 
@@ -544,9 +532,7 @@ Used when `whitespace-style' includes the value `trailing'.")
   '((default :weight bold)
     (((class mono)) :inverse-video t :underline t)
     (t :background "red1" :foreground "yellow"))
-  "Face used to visualize trailing blanks.
-
-See `whitespace-trailing-regexp'."
+  "Face used to visualize trailing blanks."
   :group 'whitespace)
 
 
@@ -574,9 +560,7 @@ Used when `whitespace-style' includes the value `space-before-tab'.")
 (defface whitespace-space-before-tab
   '((((class mono)) :inverse-video t :weight bold :underline t)
     (t :background "DarkOrange" :foreground "firebrick"))
-  "Face used to visualize SPACEs before TAB.
-
-See `whitespace-space-before-tab-regexp'."
+  "Face used to visualize SPACEs before TAB."
   :group 'whitespace)
 
 
@@ -588,17 +572,13 @@ Used when `whitespace-style' includes the value `indentation'.")
 (defface whitespace-indentation
   '((((class mono)) :inverse-video t :weight bold :underline t)
     (t :background "yellow" :foreground "firebrick"))
-  "Face used to visualize `tab-width' or more SPACEs at beginning of line.
-
-See `whitespace-indentation-regexp'."
+  "Face used to visualize `tab-width' or more SPACEs at beginning of line."
   :group 'whitespace)
 
 (defface whitespace-big-indent
   '((((class mono)) :inverse-video t :weight bold :underline t)
     (t :background "red" :foreground "firebrick"))
-  "Face used to visualize big indentation.
-
-See `whitespace-big-indent-regexp'."
+  "Face used to visualize big indentation."
   :group 'whitespace)
 
 (defface whitespace-missing-newline-at-eof
@@ -614,9 +594,7 @@ Used when `whitespace-style' includes the value `empty'.")
 (defface whitespace-empty
   '((((class mono)) :inverse-video t :weight bold :underline t)
     (t :background "yellow" :foreground "firebrick" :extend t))
-  "Face used to visualize empty lines at beginning and/or end of buffer.
-
-See `whitespace-empty-at-bob-regexp' and `whitespace-empty-at-eob-regexp."
+  "Face used to visualize empty lines at beginning and/or end of buffer."
   :group 'whitespace)
 
 
@@ -629,17 +607,14 @@ Used when `whitespace-style' includes the value `space-after-tab'.")
 (defface whitespace-space-after-tab
   '((((class mono)) :inverse-video t :weight bold :underline t)
     (t :background "yellow" :foreground "firebrick"))
-  "Face used to visualize `tab-width' or more SPACEs after TAB.
-
-See `whitespace-space-after-tab-regexp'."
+  "Face used to visualize `tab-width' or more SPACEs after TAB."
   :group 'whitespace)
 
 
 (defcustom whitespace-hspace-regexp
   "\\(\u00A0+\\)"
-  "Regexp to match HARD SPACE characters that should be visualized.
+  "Specify HARD SPACE characters regexp.
 
-The HARD SPACE characters are highlighted using the `whitespace-hspace' face.
 Here are some examples:
 
    \"\\\\(^\\xA0+\\\\)\"		\
@@ -651,21 +626,19 @@ visualize leading and/or trailing HARD SPACEs.
    \"\\t\\\\(\\xA0+\\\\)\\t\"		\
 visualize only HARD SPACEs between TABs.
 
-NOTE: Always enclose the elements to highlight in \\\\(...\\\\).
+NOTE: Enclose always by \\\\( and \\\\) the elements to highlight.
       Use exactly one pair of enclosing \\\\( and \\\\).
 
-This variable is used when `whitespace-style' includes `spaces'."
+Used when `whitespace-style' includes `spaces'."
   :type '(regexp :tag "HARD SPACE Chars")
   :group 'whitespace)
 
 
 (defcustom whitespace-space-regexp "\\( +\\)"
-  "Regexp to match SPACE characters that should be visualized.
+  "Specify SPACE characters regexp.
 
-The SPACE characters are highlighted using the `whitespace-space' face.
-By default only ASCII SPACE character is visualized, but if you
-are typing in some non-Latin language, there may be other
-characters besides \" \" that should be considered SPACE.
+If you're using `mule' package, there may be other characters
+besides \" \" that should be considered SPACE.
 
 Here are some examples:
 
@@ -675,21 +648,19 @@ Here are some examples:
 visualize leading and/or trailing SPACEs.
    \"\\t\\\\( +\\\\)\\t\"	visualize only SPACEs between TABs.
 
-NOTE: Always enclose the elements to highlight in \\\\(...\\\\).
+NOTE: Enclose always by \\\\( and \\\\) the elements to highlight.
       Use exactly one pair of enclosing \\\\( and \\\\).
 
-This variable is used when `whitespace-style' includes `spaces'."
+Used when `whitespace-style' includes `spaces'."
   :type '(regexp :tag "SPACE Chars")
   :group 'whitespace)
 
 
 (defcustom whitespace-tab-regexp "\\(\t+\\)"
-  "Regexp to match TAB characters that should be visualized.
+  "Specify TAB characters regexp.
 
-The TAB characters are highlighted using the `whitespace-tab' face.
-By default only ASCII TAB character is visualized, but if you
-are typing in some non-Latin language, there may be other
-characters besides \" \" that should be considered a TAB.
+If you're using `mule' package, there may be other characters
+besides \"\\t\" that should be considered TAB.
 
 Here are some examples:
 
@@ -699,40 +670,37 @@ Here are some examples:
 visualize leading and/or trailing TABs.
    \" \\\\(\\t+\\\\) \"	visualize only TABs between SPACEs.
 
-NOTE: Always enclose the elements to highlight in \\\\(...\\\\).
+NOTE: Enclose always by \\\\( and \\\\) the elements to highlight.
       Use exactly one pair of enclosing \\\\( and \\\\).
 
-This variable is used when `whitespace-style' includes `tabs'."
+Used when `whitespace-style' includes `tabs'."
   :type '(regexp :tag "TAB Chars")
   :group 'whitespace)
 
 
 (defcustom whitespace-trailing-regexp
   "\\([\t \u00A0]+\\)$"
-  "Regexp to match trailing characters that should be visualized.
+  "Specify trailing characters regexp.
 
-The trailing characters are highlighted using the `whitespace-trailing' face.
 There may be other characters besides:
 
    \" \"  \"\\t\"  \"\\u00A0\"
 
 that should be considered blank.
 
-NOTE: Always enclose the elements to highlight in \"\\\\(\"...\"\\\\)$\".
+NOTE: Enclose always by \"\\\\(\" and \"\\\\)$\" the elements to highlight.
       Use exactly one pair of enclosing elements above.
 
-This variable is used when `whitespace-style' includes `trailing'."
+Used when `whitespace-style' includes `trailing'."
   :type '(regexp :tag "Trailing Chars")
   :group 'whitespace)
 
 
 (defcustom whitespace-space-before-tab-regexp "\\( +\\)\\(\t+\\)"
-  "Regexp to match SPACEs before TAB that should be visualized.
+  "Specify SPACEs before TAB regexp.
 
-The SPACE characters are highlighted using the `whitespace-space-before-tab'
-face.
-This variable is used when `whitespace-style' includes
-`space-before-tab', `space-before-tab::tab' or `space-before-tab::space'."
+Used when `whitespace-style' includes `space-before-tab',
+`space-before-tab::tab' or  `space-before-tab::space'."
   :type '(regexp :tag "SPACEs Before TAB")
   :group 'whitespace)
 
@@ -740,35 +708,30 @@ This variable is used when `whitespace-style' includes
 (defcustom whitespace-indentation-regexp
   '("^\t*\\(\\( \\{%d\\}\\)+\\)[^\n\t]"
     . "^ *\\(\t+\\)[^\n]")
-  "Regexps to match indentation whitespace that should be visualized.
+  "Specify regexp for `tab-width' or more SPACEs at beginning of line.
 
-The value should be a cons whose car specifies the regexp to match
-visualization of SPACEs, and the cdr specifies the regexp to match
-visualization of TABs.
+It is a cons where the cons car is used for SPACEs visualization
+and the cons cdr is used for TABs visualization.
 
-The indentation characters are highlighted using the `whitespace-indentation'
-face.
-This variable is used when `whitespace-style' includes `indentation',
+Used when `whitespace-style' includes `indentation',
 `indentation::tab' or  `indentation::space'."
   :type '(cons (string :tag "Indentation SPACEs")
 	       (regexp :tag "Indentation TABs"))
   :group 'whitespace)
 
 
-(defcustom whitespace-empty-at-bob-regexp "\\`\\([ \t\n]*\\(?:\n\\|$\\)\\)"
-  "Regexp to match empty lines at beginning of buffer that should be visualized.
+(defcustom whitespace-empty-at-bob-regexp "\\`\\(\\([ \t]*\n\\)+\\)"
+  "Specify regexp for empty lines at beginning of buffer.
 
-The empty lines are highlighted using the `whitespace-empty' face.
-This variable is used when `whitespace-style' includes `empty'."
+Used when `whitespace-style' includes `empty'."
   :type '(regexp :tag "Empty Lines At Beginning Of Buffer")
   :group 'whitespace)
 
 
 (defcustom whitespace-empty-at-eob-regexp "^\\([ \t\n]+\\)\\'"
-  "Regexp to match empty lines at end of buffer that should be visualized.
+  "Specify regexp for empty lines at end of buffer.
 
-The empty lines are highlighted using the `whitespace-empty' face.
-This variable is used when `whitespace-style' includes `empty'."
+Used when `whitespace-style' includes `empty'."
   :type '(regexp :tag "Empty Lines At End Of Buffer")
   :group 'whitespace)
 
@@ -776,16 +739,12 @@ This variable is used when `whitespace-style' includes `empty'."
 (defcustom whitespace-space-after-tab-regexp
   '("\t+\\(\\( \\{%d,\\}\\)+\\)"
     . "\\(\t+\\) \\{%d,\\}")
-  "Regexps to match multiple SPACEs after TAB that should be visualized.
+  "Specify regexp for `tab-width' or more SPACEs after TAB.
 
-The SPACE and TAB characters will be visualized if there at least
-as many SPACEs as `tab-width' after a TAB.
-The value should be a cons whose car is used for SPACEs visualization
-and whose cdr is used for TABs visualization.
+It is a cons where the cons car is used for SPACEs visualization
+and the cons cdr is used for TABs visualization.
 
-The SPACE characters are highlighted using the `whitespace-space-after-tab'
-face.
-This variable is used when `whitespace-style' includes `space-after-tab',
+Used when `whitespace-style' includes `space-after-tab',
 `space-after-tab::tab' or `space-after-tab::space'."
   :type '(cons (string :tag "SPACEs After TAB")
 	       string)
@@ -793,33 +752,27 @@ This variable is used when `whitespace-style' includes `space-after-tab',
 
 (defcustom whitespace-big-indent-regexp
   "^\\(\\(?:\t\\{4,\\}\\| \\{32,\\}\\)[\t ]*\\)"
-  "Regexp to match big indentation at BOL that should be visualized.
+  "Specify big indentation regexp.
 
-The indentation characters are highlighted using the `whitespace-big-indent'
-face.
-If you're using non-Latin languages, there may be other characters
-besides \"\\t\" that should be considered a TAB.
+If you're using `mule' package, there may be other characters
+besides \"\\t\" that should be considered TAB.
 
-NOTE: Always enclose the elements to highlight in \\\\(...\\\\).
+NOTE: Enclose always by \\\\( and \\\\) the elements to highlight.
       Use exactly one pair of enclosing \\\\( and \\\\).
 
-This variable is used when `whitespace-style' includes `big-indent'."
+Used when `whitespace-style' includes `big-indent'."
   :version "25.1"
   :type '(regexp :tag "Detect too much indentation at the beginning of a line")
   :group 'whitespace)
 
 
 (defcustom whitespace-line-column 80
-  "Column beyond which the line is highlighted.
+  "Specify column beyond which the line is highlighted.
 
-The value must be an integer or nil.  If nil, use the value
-of the `fill-column' variable.
+It must be an integer or nil.  If nil, the `fill-column' variable value is
+used.
 
-The characters beyond the column specified by this variable are
-highlighted using the `whitespace-line' face.
-
-This variable is used when `whitespace-style' includes `lines',
-`lines-tail' or `lines-char'."
+Used when `whitespace-style' includes `lines' or `lines-tail'."
   :type '(choice :tag "Line Length Limit"
 		 (integer :tag "Line Length")
 		 (const :tag "Use fill-column" nil))
@@ -847,7 +800,7 @@ This variable is used when `whitespace-style' includes `lines',
     ;; If this is a problem for you, please, comment the line below.
     (tab-mark     ?\t    [?» ?\t] [?\\ ?\t])	; tab - right guillemet
     )
-  "Alist of mappings for displaying characters.
+  "Specify an alist of mappings for displaying characters.
 
 Each element has the following form:
 
@@ -855,27 +808,27 @@ Each element has the following form:
 
 Where:
 
-KIND    is the kind of character.
-        It can be one of the following symbols:
+KIND	is the kind of character.
+	It can be one of the following symbols:
 
-        tab-mark        for TAB character
+	tab-mark	for TAB character
 
-        space-mark      for SPACE or HARD SPACE character
+	space-mark	for SPACE or HARD SPACE character
 
-        newline-mark    for NEWLINE character
+	newline-mark	for NEWLINE character
 
-CHAR    is the character to be mapped.
+CHAR	is the character to be mapped.
 
-VECTOR  is a vector of characters to be displayed in place of CHAR.
-        The first vector that can be displayed by the terminal is used;
-        if no display vector for a mapping can be displayed, then
-        that character is displayed unmodified.
+VECTOR	is a vector of characters to be displayed in place of CHAR.
+	The first display vector that can be displayed is used;
+	if no display vector for a mapping can be displayed, then
+	that character is displayed unmodified.
 
 The NEWLINE character is displayed using the face given by
 `whitespace-newline' variable.
 
-This variable is used when `whitespace-style' includes `tab-mark',
-`space-mark' or `newline-mark'."
+Used when `whitespace-style' includes `tab-mark', `space-mark' or
+`newline-mark'."
   :type '(repeat
 	  (list :tag "Character Mapping"
 		(choice :tag "Char Kind"
@@ -897,7 +850,8 @@ This variable is used when `whitespace-style' includes `tab-mark',
 Global `whitespace-mode' is controlled by the command
 `global-whitespace-mode'.
 
-If nil, no modes have `whitespace-mode' automatically turned on.
+If nil, means no modes have `whitespace-mode' automatically
+turned on.
 
 If t, all modes that support `whitespace-mode' have it
 automatically turned on.
@@ -924,29 +878,29 @@ C++ modes only."
 (defcustom whitespace-action nil
   "Specify which action is taken when a buffer is visited or written.
 
-The value is a list containing one or more of the following symbols:
+It's a list containing some or all of the following values:
 
-   nil                  no action is taken.
+   nil			no action is taken.
 
-   cleanup              always cleanup any bogus whitespace when local
-                        whitespace is turned on.
-                        See `whitespace-cleanup' and
-                        `whitespace-cleanup-region'.
+   cleanup		cleanup any bogus whitespace always when local
+			whitespace is turned on.
+			See `whitespace-cleanup' and
+			`whitespace-cleanup-region'.
 
-   report-on-bogus      always report if there is any bogus whitespace
-                        when local whitespace is turned on.
+   report-on-bogus	report if there is any bogus whitespace always
+			when local whitespace is turned on.
 
-   auto-cleanup         cleanup any bogus whitespace when buffer is
-                        written.
-                        See `whitespace-cleanup' and
-                        `whitespace-cleanup-region'.
+   auto-cleanup		cleanup any bogus whitespace when buffer is
+			written.
+			See `whitespace-cleanup' and
+			`whitespace-cleanup-region'.
 
-   abort-on-bogus       signal an error when writing the buffer if there is
-                        any bogus whitespace in the buffer.
+   abort-on-bogus	abort if there is any bogus whitespace and the
+			buffer is written.
 
-   warn-if-read-only    give a warning if `cleanup' or `auto-cleanup'
-                        is included in `whitespace-action' and the
-                        buffer is read-only.
+   warn-if-read-only	give a warning if `cleanup' or `auto-cleanup'
+			is included in `whitespace-action' and the
+			buffer is read-only.
 
 Any other value is treated as nil."
   :type '(choice :tag "Actions"
@@ -1014,11 +968,34 @@ See also `whitespace-newline' and `whitespace-display-mappings'."
 
 
 ;;;###autoload
-(define-globalized-minor-mode global-whitespace-mode
-  whitespace-mode
-  whitespace-turn-on-if-enabled
+(define-minor-mode global-whitespace-mode
+  "Toggle whitespace visualization globally (Global Whitespace mode).
+
+See also `whitespace-style', `whitespace-newline' and
+`whitespace-display-mappings'."
+  :lighter    " WS"
   :init-value nil
-  :group 'whitespace)
+  :global     t
+  :group      'whitespace
+  (cond
+   (noninteractive			; running a batch job
+    (setq global-whitespace-mode nil))
+   (global-whitespace-mode		; global-whitespace-mode on
+    (save-current-buffer
+      (add-hook 'find-file-hook 'whitespace-turn-on-if-enabled)
+      (add-hook 'after-change-major-mode-hook 'whitespace-turn-on-if-enabled)
+      (dolist (buffer (buffer-list))	; adjust all local mode
+	(set-buffer buffer)
+	(unless whitespace-mode
+	  (whitespace-turn-on-if-enabled)))))
+   (t					; global-whitespace-mode off
+    (save-current-buffer
+      (remove-hook 'find-file-hook 'whitespace-turn-on-if-enabled)
+      (remove-hook 'after-change-major-mode-hook 'whitespace-turn-on-if-enabled)
+      (dolist (buffer (buffer-list))	; adjust all local mode
+	(set-buffer buffer)
+	(unless whitespace-mode
+	  (whitespace-turn-off)))))))
 
 (defvar whitespace-enable-predicate
   (lambda ()
@@ -1044,7 +1021,7 @@ This variable is normally modified via `add-function'.")
 
 (defun whitespace-turn-on-if-enabled ()
   (when (funcall whitespace-enable-predicate)
-    (whitespace-mode)))
+    (whitespace-turn-on)))
 
 ;;;###autoload
 (define-minor-mode global-whitespace-newline-mode
@@ -1081,7 +1058,6 @@ See also `whitespace-newline' and `whitespace-display-mappings'."
     trailing
     lines
     lines-tail
-    lines-char
     newline
     empty
     indentation
@@ -1109,7 +1085,6 @@ See also `whitespace-newline' and `whitespace-display-mappings'."
     (?r    . trailing)
     (?l    . lines)
     (?L    . lines-tail)
-    (?\C-l . lines-char)
     (?n    . newline)
     (?e    . empty)
     (?\C-i . indentation)
@@ -1141,33 +1116,28 @@ SYMBOL	is a valid symbol associated with CHAR.
 	See `whitespace-style-value-list'.")
 
 
-(defvar-local whitespace-active-style nil
+(defvar whitespace-active-style nil
   "Used to save locally `whitespace-style' value.")
 
-(defvar-local whitespace-point (point)
+(defvar whitespace-point (point)
   "Used to save locally current point value.
 Used by function `whitespace-trailing-regexp' (which see).")
 (defvar-local whitespace-point--used nil
   "Region whose highlighting depends on `whitespace-point'.")
 
-(defvar-local whitespace-bob-marker nil
-  "Position of the buffer's first non-empty line.
-This marker is positioned at the beginning of the first line in
-the buffer that contains a non-space character.  If no such line
-exists, this is positioned at the end of the buffer (which could
-be after `whitespace-eob-marker' if the buffer contains nothing
-but empty lines).")
+(defvar whitespace-font-lock-refontify nil
+  "Used to save locally the font-lock refontify state.
+Used by function `whitespace-post-command-hook' (which see).")
 
-(defvar-local whitespace-eob-marker nil
-  "Position after the buffer's last non-empty line.
-This marker is positioned at the beginning of the first line
-immediately following the last line in the buffer that contains a
-non-space character.  If no such line exists, this is positioned
-at the beginning of the buffer (which could be before
-`whitespace-bob-marker' if the buffer contains nothing but empty
-lines).")
+(defvar whitespace-bob-marker nil
+  "Used to save locally the bob marker value.
+Used by function `whitespace-post-command-hook' (which see).")
 
-(defvar-local whitespace-buffer-changed nil
+(defvar whitespace-eob-marker nil
+  "Used to save locally the eob marker value.
+Used by function `whitespace-post-command-hook' (which see).")
+
+(defvar whitespace-buffer-changed nil
   "Used to indicate locally if buffer changed.
 Used by `whitespace-post-command-hook' and `whitespace-buffer-changed'
 functions (which see).")
@@ -1274,7 +1244,6 @@ Interactively, it accepts one of the following chars:
    r	toggle trailing blanks visualization
    l	toggle \"long lines\" visualization
    L	toggle \"long lines\" tail visualization
-   C-l	toggle \"long lines\" one character visualization
    n	toggle NEWLINE visualization
    e	toggle empty line at bob and/or eob visualization
    C-i	toggle indentation SPACEs visualization (via `indent-tabs-mode')
@@ -1305,7 +1274,6 @@ The valid symbols are:
    trailing		toggle trailing blanks visualization
    lines		toggle \"long lines\" visualization
    lines-tail		toggle \"long lines\" tail visualization
-   lines-char		toggle \"long lines\" one character visualization
    newline		toggle NEWLINE visualization
    empty		toggle empty line at bob and/or eob visualization
    indentation		toggle indentation SPACEs visualization
@@ -1714,37 +1682,37 @@ cleaning up these problems."
            (rstart    (min start end))
            (rend      (max start end))
            ;; Fall back to whitespace-style so we can run before
-           ;; the mode is active.
+           ;; before the mode is active.
            (style     (copy-sequence
                        (or whitespace-active-style whitespace-style)))
            (bogus-list
             (mapcar
-             (lambda (option)
-               (when force
-                 (push (car option) style))
-               (goto-char rstart)
-               (let ((regexp
-                      (cond
-                       ((eq (car option) 'indentation)
-                        (whitespace-indentation-regexp))
-                       ((eq (car option) 'indentation::tab)
-                        (whitespace-indentation-regexp 'tab))
-                       ((eq (car option) 'indentation::space)
-                        (whitespace-indentation-regexp 'space))
-                       ((eq (car option) 'space-after-tab)
-                        (whitespace-space-after-tab-regexp))
-                       ((eq (car option) 'space-after-tab::tab)
-                        (whitespace-space-after-tab-regexp 'tab))
-                       ((eq (car option) 'space-after-tab::space)
-                        (whitespace-space-after-tab-regexp 'space))
-                       ((eq (car option) 'missing-newline-at-eof)
-                        "[^\n]\\'")
-                       (t
-                        (cdr option)))))
-                 (when (re-search-forward regexp rend t)
-                   (unless has-bogus
-                     (setq has-bogus (memq (car option) style)))
-                   t)))
+             #'(lambda (option)
+                 (when force
+                   (push (car option) style))
+                 (goto-char rstart)
+                 (let ((regexp
+                        (cond
+                         ((eq (car option) 'indentation)
+                          (whitespace-indentation-regexp))
+                         ((eq (car option) 'indentation::tab)
+                          (whitespace-indentation-regexp 'tab))
+                         ((eq (car option) 'indentation::space)
+                          (whitespace-indentation-regexp 'space))
+                         ((eq (car option) 'space-after-tab)
+                          (whitespace-space-after-tab-regexp))
+                         ((eq (car option) 'space-after-tab::tab)
+                          (whitespace-space-after-tab-regexp 'tab))
+                         ((eq (car option) 'space-after-tab::space)
+                          (whitespace-space-after-tab-regexp 'space))
+                         ((eq (car option) 'missing-newline-at-eof)
+                          "[^\n]\\'")
+                         (t
+                          (cdr option)))))
+                   (when (re-search-forward regexp rend t)
+                     (unless has-bogus
+                       (setq has-bogus (memq (car option) style)))
+                     t)))
              whitespace-report-list)))
       (when (pcase report-if-bogus ('nil t) ('never nil) (_ has-bogus))
         (whitespace-kill-buffer whitespace-report-buffer-name)
@@ -1787,7 +1755,7 @@ cleaning up these problems."
 ;;;; Internal functions
 
 
-(defvar-local whitespace-font-lock-keywords nil
+(defvar whitespace-font-lock-keywords nil
   "Used to save the value `whitespace-color-on' adds to `font-lock-keywords'.")
 
 
@@ -1802,7 +1770,6 @@ cleaning up these problems."
  []  r   - toggle trailing blanks visualization
  []  l   - toggle \"long lines\" visualization
  []  L   - toggle \"long lines\" tail visualization
- []  C-l - toggle \"long lines\" one character visualization
  []  n   - toggle NEWLINE visualization
  []  e   - toggle empty line at bob and/or eob visualization
  []  C-i - toggle indentation SPACEs visualization (via `indent-tabs-mode')
@@ -1925,7 +1892,6 @@ It accepts one of the following chars:
    r	toggle trailing blanks visualization
    l	toggle \"long lines\" visualization
    L	toggle \"long lines\" tail visualization
-   C-l	toggle \"long lines\" one character visualization
    n	toggle NEWLINE visualization
    e	toggle empty line at bob and/or eob visualization
    C-i	toggle indentation SPACEs visualization (via `indent-tabs-mode')
@@ -2014,10 +1980,10 @@ resultant list will be returned."
   the-list)
 
 
-(defvar-local whitespace-display-table nil
+(defvar whitespace-display-table nil
   "Used to save a local display table.")
 
-(defvar-local whitespace-display-table-was-local nil
+(defvar whitespace-display-table-was-local nil
   "Used to remember whether a buffer initially had a local display table.")
 
 (defun whitespace-turn-on ()
@@ -2054,7 +2020,6 @@ resultant list will be returned."
 	   (memq 'trailing                whitespace-active-style)
 	   (memq 'lines                   whitespace-active-style)
 	   (memq 'lines-tail              whitespace-active-style)
-	   (memq 'lines-char              whitespace-active-style)
 	   (memq 'newline                 whitespace-active-style)
 	   (memq 'empty                   whitespace-active-style)
 	   (memq 'indentation             whitespace-active-style)
@@ -2070,17 +2035,6 @@ resultant list will be returned."
        t))
 
 
-(defun whitespace--clone ()
-  "Hook function run after `make-indirect-buffer' and `clone-buffer'."
-  (when (whitespace-style-face-p)
-    (setq-local whitespace-bob-marker
-                (copy-marker (marker-position whitespace-bob-marker)
-                             (marker-insertion-type whitespace-bob-marker)))
-    (setq-local whitespace-eob-marker
-                (copy-marker (marker-position whitespace-eob-marker)
-                             (marker-insertion-type whitespace-eob-marker)))))
-
-
 (defun whitespace-color-on ()
   "Turn on color visualization."
   (when (whitespace-style-face-p)
@@ -2089,18 +2043,12 @@ resultant list will be returned."
     (setq whitespace-point--used
           (let ((ol (make-overlay (point) (point) nil nil t)))
             (delete-overlay ol) ol))
+    (setq-local whitespace-font-lock-refontify 0)
     (setq-local whitespace-bob-marker (point-min-marker))
     (setq-local whitespace-eob-marker (point-max-marker))
-    (whitespace--update-bob-eob)
     (setq-local whitespace-buffer-changed nil)
     (add-hook 'post-command-hook #'whitespace-post-command-hook nil t)
     (add-hook 'before-change-functions #'whitespace-buffer-changed nil t)
-    (add-hook 'after-change-functions #'whitespace--update-bob-eob
-              ;; The -1 ensures that it runs before any
-              ;; `font-lock-mode' hook functions.
-              -1 t)
-    (add-hook 'clone-buffer-hook #'whitespace--clone nil t)
-    (add-hook 'clone-indirect-buffer-hook #'whitespace--clone nil t)
     ;; Add whitespace-mode color into font lock.
     (setq
      whitespace-font-lock-keywords
@@ -2118,17 +2066,12 @@ resultant list will be returned."
            ;; Show trailing blanks.
            `((,#'whitespace-trailing-regexp 1 whitespace-trailing t)))
        ,@(when (or (memq 'lines      whitespace-active-style)
-                   (memq 'lines-tail whitespace-active-style)
-                   (memq 'lines-char whitespace-active-style))
+                   (memq 'lines-tail whitespace-active-style))
            ;; Show "long" lines.
            `((,#'whitespace-lines-regexp
-              ,(cond
-                ;; whole line
-                ((memq 'lines whitespace-active-style) 0)
-                ;; line tail
-                ((memq 'lines-tail whitespace-active-style) 2)
-                ;; first overflowing character
-                ((memq 'lines-char whitespace-active-style) 3))
+              ,(if (memq 'lines whitespace-active-style)
+                   0                    ; whole line
+                 2)                     ; line tail
               whitespace-line prepend)))
        ,@(when (or (memq 'space-before-tab whitespace-active-style)
                    (memq 'space-before-tab::tab whitespace-active-style)
@@ -2146,18 +2089,27 @@ resultant list will be returned."
        ,@(when (or (memq 'indentation whitespace-active-style)
                    (memq 'indentation::tab whitespace-active-style)
                    (memq 'indentation::space whitespace-active-style))
-           `((,#'whitespace--indentation-matcher
+           `((,(cond
+                ((memq 'indentation whitespace-active-style)
+                 ;; Show indentation SPACEs (indent-tabs-mode).
+                 (whitespace-indentation-regexp))
+                ((memq 'indentation::tab whitespace-active-style)
+                 ;; Show indentation SPACEs (SPACEs).
+                 (whitespace-indentation-regexp 'tab))
+                ((memq 'indentation::space whitespace-active-style)
+                 ;; Show indentation SPACEs (TABs).
+                 (whitespace-indentation-regexp 'space)))
               1 whitespace-indentation t)))
        ,@(when (memq 'big-indent whitespace-active-style)
            ;; Show big indentation.
            `((,whitespace-big-indent-regexp 1 'whitespace-big-indent t)))
        ,@(when (memq 'empty whitespace-active-style)
            ;; Show empty lines at beginning of buffer.
-           `((,#'whitespace--empty-at-bob-matcher
-              0 whitespace-empty t)
+           `((,#'whitespace-empty-at-bob-regexp
+              1 whitespace-empty t)
              ;; Show empty lines at end of buffer.
-             (,#'whitespace--empty-at-eob-matcher
-              0 whitespace-empty t)))
+             (,#'whitespace-empty-at-eob-regexp
+              1 whitespace-empty t)))
        ,@(when (or (memq 'space-after-tab whitespace-active-style)
                    (memq 'space-after-tab::tab whitespace-active-style)
                    (memq 'space-after-tab::space whitespace-active-style))
@@ -2192,10 +2144,6 @@ resultant list will be returned."
   (when (whitespace-style-face-p)
     (remove-hook 'post-command-hook #'whitespace-post-command-hook t)
     (remove-hook 'before-change-functions #'whitespace-buffer-changed t)
-    (remove-hook 'after-change-functions #'whitespace--update-bob-eob
-                 t)
-    (remove-hook 'clone-buffer-hook #'whitespace--clone t)
-    (remove-hook 'clone-indirect-buffer-hook #'whitespace--clone t)
     (font-lock-remove-keywords nil whitespace-font-lock-keywords)
     (font-lock-flush)))
 
@@ -2234,7 +2182,7 @@ resultant list will be returned."
   (re-search-forward
    (let ((line-column (or whitespace-line-column fill-column)))
      (format
-      "^\\([^\t\n]\\{%s\\}\\|[^\t\n]\\{0,%s\\}\t\\)\\{%d\\}%s\\(?2:\\(?3:.\\).*\\)$"
+      "^\\([^\t\n]\\{%s\\}\\|[^\t\n]\\{0,%s\\}\t\\)\\{%d\\}%s\\(.+\\)$"
       tab-width
       (1- tab-width)
       (/ line-column tab-width)
@@ -2244,85 +2192,114 @@ resultant list will be returned."
           (format ".\\{%d\\}" rem)))))
    limit t))
 
-(defun whitespace--empty-at-bob-matcher (limit)
-  "Match empty/space-only lines at beginning of buffer (BoB).
-Match does not extend past position LIMIT.  For improved UX, the
-line containing `whitespace-point' and subsequent lines are
-excluded from the match.  (The idea is that the user might be
-about to start typing, and if they do, that line and any
-following empty lines will no longer be BoB empty lines.
-Highlighting those lines can be distracting.)"
-  (let ((p (point))
-        (e (min whitespace-bob-marker limit
-                ;; EoB marker will be before BoB marker if the buffer
-                ;; has nothing but empty lines.
-                whitespace-eob-marker
-                (save-excursion (goto-char whitespace-point)
-                                (line-beginning-position)))))
-    (when (= p 1)
-      (with-silent-modifications
-        ;; See the comment in `whitespace--update-bob-eob' for why
-        ;; this text property is added here.
-        (put-text-property 1 whitespace-bob-marker
-                           'font-lock-multiline t)))
-    (when (< p e)
-      (set-match-data (list p e))
-      (goto-char e))))
+(defun whitespace-empty-at-bob-regexp (limit)
+  "Match spaces at beginning of buffer (BOB) which do not contain point at BOB."
+  (let ((b (point))
+	r)
+    (cond
+     ;; at bob
+     ((= b 1)
+      (setq r (and (looking-at whitespace-empty-at-bob-regexp)
+                   (or (/= whitespace-point 1)
+                       (progn (whitespace-point--used (match-beginning 0)
+                                                      (match-end 0))
+                              nil))))
+      (set-marker whitespace-bob-marker (if r (match-end 1) b)))
+     ;; inside bob empty region
+     ((<= limit whitespace-bob-marker)
+      (setq r (looking-at whitespace-empty-at-bob-regexp))
+      (if r
+	  (when (< (match-end 1) limit)
+	    (set-marker whitespace-bob-marker (match-end 1)))
+	(set-marker whitespace-bob-marker b)))
+     ;; intersection with end of bob empty region
+     ((<= b whitespace-bob-marker)
+      (setq r (looking-at whitespace-empty-at-bob-regexp))
+      (set-marker whitespace-bob-marker (if r (match-end 1) b)))
+     ;; it is not inside bob empty region
+     (t
+      (setq r nil)))
+    ;; move to end of matching
+    (and r (goto-char (match-end 1)))
+    r))
 
-(defsubst whitespace--looking-back (regexp)
+
+(defsubst whitespace-looking-back (regexp limit)
   (save-excursion
-    (when (/= 0 (skip-chars-backward " \t\n"))
+    (when (/= 0 (skip-chars-backward " \t\n" limit))
       (unless (bolp)
 	(forward-line 1))
       (looking-at regexp))))
 
-(defun whitespace--empty-at-eob-matcher (limit)
-  "Match empty/space-only lines at end of buffer (EoB).
-Match does not extend past position LIMIT.  For improved UX, the
-line containing `whitespace-point' and preceding lines are
-excluded from the match.  (The idea is that the user might be
-about to start typing, and if they do, that line and previous
-empty lines will no longer be EoB empty lines.  Highlighting
-those lines can be distracting.)"
-  (when (= limit (1+ (buffer-size)))
-    (with-silent-modifications
-      ;; See the comment in `whitespace--update-bob-eob' for why this
-      ;; text property is added here.
-      (put-text-property whitespace-eob-marker limit
-                         'font-lock-multiline t)))
-  (let ((b (max (point) whitespace-eob-marker
-                whitespace-bob-marker ; See comment in the bob func.
-                (save-excursion (goto-char whitespace-point)
-                                (forward-line 1)
-                                (point)))))
-    (when (< b limit)
-      (set-match-data (list b limit))
-      (goto-char limit))))
+
+(defun whitespace-empty-at-eob-regexp (limit)
+  "Match spaces at end of buffer which do not contain the point at end of \
+buffer."
+  (let ((b (point))
+	(e (1+ (buffer-size)))
+	r)
+    (cond
+     ;; at eob
+     ((= limit e)
+      (goto-char limit)
+      (setq r (whitespace-looking-back whitespace-empty-at-eob-regexp b))
+      (when (and r (= whitespace-point e))
+        (setq r nil)
+        (whitespace-point--used (match-beginning 0) (match-end 0)))
+      (if r
+	  (set-marker whitespace-eob-marker (match-beginning 1))
+	(set-marker whitespace-eob-marker limit)
+	(goto-char b)))			; return back to initial position
+     ;; inside eob empty region
+     ((>= b whitespace-eob-marker)
+      (goto-char limit)
+      (setq r (whitespace-looking-back whitespace-empty-at-eob-regexp b))
+      (if r
+	  (when (> (match-beginning 1) b)
+	    (set-marker whitespace-eob-marker (match-beginning 1)))
+	(set-marker whitespace-eob-marker limit)
+	(goto-char b)))			; return back to initial position
+     ;; intersection with beginning of eob empty region
+     ((>= limit whitespace-eob-marker)
+      (goto-char limit)
+      (setq r (whitespace-looking-back whitespace-empty-at-eob-regexp b))
+      (if r
+	  (set-marker whitespace-eob-marker (match-beginning 1))
+	(set-marker whitespace-eob-marker limit)
+	(goto-char b)))			; return back to initial position
+     ;; it is not inside eob empty region
+     (t
+      (setq r nil)))
+    r))
+
 
 (defun whitespace-buffer-changed (_beg _end)
   "Set `whitespace-buffer-changed' variable to t."
   (setq whitespace-buffer-changed t))
+
 
 (defun whitespace-post-command-hook ()
   "Save current point into `whitespace-point' variable.
 Also refontify when necessary."
   (unless (and (eq whitespace-point (point))
                (not whitespace-buffer-changed))
-    (when (and (not whitespace-buffer-changed)
-               (memq 'empty whitespace-active-style))
-      ;; No need to handle the `whitespace-buffer-changed' case here
-      ;; because that is taken care of by the `font-lock-multiline'
-      ;; text property.
-      (when (<= (min (point) whitespace-point) whitespace-bob-marker)
-        (font-lock-flush 1 whitespace-bob-marker))
-      (when (>= (max (point) whitespace-point) whitespace-eob-marker)
-        (font-lock-flush whitespace-eob-marker (1+ (buffer-size)))))
-    (setq-local whitespace-buffer-changed nil)
     (setq whitespace-point (point))	; current point position
-    (let ((refontify (and (eolp) ; It is at end of line ...
-                          ;; ... with trailing SPACE or TAB
-                          (or (memq (preceding-char) '(?\s ?\t)))
-                          (line-beginning-position)))
+    (let ((refontify
+           (cond
+            ;; It is at end of buffer (eob).
+            ((= whitespace-point (1+ (buffer-size)))
+             (when (whitespace-looking-back whitespace-empty-at-eob-regexp
+                                            nil)
+               (match-beginning 0)))
+            ;; It is at end of line ...
+            ((and (eolp)
+                  ;; ... with trailing SPACE or TAB
+                  (or (memq (preceding-char) '(?\s ?\t))))
+             (line-beginning-position))
+            ;; It is at beginning of buffer (bob).
+            ((and (= whitespace-point 1)
+                  (looking-at whitespace-empty-at-bob-regexp))
+             (match-end 0))))
           (ostart (overlay-start whitespace-point--used)))
       (cond
        ((not refontify)
@@ -2355,100 +2332,6 @@ Also refontify when necessary."
                          (max refontify (point)))
         (font-lock-flush ostart (overlay-end whitespace-point--used))
         (delete-overlay whitespace-point--used))))))
-
-(defun whitespace--indentation-matcher (limit)
-  "Indentation matcher for `font-lock-keywords'.
-This matcher is a function instead of a static regular expression
-so that the next call to `font-lock-flush' picks up any changes
-to `indent-tabs-mode' and `tab-width'."
-  (re-search-forward
-   (whitespace-indentation-regexp
-    (cond
-     ((memq 'indentation whitespace-active-style) nil)
-     ((memq 'indentation::tab whitespace-active-style) 'tab)
-     ((memq 'indentation::space whitespace-active-style) 'space)))
-   limit t))
-
-(defun whitespace--variable-watcher (_symbol _newval _op buffer)
-  "Variable watcher that calls `font-lock-flush' for BUFFER."
-  (when buffer
-    (with-current-buffer buffer
-      (when whitespace-mode
-        (font-lock-flush)))))
-
-(defun whitespace--update-bob-eob (&optional beg end &rest _)
-  "Update `whitespace-bob-marker' and `whitespace-eob-marker'.
-Also apply `font-lock-multiline' text property.  If BEG and END
-are non-nil, assume that only characters in that range have
-changed since the last call to this function (for optimization
-purposes)."
-  (when (memq 'empty whitespace-active-style)
-    ;; When a line is changed, `font-lock-mode' normally limits
-    ;; re-processing to only the changed line.  That behavior is
-    ;; problematic for highlighting `empty' lines because adding or
-    ;; deleting a character might affect lines before or after the
-    ;; change.  To address this, all `empty' lines are marked with a
-    ;; non-nil `font-lock-multiline' text property.  This forces
-    ;; `font-lock-mode' to re-process all of the lines whenever
-    ;; there's an edit within any one of them.
-    ;;
-    ;; The text property must be set on `empty' lines twice per
-    ;; relevant change:
-    ;;
-    ;;   1. Before the change.  This is necessary to ensure that
-    ;;      previously highlighted lines become un-highlighted if
-    ;;      necessary.  The text property must be added after the
-    ;;      previous `font-lock-mode' run (the run in reaction to the
-    ;;      previous change) because `font-lock-mode' clears the text
-    ;;      property when it runs.
-    ;;
-    ;;   2. After the change, but before `font-lock-mode' reacts to
-    ;;      the change.  This is necessary to ensure that new `empty'
-    ;;      lines become highlighted.
-    ;;
-    ;; This hook function is responsible for #2, while the
-    ;; `whitespace--empty-at-bob-matcher' and
-    ;; `whitespace--empty-at-eob-matcher' functions are responsible
-    ;; for #1.  (Those functions run after `font-lock-mode' clears the
-    ;; text property and before the next change.)
-    (save-excursion
-      (save-restriction
-        (widen)
-        (let ((inhibit-read-only t))
-          (when (or (null beg)
-                    (<= beg (save-excursion
-                              (goto-char whitespace-bob-marker)
-                              ;; Any change in the first non-`empty'
-                              ;; line, even if it's not the first
-                              ;; character in the line, can potentially
-                              ;; cause subsequent lines to become
-                              ;; classified as `empty' (e.g., delete the
-                              ;; "x" from " x").
-                              (forward-line 1)
-                              (point))))
-            (goto-char 1)
-            (set-marker whitespace-bob-marker (point))
-            (save-match-data
-              (when (looking-at whitespace-empty-at-bob-regexp)
-                (set-marker whitespace-bob-marker (match-end 1))
-                (with-silent-modifications
-                  (put-text-property (match-beginning 1) (match-end 1)
-                                     'font-lock-multiline t)))))
-          (when (or (null end)
-                    (>= end (save-excursion
-                              (goto-char whitespace-eob-marker)
-                              ;; See above comment for the BoB case.
-                              (forward-line -1)
-                              (point))))
-            (goto-char (1+ (buffer-size)))
-            (set-marker whitespace-eob-marker (point))
-            (save-match-data
-              (when (whitespace--looking-back
-                     whitespace-empty-at-eob-regexp)
-                (set-marker whitespace-eob-marker (match-beginning 1))
-                (with-silent-modifications
-                  (put-text-property (match-beginning 1) (match-end 1)
-                                     'font-lock-multiline t))))))))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2486,11 +2369,9 @@ purposes)."
       ;; Remember whether a buffer has a local display table.
       (unless whitespace-display-table-was-local
 	(setq whitespace-display-table-was-local t)
-        ;; Save the old table so we can restore it when
-        ;; `whitespace-mode' is switched off again.
-        (when whitespace-mode
-	  (setq whitespace-display-table
-	        (copy-sequence buffer-display-table)))
+        (unless (or whitespace-mode global-whitespace-mode)
+	      (setq whitespace-display-table
+	      (copy-sequence buffer-display-table)))
 	;; Assure `buffer-display-table' is unique
 	;; when two or more windows are visible.
 	(setq buffer-display-table
@@ -2564,16 +2445,9 @@ It should be added buffer-locally to `write-file-functions'."
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defvar whitespace--watched-vars
-  '(fill-column indent-tabs-mode tab-width whitespace-line-column))
-
-(dolist (var whitespace--watched-vars)
-  (add-variable-watcher var #'whitespace--variable-watcher))
 
 (defun whitespace-unload-function ()
   "Unload the whitespace library."
-  (dolist (var whitespace--watched-vars)
-    (remove-variable-watcher var #'whitespace--variable-watcher))
   (global-whitespace-mode -1)
   ;; be sure all local whitespace mode is turned off
   (save-current-buffer
@@ -2588,5 +2462,6 @@ It should be added buffer-locally to `write-file-functions'."
 (make-obsolete-variable 'whitespace-load-hook
                         "use `with-eval-after-load' instead." "28.1")
 (run-hooks 'whitespace-load-hook)
+
 
 ;;; whitespace.el ends here

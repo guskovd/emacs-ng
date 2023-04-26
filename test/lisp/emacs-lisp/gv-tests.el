@@ -1,6 +1,6 @@
 ;;; gv-tests.el --- tests for gv.el  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2017-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2017-2022 Free Software Foundation, Inc.
 
 ;; This file is part of GNU Emacs.
 
@@ -21,21 +21,22 @@
 
 (require 'edebug)
 (require 'ert)
-(require 'ert-x)
 (eval-when-compile (require 'cl-lib))
 
 (cl-defmacro gv-tests--in-temp-dir ((elvar elcvar)
                                     (&rest filebody)
                                     &rest body)
   (declare (indent 2))
-  `(ert-with-temp-directory default-directory
-     (let ((,elvar "gv-test-deffoo.el")
-           (,elcvar "gv-test-deffoo.elc"))
-       (with-temp-file ,elvar
-         (insert ";; -*- lexical-binding: t; -*-\n")
-         (dolist (form ',filebody)
-           (pp form (current-buffer))))
-       ,@body)))
+  `(let ((default-directory (make-temp-file "gv-test" t)))
+     (unwind-protect
+         (let ((,elvar "gv-test-deffoo.el")
+               (,elcvar "gv-test-deffoo.elc"))
+           (with-temp-file ,elvar
+             (insert ";; -*- lexical-binding: t; -*-\n")
+             (dolist (form ',filebody)
+               (pp form (current-buffer))))
+           ,@body)
+       (delete-directory default-directory t))))
 
 (ert-deftest gv-define-expander-in-file ()
   (gv-tests--in-temp-dir (el elc)
@@ -157,42 +158,55 @@ its getter (Bug#41853)."
                       (push 123 (gv-setter-edebug-get 'gv-setter-edebug
                                                       'gv-setter-edebug-prop))))
         (print form (current-buffer)))
-      ;; Silence "Edebug: foo" messages.
-      (let ((inhibit-message t))
-        ;; Only check whether evaluation works in general.
-        (eval-buffer))))
+      ;; Only check whether evaluation works in general.
+      (eval-buffer)))
   (should (equal (get 'gv-setter-edebug 'gv-setter-edebug-prop) '(123))))
 
 (ert-deftest gv-plist-get ()
-  ;; Simple `setf' usage for `plist-get'.
-  (let ((target (list :a "a" :b "b" :c "c")))
-    (setf (plist-get target :b) "modify")
-    (should (equal target '(:a "a" :b "modify" :c "c")))
-    (setf (plist-get target ":a" #'string=) "mogrify")
-    (should (equal target '(:a "mogrify" :b "modify" :c "c"))))
+  (require 'cl-lib)
 
-  ;; Other function (`cl-rotatef') usage for `plist-get'.
-  (let ((target (list :a "a" :b "b" :c "c")))
-    (cl-rotatef (plist-get target :b) (plist-get target :c))
-    (should (equal target '(:a "a" :b "c" :c "b")))
-    (cl-rotatef (plist-get target ":a" #'string=)
-                (plist-get target ":b" #'string=))
-    (should (equal target '(:a "c" :b "a" :c "b"))))
+  ;; Simple setf usage for plist-get.
+  (should (equal (let ((target '(:a "a" :b "b" :c "c")))
+                   (setf (plist-get target :b) "modify")
+                   target)
+                 '(:a "a" :b "modify" :c "c")))
 
-  ;; Add new key value pair at top of list if `setf' for missing key.
-  (let ((target (list :a "a" :b "b" :c "c")))
-    (setf (plist-get target :d) "modify")
-    (should (equal target '(:d "modify" :a "a" :b "b" :c "c")))
-    (setf (plist-get target :e #'string=) "mogrify")
-    (should (equal target '(:e "mogrify" :d "modify" :a "a" :b "b" :c "c"))))
+  ;; Other function (cl-rotatef) usage for plist-get.
+  (should (equal (let ((target '(:a "a" :b "b" :c "c")))
+                   (cl-rotatef (plist-get target :b) (plist-get target :c))
+                   target)
+                 '(:a "a" :b "c" :c "b")))
+
+  ;; Add new key value pair at top of list if setf for missing key.
+  (should (equal (let ((target '(:a "a" :b "b" :c "c")))
+                   (setf (plist-get target :d) "modify")
+                   target)
+                 '(:d "modify" :a "a" :b "b" :c "c")))
 
   ;; Rotate with missing value.
   ;; The value corresponding to the missing key is assumed to be nil.
-  (let ((target (list :a "a" :b "b" :c "c")))
-    (cl-rotatef (plist-get target :b) (plist-get target :d))
-    (should (equal target '(:d "b" :a "a" :b nil :c "c")))
-    (cl-rotatef (plist-get target ":e" #'string=)
-                (plist-get target ":d" #'string=))
-    (should (equal target '(":e" "b" :d nil :a "a" :b nil :c "c")))))
+  (should (equal (let ((target '(:a "a" :b "b" :c "c")))
+                   (cl-rotatef (plist-get target :b) (plist-get target :d))
+                   target)
+                 '(:d "b" :a "a" :b nil :c "c")))
+
+  ;; Simple setf usage for plist-get. (symbol plist)
+  (should (equal (let ((target '(a "a" b "b" c "c")))
+                   (setf (plist-get target 'b) "modify")
+                   target)
+                 '(a "a" b "modify" c "c")))
+
+  ;; Other function (cl-rotatef) usage for plist-get. (symbol plist)
+  (should (equal (let ((target '(a "a" b "b" c "c")))
+                   (cl-rotatef (plist-get target 'b) (plist-get target 'c))
+                   target)
+                 '(a "a" b "c" c "b"))))
+
+;; `ert-deftest' messes up macroexpansion when the test file itself is
+;; compiled (see Bug #24402).
+
+;; Local Variables:
+;; no-byte-compile: t
+;; End:
 
 ;;; gv-tests.el ends here

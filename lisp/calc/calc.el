@@ -1,6 +1,6 @@
 ;;; calc.el --- the GNU Emacs calculator  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1990-1993, 2001-2023 Free Software Foundation, Inc.
+;; Copyright (C) 1990-1993, 2001-2022 Free Software Foundation, Inc.
 
 ;; Author: David Gillespie <daveg@synaptics.com>
 ;; Keywords: convenience, extensions
@@ -412,7 +412,7 @@ and deleted by `calc-pop'."
 
 (defcustom calc-undo-length 100
   "The number of undo steps that will be preserved when Calc is quit."
-  :type 'natnum)
+  :type 'integer)
 
 (defcustom calc-highlight-selections-with-faces nil
   "If non-nil, use a separate face to indicate selected sub-formulas.
@@ -438,14 +438,6 @@ by displaying the sub-formula in `calc-selected-face'."
 to be identified as that note."
   :version "24.1"
   :type 'string)
-
-(defcustom calc-kill-line-numbering t
-  "If non-nil, calculator kills include any line numbering.
-
-This option does not affect calc kill and copy commands which
-operate on the region, such as `calc-copy-region-as-kill'."
-  :version "29.1"
-  :type 'boolean)
 
 (defvar math-format-date-cache) ; calc-forms.el
 
@@ -502,7 +494,7 @@ This setting only applies to floats in normal display mode.")
 (defmacro defcalcmodevar (var defval &optional doc)
   "Declare VAR as a Calc variable, with default value DEFVAL and doc-string DOC.
 The variable VAR will be added to `calc-mode-var-list'."
-  (declare (doc-string 3) (indent defun))
+  (declare (doc-string 3))
   `(progn
      (defvar ,var ,defval ,doc)
      (add-to-list 'calc-mode-var-list (list (quote ,var) ,defval))))
@@ -1162,7 +1154,7 @@ Used by `calc-user-invocation'.")
 
 
 ;;;; (Autoloads here)
-(load "calc-loaddefs" nil t)
+(load "calc-loaddefs.el" nil t)
 
 ;;;###autoload (define-key ctl-x-map "*" 'calc-dispatch)
 
@@ -1188,12 +1180,8 @@ Used by `calc-user-invocation'.")
   "Start the Calculator."
   (let ((key (calc-read-key-sequence
 	      (if calc-dispatch-help
-		  (substitute-command-keys
-                   (concat
-                    "Calc options: \\`c'alc, \\`k'eypad, \\`q'uick, \\`e'mbed; "
-                    "e\\`x'it; \\`i'nfo, \\`t'utorial; \\`g'rab; \\`?'=more"))
-		(format (substitute-command-keys
-                         "%s  (Type \\`?' for a list of Calc options)")
+		  "Calc options: Calc, Keypad, Quick, Embed; eXit; Info, Tutorial; Grab; ?=more"
+		(format "%s  (Type ? for a list of Calc options)"
 			(key-description (this-command-keys))))
 	      calc-dispatch-map)))
     (setq key (lookup-key calc-dispatch-map key))
@@ -1286,17 +1274,16 @@ the trail buffer."
 (defun calc-mode ()
   "Calculator major mode.
 
-This is a Reverse Polish notation (RPN) calculator featuring
-arbitrary-precision integer, rational, floating-point, complex,
-matrix, and symbolic arithmetic.
+This is an RPN calculator featuring arbitrary-precision integer, rational,
+floating-point, complex, matrix, and symbolic arithmetic.
 
 RPN calculation:  2 RET 3 +    produces 5.
 Algebraic style:  \\=' 2+3 RET    produces 5.
 
 Basic operators are +, -, *, /, ^, & (reciprocal), % (modulo), n (change-sign).
 
-Press \\`?' repeatedly for more complete help.  Press \\`h i' to read the
-Calc manual, \\`h s' to read the summary, or \\`h t' for the tutorial.
+Press ? repeatedly for more complete help.  Press `h i' to read the
+Calc manual on-line, `h s' to read the summary, or `h t' for the tutorial.
 
 Notations:  3.14e6     3.14 * 10^6
             _23        negative number -23 (or type `23 n')
@@ -1378,15 +1365,17 @@ Notations:  3.14e6     3.14 * 10^6
 	      (calc-check-defines))
 	  (setplist 'calc-define nil)))))
 
-(defvar-keymap calc-trail-mode-map
-  :parent calc-mode-map)
+(defvar calc-trail-mode-map
+  (let ((map (make-sparse-keymap)))
+    (set-keymap-parent map calc-mode-map)
+    map))
 
 (defun calc--header-line (long short width &optional fudge)
   "Return a Calc header line appropriate for the buffer WIDTH.
 
 LONG is a desired text for a wide window, SHORT is a desired
 abbreviated text, and width is the buffer width, which will be
-some fraction of the \"parent\" window width (At the time of
+some fraction of the 'parent' window width (At the time of
 writing, 2/3 for calc, 1/3 for trail).  The optional FUDGE is a
 trial-and-error adjustment number for the edge-cases at the
 border of the two cases."
@@ -1630,9 +1619,9 @@ See calc-keypad for details."
 	  (error
 	   (if (and (eq (car err) 'error)
 		    (stringp (nth 1 err))
-		    (string-search "max-lisp-eval-depth" (nth 1 err)))
-               (error (substitute-command-keys
-                       "Computation got stuck or ran too long.  Type \\`M' to increase the limit"))
+		    (string-match "max-specpdl-size\\|max-lisp-eval-depth"
+				  (nth 1 err)))
+	       (error "Computation got stuck or ran too long.  Type `M' to increase the limit")
 	     (setq calc-aborted-prefix nil)
 	     (signal (car err) (cdr err)))))
       (when calc-aborted-prefix
@@ -1961,8 +1950,12 @@ See calc-keypad for details."
   (or n (setq n 1))
   (or m (setq m 1))
   (calc-check-stack (+ n m -1))
-  (nreverse (mapcar (lambda (x) (calc-get-stack-element x sel-mode))
-                    (take n (nthcdr (+ m calc-stack-top -1) calc-stack)))))
+  (and (> n 0)
+       (let ((top (copy-sequence (nthcdr (+ m calc-stack-top -1)
+					 calc-stack))))
+	 (setcdr (nthcdr (1- n) top) nil)
+	 (nreverse
+          (mapcar (lambda (x) (calc-get-stack-element x sel-mode)) top)))))
 
 (defun calc-top-list-n (&optional n m sel-mode)
   (mapcar #'math-check-complete
@@ -2289,7 +2282,9 @@ the United States."
              ((and (null n)
                    (eq (car-safe top) 'incomplete)
                    (> (length top) (if (eq (nth 1 top) 'intv) 3 2)))
-              (calc-pop-push-list 1 (list (butlast top))))
+              (calc-pop-push-list 1 (let ((tt (copy-sequence top)))
+                                      (setcdr (nthcdr (- (length tt) 2) tt) nil)
+                                      (list tt))))
              ((< nn 0)
               (if (and calc-any-selections
                        (calc-top-selected 1 (- nn)))
@@ -2482,8 +2477,7 @@ the United States."
   (interactive)
   (cond ((eq last-command 'calcDigit-start)
 	 (erase-buffer))
-	(t (with-suppressed-warnings ((interactive-only backward-delete-char))
-             (backward-delete-char 1))))
+	(t (backward-delete-char 1)))
   (if (= (calc-minibuffer-size) 0)
       (progn
 	(setq last-command-event 13)
@@ -3445,7 +3439,7 @@ The prefix `calcFunc-' is added to the specified name to get the
 actual Lisp function name.
 
 See Info node `(calc)Defining Functions'."
-  (declare (doc-string 3) (indent defun)) ;; FIXME: Edebug spec?
+  (declare (doc-string 3)) ;; FIXME: Edebug spec?
   (require 'calc-ext)
   (math-do-defmath func args body))
 

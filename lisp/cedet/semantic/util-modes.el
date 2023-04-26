@@ -1,6 +1,6 @@
 ;;; semantic/util-modes.el --- Semantic minor modes  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2000-2005, 2007-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2000-2005, 2007-2022 Free Software Foundation, Inc.
 
 ;; Authors: Eric M. Ludlam <zappo@gnu.org>
 ;;          David Ponce <david@dponce.com>
@@ -133,7 +133,7 @@ symbol whose value is such a string."
                                        semantic-minor-mode-alist))))
   (semantic-mode-line-update)
 
-  ;; Semantic minor modes don't work with Desktop restore.
+  ;; Semantic minor modes don't work w/ Desktop restore.
   ;; This line will disable this minor mode from being restored
   ;; by Desktop.
   (when (boundp 'desktop-minor-mode-handlers)
@@ -196,8 +196,10 @@ Argument OVERLAY is the overlay created to mark the change.
 This function will set the face property on this overlay."
   (overlay-put overlay 'face 'semantic-highlight-edits-face))
 
-(defvar-keymap semantic-highlight-edits-mode-map
-  :doc "Keymap for highlight-edits minor mode.")
+(defvar semantic-highlight-edits-mode-map
+  (let ((km (make-sparse-keymap)))
+    km)
+  "Keymap for highlight-edits minor mode.")
 
 ;;;###autoload
 (define-minor-mode semantic-highlight-edits-mode
@@ -341,9 +343,11 @@ Do not search past BOUND if non-nil."
                 (setq ol (cdr ol))))))
       ol)))
 
-(defvar-keymap semantic-show-unmatched-syntax-mode-map
-  :doc "Keymap for command `semantic-show-unmatched-syntax-mode'."
-  "C-c , `" #'semantic-show-unmatched-syntax-next)
+(defvar semantic-show-unmatched-syntax-mode-map
+  (let ((km (make-sparse-keymap)))
+    (define-key km "\C-c,`" #'semantic-show-unmatched-syntax-next)
+    km)
+  "Keymap for command `semantic-show-unmatched-syntax-mode'.")
 
 ;;;###autoload
 (define-minor-mode semantic-show-unmatched-syntax-mode
@@ -413,8 +417,10 @@ non-nil if the minor mode is enabled.
   :group 'semantic
   :type 'hook)
 
-(defvar-keymap semantic-show-parser-state-mode-map
-  :doc "Keymap for show-parser-state minor mode.")
+(defvar semantic-show-parser-state-mode-map
+  (let ((km (make-sparse-keymap)))
+    km)
+  "Keymap for show-parser-state minor mode.")
 
 ;;;###autoload
 (define-minor-mode semantic-show-parser-state-mode
@@ -547,9 +553,11 @@ to indicate a parse in progress."
   :group 'semantic
   :type 'hook)
 
-(defvar-keymap semantic-stickyfunc-mode-map
-  :doc "Keymap for stickyfunc minor mode."
-  "<header-line> <down-mouse-1>" #'semantic-stickyfunc-menu)
+(defvar semantic-stickyfunc-mode-map
+  (let ((km (make-sparse-keymap)))
+    (define-key km [ header-line down-mouse-1 ] #'semantic-stickyfunc-menu)
+    km)
+  "Keymap for stickyfunc minor mode.")
 
 (defvar semantic-stickyfunc-popup-menu nil
   "Menu used if the user clicks on the header line used by stickyfunc mode.")
@@ -742,7 +750,7 @@ If there is no function, disable the header line."
 		    (if noshow
 			""
 		      (if semantic-stickyfunc-show-only-functions-p ""
-                        (buffer-substring (line-beginning-position) (line-end-position))
+			(buffer-substring (point-at-bol) (point-at-eol))
 			))
 		  ;; Go get the first line of this tag.
 		  (goto-char (semantic-tag-start tag))
@@ -757,7 +765,7 @@ If there is no function, disable the header line."
 		  ;; Without going to the tag-name we would get"void" in the
 		  ;; header line which is IMHO not really useful
 		  (search-forward (semantic-tag-name tag) nil t)
-                  (buffer-substring (line-beginning-position) (line-end-position))
+		  (buffer-substring (point-at-bol) (point-at-eol))
 		  ))))
 	   (start 0))
       (while (string-match "%" str start)
@@ -816,9 +824,11 @@ Argument EVENT describes the event that caused this function to be called."
   :group 'semantic
   :type 'hook)
 
-(defvar-keymap semantic-highlight-func-mode-map
-  :doc "Keymap for highlight-func minor mode."
-  "<mouse-3>" #'semantic-highlight-func-menu)
+(defvar semantic-highlight-func-mode-map
+  (let ((km (make-sparse-keymap)))
+    (define-key km [mouse-3] #'semantic-highlight-func-menu)
+    km)
+  "Keymap for highlight-func minor mode.")
 
 (defvar semantic-highlight-func-popup-menu nil
   "Menu used if the user clicks on the header line.
@@ -949,7 +959,7 @@ function was called, move the overlay."
 	    (goto-char (semantic-tag-start tag))
 	    (search-forward (semantic-tag-name tag) nil t)
 	    (overlay-put ol 'tag tag)
-            (move-overlay ol (line-beginning-position) (line-end-position)))))))
+	    (move-overlay ol (point-at-bol) (point-at-eol)))))))
   nil)
 
 (semantic-add-minor-mode 'semantic-highlight-func-mode

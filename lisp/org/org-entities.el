@@ -1,11 +1,11 @@
 ;;; org-entities.el --- Support for Special Entities -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2010-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2010-2022 Free Software Foundation, Inc.
 
 ;; Author: Carsten Dominik <carsten.dominik@gmail.com>,
 ;;         Ulf Stegemann <ulf at zeitform dot de>
 ;; Keywords: outlines, calendar, wp
-;; URL: https://orgmode.org
+;; Homepage: https://orgmode.org
 ;;
 ;; This file is part of GNU Emacs.
 ;;
@@ -26,9 +26,6 @@
 ;;; Commentary:
 
 ;;; Code:
-
-(require 'org-macs)
-(org-assert-version)
 
 (declare-function org-mode "org" ())
 (declare-function org-toggle-pretty-entities "org"       ())
@@ -92,8 +89,8 @@ packages to be loaded, add these packages to `org-latex-packages-alist'."
      ("aacute" "\\'{a}" nil "&aacute;" "a" "á" "á")
      ("Acirc" "\\^{A}" nil "&Acirc;" "A" "Â" "Â")
      ("acirc" "\\^{a}" nil "&acirc;" "a" "â" "â")
-     ("Amacr" "\\={A}" nil "&Amacr;" "A" "Ã" "Ã")
-     ("amacr" "\\={a}" nil "&amacr;" "a" "ã" "ã")
+     ("Amacr" "\\bar{A}" nil "&Amacr;" "A" "Ã" "Ã")
+     ("amacr" "\\bar{a}" nil "&amacr;" "a" "ã" "ã")
      ("Atilde" "\\~{A}" nil "&Atilde;" "A" "Ã" "Ã")
      ("atilde" "\\~{a}" nil "&atilde;" "a" "ã" "ã")
      ("Auml" "\\\"{A}" nil "&Auml;" "Ae" "Ä" "Ä")
@@ -310,7 +307,7 @@ packages to be loaded, add these packages to `org-latex-packages-alist'."
      ("trade" "\\texttrademark{}" nil "&trade;" "TM" "TM" "™")
 
      "** Science et al."
-     ("minus" "-" t "&minus;" "-" "-" "−")
+     ("minus" "\\minus" t "&minus;" "-" "-" "−")
      ("pm" "\\textpm{}" nil "&plusmn;" "+-" "±" "±")
      ("plusmn" "\\textpm{}" nil "&plusmn;" "+-" "±" "±")
      ("times" "\\texttimes{}" nil "&times;" "*" "×" "×")

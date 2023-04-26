@@ -1,6 +1,6 @@
 ;;; hashcash.el --- Add hashcash payments to email  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2003-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2003-2005, 2007-2022 Free Software Foundation, Inc.
 
 ;; Written by: Paul Foley <mycroft@actrix.gen.nz> (1997-2002)
 ;; Maintainer: emacs-devel@gnu.org
@@ -25,16 +25,16 @@
 
 ;; The hashcash binary is at http://www.hashcash.org/.
 ;;
-;; Call `mail-add-payment' to add a hashcash payment to a mail message
+;; Call mail-add-payment to add a hashcash payment to a mail message
 ;; in the current buffer.
 ;;
-;; Call `mail-add-payment-async' after writing the addresses but
-;; before writing the mail to start calculating the hashcash payment
+;; Call mail-add-payment-async after writing the addresses but before
+;; writing the mail to start calculating the hashcash payment
 ;; asynchronously.
 ;;
-;; The easiest way to do this automatically for all outgoing mail is
-;; to set `message-generate-hashcash' to `opportunistic' or t.  If you
-;; want more control, try the following hooks.
+;; The easiest way to do this automatically for all outgoing mail
+;; is to set `message-generate-hashcash' to t.  If you want more
+;; control, try the following hooks.
 ;;
 ;; To automatically add payments to all outgoing mail when sending:
 ;;    (add-hook 'message-send-hook 'mail-add-payment)
@@ -44,8 +44,6 @@
 ;;
 ;; To check whether calculations are done before sending:
 ;;    (add-hook 'message-send-hook 'hashcash-wait-or-cancel)
-;;
-;; For more information, see Info node `(gnus) Hashcash'.
 
 ;;; Code:
 
@@ -59,7 +57,8 @@
   "The default number of bits to pay to unknown users.
 If this is zero, no payment header will be generated.
 See `hashcash-payment-alist'."
-  :type 'natnum)
+  :type 'integer
+  :group 'hashcash)
 
 (defcustom hashcash-payment-alist '()
   "An association list mapping email addresses to payment amounts.
@@ -73,41 +72,44 @@ present, is the string to be hashed; if not present ADDR will be used."
 			 (list :tag "Replace hash input"
 			       (string :name "Address")
 			       (string :name "Hash input")
-                               (integer :name "Amount")))))
+			       (integer :name "Amount"))))
+  :group 'hashcash)
 
 (defcustom hashcash-default-accept-payment 20
   "The default minimum number of bits to accept on incoming payments."
-  :type 'natnum)
+  :type 'integer
+  :group 'hashcash)
 
 (defcustom hashcash-accept-resources `((,user-mail-address nil))
   "An association list mapping hashcash resources to payment amounts.
 Resources named here are to be accepted in incoming payments.  If the
 corresponding AMOUNT is NIL, the value of `hashcash-default-accept-payment'
 is used instead."
-  :type 'alist)
+  :type 'alist
+  :group 'hashcash)
 
 (define-obsolete-variable-alias 'hashcash-path 'hashcash-program "24.4")
 (defcustom hashcash-program "hashcash"
   "The name of the hashcash executable.
-If this is not in your PATH, specify an absolute file name.
+If this is not in your PATH, specify an absolute file name."
+  :type '(choice (const nil) file)
+  :group 'hashcash)
 
-See also `message-generate-hashcash'."
-  :type '(choice (const nil) file))
-
-(defcustom hashcash-extra-generate-parameters '("-Z2")
+(defcustom hashcash-extra-generate-parameters nil
   "A list of parameter strings passed to `hashcash-program' when minting.
-For example, on very old hardware, you may want to set this
-to (\"-Z0\") to disable compression."
+For example, you may want to set this to (\"-Z2\") to reduce header length."
   :type '(repeat string)
-  :version "29.1")
+  :group 'hashcash)
 
 (defcustom hashcash-double-spend-database "hashcash.db"
   "The name of the double-spending database file."
-  :type 'file)
+  :type 'file
+  :group 'hashcash)
 
 (defcustom hashcash-in-news nil
   "Specifies whether or not hashcash payments should be made to newsgroups."
-  :type 'boolean)
+  :type 'boolean
+  :group 'hashcash)
 
 (defvar hashcash-process-alist nil
   "Alist of asynchronous hashcash processes and buffers.")
@@ -312,7 +314,6 @@ Set ASYNC to t to start asynchronous calculation.  (See
     (save-excursion
       (save-restriction
 	(message-narrow-to-headers)
-        (goto-char (point-max))
 	(let ((to (hashcash-strip-quoted-names (mail-fetch-field "To" nil t)))
 	      (cc (hashcash-strip-quoted-names (mail-fetch-field "Cc" nil t)))
 	      (ng (hashcash-strip-quoted-names (mail-fetch-field "Newsgroups"

@@ -1,10 +1,10 @@
 ;;; ob-eshell.el --- Babel Functions for Eshell      -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2018-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2018-2022 Free Software Foundation, Inc.
 
 ;; Author: stardiviner <numbchild@gmail.com>
 ;; Maintainer: stardiviner <numbchild@gmail.com>
-;; URL: https://github.com/stardiviner/ob-eshell
+;; Homepage: https://github.com/stardiviner/ob-eshell
 ;; Keywords: literate programming, reproducible research
 
 ;; This file is part of GNU Emacs.
@@ -27,10 +27,6 @@
 ;; Org Babel support for evaluating Eshell source code.
 
 ;;; Code:
-
-(require 'org-macs)
-(org-assert-version)
-
 (require 'ob)
 (require 'eshell)
 

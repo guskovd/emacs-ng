@@ -1,6 +1,6 @@
-# libgmp.m4 serial 7
+# libgmp.m4 serial 5
 # Configure the GMP library or a replacement.
-dnl Copyright 2020-2023 Free Software Foundation, Inc.
+dnl Copyright 2020-2022 Free Software Foundation, Inc.
 dnl This file is free software; the Free Software Foundation
 dnl gives unlimited permission to copy and/or distribute it,
 dnl with or without modifications, as long as this notice is preserved.
@@ -59,12 +59,13 @@ AC_DEFUN([gl_LIBGMP],
             [ Try specifying --with-libgmp-prefix=DIR.])])
      fi])
   if test $HAVE_LIBGMP = yes && test "$ac_cv_header_gmp_h" = yes; then
-    GL_GENERATE_GMP_H=false
+    GMP_H=
   else
-    GL_GENERATE_GMP_H=true
+    GMP_H=gmp.h
   fi
-  gl_CONDITIONAL([GL_GENERATE_MINI_GMP_H],
+  AC_SUBST([GMP_H])
+  AM_CONDITIONAL([GL_GENERATE_MINI_GMP_H],
     [test $HAVE_LIBGMP != yes])
-  gl_CONDITIONAL([GL_GENERATE_GMP_GMP_H],
+  AM_CONDITIONAL([GL_GENERATE_GMP_GMP_H],
     [test $HAVE_LIBGMP = yes && test "$ac_cv_header_gmp_h" != yes])
 ])

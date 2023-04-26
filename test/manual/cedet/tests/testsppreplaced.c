@@ -1,5 +1,5 @@
 /* testsppreplaced.c --- unit test for CPP/SPP Replacement
-   Copyright (C) 2007-2023 Free Software Foundation, Inc.
+   Copyright (C) 2007-2022 Free Software Foundation, Inc.
 
    Author: Eric M. Ludlam <zappo@gnu.org>
 
@@ -55,14 +55,14 @@ int myFcn3 (int a, int b);
 /* TEST: Multiple args to a macro. */
 struct ma_struct { int moose; int penguin; int emu; };
 
-/* TEST: Macro with args, but no body. */
+/* TEST: Macro w/ args, but no body. */
 
 /* TEST: Not a macro with args, but close. */
 int not_with_args_fcn (moose)
 {
 }
 
-/* TEST: macro with continuation. */
+/* TEST: macro w/ continuation. */
 int continuation_symbol () { };
 
 /* TEST: macros in a macro - tail processing */

@@ -1,6 +1,6 @@
 ;;; gnus-eform.el --- a mode for editing forms for Gnus  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 1996-2023 Free Software Foundation, Inc.
+;; Copyright (C) 1996-2022 Free Software Foundation, Inc.
 
 ;; Author: Lars Magne Ingebrigtsen <larsi@gnus.org>
 ;; Keywords: news
@@ -48,10 +48,13 @@
 (defvar gnus-edit-form-buffer "*Gnus edit form*")
 (defvar gnus-edit-form-done-function nil)
 
-(defvar-keymap gnus-edit-form-mode-map
-  :parent emacs-lisp-mode-map
-  "C-c C-c" #'gnus-edit-form-done
-  "C-c C-k" #'gnus-edit-form-exit)
+(defvar gnus-edit-form-mode-map
+  (let ((map (make-sparse-keymap)))
+    (set-keymap-parent map emacs-lisp-mode-map)
+    (gnus-define-keys map
+      "\C-c\C-c" gnus-edit-form-done
+      "\C-c\C-k" gnus-edit-form-exit)
+    map))
 
 (defun gnus-edit-form-make-menu-bar ()
   (unless (boundp 'gnus-edit-form-menu)
@@ -70,20 +73,17 @@ It is a slightly enhanced `lisp-data-mode'.
   (when (gnus-visual-p 'group-menu 'menu)
     (gnus-edit-form-make-menu-bar))
   (make-local-variable 'gnus-edit-form-done-function)
-  (make-local-variable 'gnus-prev-winconf)
-  (make-local-variable 'gnus-prev-cwc))
+  (make-local-variable 'gnus-prev-winconf))
 
 (defun gnus-edit-form (form documentation exit-func &optional layout)
   "Edit FORM in a new buffer.
 Call EXIT-FUNC on exit.  Display DOCUMENTATION in the beginning
 of the buffer.
 The optional LAYOUT overrides the `edit-form' window layout."
-  (let ((winconf (current-window-configuration))
-        (cwc gnus-current-window-configuration))
+  (let ((winconf (current-window-configuration)))
     (set-buffer (gnus-get-buffer-create gnus-edit-form-buffer))
     (gnus-configure-windows (or layout 'edit-form))
     (gnus-edit-form-mode)
-    (setq gnus-prev-cwc cwc)
     (setq gnus-prev-winconf winconf)
     (setq gnus-edit-form-done-function exit-func)
     (erase-buffer)
@@ -95,7 +95,7 @@ The optional LAYOUT overrides the `edit-form' window layout."
       (insert ";;; ")
       (forward-line 1))
     (insert (substitute-command-keys
-             ";; Type \\`C-c C-c' after you've finished editing.\n"))
+	     ";; Type `C-c C-c' after you've finished editing.\n"))
     (insert "\n")
     (let ((p (point)))
       (gnus-pp form)
@@ -116,11 +116,9 @@ The optional LAYOUT overrides the `edit-form' window layout."
 (defun gnus-edit-form-exit ()
   "Kill the current buffer."
   (interactive nil gnus-edit-form-mode)
-  (let ((winconf gnus-prev-winconf)
-        (cwc gnus-prev-cwc))
+  (let ((winconf gnus-prev-winconf))
     (kill-buffer (current-buffer))
-    (set-window-configuration winconf)
-    (setq gnus-current-window-configuration cwc)))
+    (set-window-configuration winconf)))
 
 (provide 'gnus-eform)
 

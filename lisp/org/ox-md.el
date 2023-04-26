@@ -1,9 +1,9 @@
 ;;; ox-md.el --- Markdown Back-End for Org Export Engine -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2012-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2012-2022 Free Software Foundation, Inc.
 
 ;; Author: Nicolas Goaziou <n.goaziou@gmail.com>
-;; Maintainer: Nicolas Goaziou <mail@nicolasgoaziou.fr>
+;; Maintainer: Nicolas Goaziou <n.goaziou at gmail dot com>
 ;; Keywords: org, wp, markdown
 
 ;; This file is part of GNU Emacs.
@@ -28,9 +28,6 @@
 ;; information.
 
 ;;; Code:
-
-(require 'org-macs)
-(org-assert-version)
 
 (require 'cl-lib)
 (require 'ox-html)
@@ -73,23 +70,6 @@ The %s will be replaced by the footnote reference itself."
   :type 'string
   :version "26.1"
   :package-version '(Org . "9.0"))
-
-(defcustom org-md-toplevel-hlevel 1
-  "Heading level to use for level 1 Org headings in markdown export.
-
-If this is 1, headline levels will be preserved on export.  If this is
-2, top level Org headings will be exported to level 2 markdown
-headings, level 2 Org headings will be exported to level 3 markdown
-headings, and so on.
-
-Incrementing this value may be helpful when creating markdown to be
-included into another document or application that reserves top-level
-headings for its own use."
-  :group 'org-export-md
-  :package-version '(Org . "9.6")
-  ;; Avoid `natnum' because that's not available until Emacs 28.1.
-  :type 'integer)
-
 
 
 ;;; Define Back-End
@@ -140,8 +120,7 @@ headings for its own use."
   :options-alist
   '((:md-footnote-format nil nil org-md-footnote-format)
     (:md-footnotes-section nil nil org-md-footnotes-section)
-    (:md-headline-style nil nil org-md-headline-style)
-    (:md-toplevel-hlevel nil nil org-md-toplevel-hlevel)))
+    (:md-headline-style nil nil org-md-headline-style)))
 
 
 ;;; Filters
@@ -214,11 +193,11 @@ of contents can refer to headlines."
      ;; A link refers internally to HEADLINE.
      (org-element-map (plist-get info :parse-tree) 'link
        (lambda (link)
-	 (equal headline
-                ;; Ignore broken links.
-                (condition-case nil
-                    (org-export-resolve-id-link link info)
-                  (org-link-broken nil))))
+	 (eq headline
+	     (pcase (org-element-property :type link)
+	       ((or "custom-id" "id") (org-export-resolve-id-link link info))
+	       ("fuzzy" (org-export-resolve-fuzzy-link link info))
+	       (_ nil))))
        info t))))
 
 (defun org-md--headline-title (style level title &optional anchor tags)
@@ -250,10 +229,9 @@ When optional argument SCOPE is non-nil, build a table of
 contents according to the specified element."
   (concat
    (unless scope
-     (let ((level (plist-get info :md-toplevel-hlevel))
-           (style (plist-get info :md-headline-style))
+     (let ((style (plist-get info :md-headline-style))
 	   (title (org-html--translate "Table of Contents" info)))
-       (org-md--headline-title style level title nil)))
+       (org-md--headline-title style 1 title nil)))
    (mapconcat
     (lambda (headline)
       (let* ((indentation
@@ -372,8 +350,7 @@ CONTENTS is nil.  INFO is a plist holding contextual information."
 CONTENTS is the headline contents.  INFO is a plist used as
 a communication channel."
   (unless (org-element-property :footnote-section-p headline)
-    (let* ((level (+ (org-export-get-relative-level headline info)
-                     (1- (plist-get info :md-toplevel-hlevel))))
+    (let* ((level (org-export-get-relative-level headline info))
 	   (title (org-export-data (org-element-property :title headline) info))
 	   (todo (and (plist-get info :with-todo-keywords)
 		      (let ((todo (org-element-property :todo-keyword
@@ -486,7 +463,7 @@ channel."
     (_ (org-export-with-backend 'html keyword contents info))))
 
 
-;;;; LaTeX Environment
+;;;; Latex Environment
 
 (defun org-md-latex-environment (latex-environment _contents info)
   "Transcode a LATEX-ENVIRONMENT object from Org to Markdown.
@@ -501,7 +478,7 @@ CONTENTS is nil.  INFO is a plist holding contextual information."
                                     latex-frag)
         latex-frag))))
 
-;;;; LaTeX Fragment
+;;;; Latex Fragment
 
 (defun org-md-latex-fragment (latex-fragment _contents info)
   "Transcode a LATEX-FRAGMENT object from Org to Markdown.

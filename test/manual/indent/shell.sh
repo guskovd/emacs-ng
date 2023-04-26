@@ -140,7 +140,6 @@ foo () {
         5) hello ;;
         4) hello ;&
         4) hello ;;&
-        4) hello ;|
         5) hello ;;
         5) hello ;;
     esac

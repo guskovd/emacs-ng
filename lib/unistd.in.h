@@ -1,5 +1,5 @@
 /* Substitute for and wrapper around <unistd.h>.
-   Copyright (C) 2003-2023 Free Software Foundation, Inc.
+   Copyright (C) 2003-2022 Free Software Foundation, Inc.
 
    This file is free software: you can redistribute it and/or modify
    it under the terms of the GNU Lesser General Public License as
@@ -38,24 +38,6 @@
 # define _GL_INCLUDING_UNISTD_H
 # @INCLUDE_NEXT@ @NEXT_UNISTD_H@
 # undef _GL_INCLUDING_UNISTD_H
-#endif
-
-/* Avoid lseek bugs in FreeBSD, macOS <https://bugs.gnu.org/61386>.
-   This bug is fixed after FreeBSD 13; see <https://bugs.freebsd.org/256205>.
-   Use macOS "9999" to stand for a future fixed macOS version.  */
-#if defined __FreeBSD__ && __FreeBSD__ < 14
-# undef SEEK_DATA
-# undef SEEK_HOLE
-#elif defined __APPLE__ && defined __MACH__ && defined SEEK_DATA
-# ifdef __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__
-#  include <AvailabilityMacros.h>
-# endif
-# if (!defined MAC_OS_X_VERSION_MIN_REQUIRED \
-      || MAC_OS_X_VERSION_MIN_REQUIRED < 99990000)
-#  include <sys/fcntl.h> /* It also defines the two macros.  */
-#  undef SEEK_DATA
-#  undef SEEK_HOLE
-# endif
 #endif
 
 /* Get all possible declarations of gethostname().  */
@@ -433,30 +415,16 @@ _GL_CXXALIASWARN (close);
 
 
 #if @GNULIB_COPY_FILE_RANGE@
-# if @REPLACE_COPY_FILE_RANGE@
-#  if !(defined __cplusplus && defined GNULIB_NAMESPACE)
-#   undef copy_file_range
-#   define copy_file_range rpl_copy_file_range
-#  endif
-_GL_FUNCDECL_RPL (copy_file_range, ssize_t, (int ifd, off_t *ipos,
-                                             int ofd, off_t *opos,
-                                             size_t len, unsigned flags));
-_GL_CXXALIAS_RPL (copy_file_range, ssize_t, (int ifd, off_t *ipos,
-                                             int ofd, off_t *opos,
-                                             size_t len, unsigned flags));
-# else
-#  if !@HAVE_COPY_FILE_RANGE@
+# if !@HAVE_COPY_FILE_RANGE@
 _GL_FUNCDECL_SYS (copy_file_range, ssize_t, (int ifd, off_t *ipos,
                                              int ofd, off_t *opos,
                                              size_t len, unsigned flags));
-#  endif
 _GL_CXXALIAS_SYS (copy_file_range, ssize_t, (int ifd, off_t *ipos,
                                              int ofd, off_t *opos,
                                              size_t len, unsigned flags));
 # endif
 _GL_CXXALIASWARN (copy_file_range);
 #elif defined GNULIB_POSIXCHECK
-# undef copy_file_range
 # if HAVE_RAW_DECL_COPY_FILE_RANGE
 _GL_WARN_ON_USE (copy_file_range,
                  "copy_file_range is unportable - "
@@ -559,22 +527,17 @@ _GL_CXXALIASWARN (dup2);
    Return newfd if successful, otherwise -1 and errno set.
    See the Linux man page at
    <https://www.kernel.org/doc/man-pages/online/pages/man2/dup3.2.html>.  */
-# if @REPLACE_DUP3@
+# if @HAVE_DUP3@
 #  if !(defined __cplusplus && defined GNULIB_NAMESPACE)
-#   undef dup3
 #   define dup3 rpl_dup3
 #  endif
 _GL_FUNCDECL_RPL (dup3, int, (int oldfd, int newfd, int flags));
 _GL_CXXALIAS_RPL (dup3, int, (int oldfd, int newfd, int flags));
 # else
-#  if !@HAVE_DUP3@
 _GL_FUNCDECL_SYS (dup3, int, (int oldfd, int newfd, int flags));
-#  endif
 _GL_CXXALIAS_SYS (dup3, int, (int oldfd, int newfd, int flags));
 # endif
-# if __GLIBC__ >= 2
 _GL_CXXALIASWARN (dup3);
-# endif
 #elif defined GNULIB_POSIXCHECK
 # undef dup3
 # if HAVE_RAW_DECL_DUP3
@@ -893,9 +856,7 @@ _GL_FUNCDECL_SYS (execvpe, int,
 _GL_CXXALIAS_SYS (execvpe, int,
                   (const char *program, char * const *argv, char * const *env));
 # endif
-# if __GLIBC__ >= 2
 _GL_CXXALIASWARN (execvpe);
-# endif
 #elif defined GNULIB_POSIXCHECK
 # undef execvpe
 # if HAVE_RAW_DECL_EXECVPE
@@ -950,9 +911,7 @@ _GL_FUNCDECL_SYS (faccessat, int,
 _GL_CXXALIAS_SYS (faccessat, int,
                   (int fd, char const *file, int mode, int flag));
 # endif
-# if __GLIBC__ >= 2
 _GL_CXXALIASWARN (faccessat);
-# endif
 #elif defined GNULIB_POSIXCHECK
 # undef faccessat
 # if HAVE_RAW_DECL_FACCESSAT
@@ -1029,22 +988,11 @@ _GL_WARN_ON_USE (fchownat, "fchownat is not portable - "
    Return 0 if successful, otherwise -1 and errno set.
    See POSIX:2008 specification
    <https://pubs.opengroup.org/onlinepubs/9699919799/functions/fdatasync.html>.  */
-# if @REPLACE_FDATASYNC@
-#  if !(defined __cplusplus && defined GNULIB_NAMESPACE)
-#   undef fdatasync
-#   define fdatasync rpl_fdatasync
-#  endif
-_GL_FUNCDECL_RPL (fdatasync, int, (int fd));
-_GL_CXXALIAS_RPL (fdatasync, int, (int fd));
-# else
-#  if !@HAVE_FDATASYNC@|| !@HAVE_DECL_FDATASYNC@
+# if !@HAVE_FDATASYNC@ || !@HAVE_DECL_FDATASYNC@
 _GL_FUNCDECL_SYS (fdatasync, int, (int fd));
-#  endif
+# endif
 _GL_CXXALIAS_SYS (fdatasync, int, (int fd));
-# endif
-# if __GLIBC__ >= 2
 _GL_CXXALIASWARN (fdatasync);
-# endif
 #elif defined GNULIB_POSIXCHECK
 # undef fdatasync
 # if HAVE_RAW_DECL_FDATASYNC
@@ -1091,9 +1039,7 @@ _GL_FUNCDECL_SYS (ftruncate, int, (int fd, off_t length));
 #  endif
 _GL_CXXALIAS_SYS (ftruncate, int, (int fd, off_t length));
 # endif
-# if __GLIBC__ >= 2
 _GL_CXXALIASWARN (ftruncate);
-# endif
 #elif defined GNULIB_POSIXCHECK
 # undef ftruncate
 # if HAVE_RAW_DECL_FTRUNCATE
@@ -1183,9 +1129,7 @@ _GL_FUNCDECL_SYS (getdomainname, int, (char *name, size_t len)
 #  endif
 _GL_CXXALIAS_SYS (getdomainname, int, (char *name, size_t len));
 # endif
-# if __GLIBC__ >= 2
 _GL_CXXALIASWARN (getdomainname);
-# endif
 #elif defined GNULIB_POSIXCHECK
 # undef getdomainname
 # if HAVE_RAW_DECL_GETDOMAINNAME
@@ -1225,22 +1169,11 @@ _GL_WARN_ON_USE (getdtablesize, "getdtablesize is unportable - "
 
 #if @GNULIB_GETENTROPY@
 /* Fill a buffer with random bytes.  */
-# if @REPLACE_GETENTROPY@
-#  if !(defined __cplusplus && defined GNULIB_NAMESPACE)
-#   undef getentropy
-#   define getentropy rpl_getentropy
-#  endif
-_GL_FUNCDECL_RPL (getentropy, int, (void *buffer, size_t length));
-_GL_CXXALIAS_RPL (getentropy, int, (void *buffer, size_t length));
-# else
-#  if !@HAVE_GETENTROPY@
+# if !@HAVE_GETENTROPY@
 _GL_FUNCDECL_SYS (getentropy, int, (void *buffer, size_t length));
-#  endif
+# endif
 _GL_CXXALIAS_SYS (getentropy, int, (void *buffer, size_t length));
-# endif
-# if __GLIBC__ >= 2
 _GL_CXXALIASWARN (getentropy);
-# endif
 #elif defined GNULIB_POSIXCHECK
 # undef getentropy
 # if HAVE_RAW_DECL_GETENTROPY
@@ -1374,9 +1307,7 @@ _GL_FUNCDECL_SYS (getlogin_r, int, (char *name, size_t size)
                                                      int size.  */
 _GL_CXXALIAS_SYS_CAST (getlogin_r, int, (char *name, size_t size));
 # endif
-# if __GLIBC__ >= 2
 _GL_CXXALIASWARN (getlogin_r);
-# endif
 #elif defined GNULIB_POSIXCHECK
 # undef getlogin_r
 # if HAVE_RAW_DECL_GETLOGIN_R
@@ -1478,8 +1409,7 @@ _GL_WARN_ON_USE (getpagesize, "getpagesize is unportable - "
      Read a password from /dev/tty or stdin.
    Function getpass() from module 'getpass-gnu':
      Read a password of arbitrary length from /dev/tty or stdin.  */
-# if (@GNULIB_GETPASS@ && @REPLACE_GETPASS@) \
-     || (@GNULIB_GETPASS_GNU@ && @REPLACE_GETPASS_FOR_GETPASS_GNU@)
+# if @REPLACE_GETPASS@
 #  if !(defined __cplusplus && defined GNULIB_NAMESPACE)
 #   undef getpass
 #   define getpass rpl_getpass
@@ -1714,9 +1644,7 @@ _GL_CXXALIAS_SYS (linkat, int,
                   (int fd1, const char *path1, int fd2, const char *path2,
                    int flag));
 # endif
-# if __GLIBC__ >= 2
 _GL_CXXALIASWARN (linkat);
-# endif
 #elif defined GNULIB_POSIXCHECK
 # undef linkat
 # if HAVE_RAW_DECL_LINKAT
@@ -1797,9 +1725,8 @@ _GL_WARN_ON_USE (pipe, "pipe is unportable - "
    Return 0 upon success, or -1 with errno set upon failure.
    See also the Linux man page at
    <https://www.kernel.org/doc/man-pages/online/pages/man2/pipe2.2.html>.  */
-# if @REPLACE_PIPE2@
+# if @HAVE_PIPE2@
 #  if !(defined __cplusplus && defined GNULIB_NAMESPACE)
-#   undef pipe2
 #   define pipe2 rpl_pipe2
 #  endif
 _GL_FUNCDECL_RPL (pipe2, int, (int fd[2], int flags) _GL_ARG_NONNULL ((1)));
@@ -1808,9 +1735,7 @@ _GL_CXXALIAS_RPL (pipe2, int, (int fd[2], int flags));
 _GL_FUNCDECL_SYS (pipe2, int, (int fd[2], int flags) _GL_ARG_NONNULL ((1)));
 _GL_CXXALIAS_SYS (pipe2, int, (int fd[2], int flags));
 # endif
-# if __GLIBC__ >= 2
 _GL_CXXALIASWARN (pipe2);
-# endif
 #elif defined GNULIB_POSIXCHECK
 # undef pipe2
 # if HAVE_RAW_DECL_PIPE2
@@ -1845,9 +1770,7 @@ _GL_FUNCDECL_SYS (pread, ssize_t,
 _GL_CXXALIAS_SYS (pread, ssize_t,
                   (int fd, void *buf, size_t bufsize, off_t offset));
 # endif
-# if __GLIBC__ >= 2
 _GL_CXXALIASWARN (pread);
-# endif
 #elif defined GNULIB_POSIXCHECK
 # undef pread
 # if HAVE_RAW_DECL_PREAD
@@ -1882,9 +1805,7 @@ _GL_FUNCDECL_SYS (pwrite, ssize_t,
 _GL_CXXALIAS_SYS (pwrite, ssize_t,
                   (int fd, const void *buf, size_t bufsize, off_t offset));
 # endif
-# if __GLIBC__ >= 2
 _GL_CXXALIASWARN (pwrite);
-# endif
 #elif defined GNULIB_POSIXCHECK
 # undef pwrite
 # if HAVE_RAW_DECL_PWRITE
@@ -1998,9 +1919,7 @@ _GL_CXXALIAS_SYS (readlinkat, ssize_t,
                   (int fd, char const *restrict file,
                    char *restrict buf, size_t len));
 # endif
-# if __GLIBC__ >= 2
 _GL_CXXALIASWARN (readlinkat);
-# endif
 #elif defined GNULIB_POSIXCHECK
 # undef readlinkat
 # if HAVE_RAW_DECL_READLINKAT
@@ -2060,27 +1979,15 @@ _GL_CXXALIASWARN (rmdir);
 
    Platforms with no ability to set the hostname return -1 and set
    errno = ENOSYS.  */
-# if @REPLACE_SETHOSTNAME@
-#  if !(defined __cplusplus && defined GNULIB_NAMESPACE)
-#   undef sethostname
-#   define sethostname rpl_sethostname
-#  endif
-_GL_FUNCDECL_RPL (sethostname, int, (const char *name, size_t len)
-                                    _GL_ARG_NONNULL ((1)));
-_GL_CXXALIAS_RPL (sethostname, int, (const char *name, size_t len));
-# else
-#  if !@HAVE_SETHOSTNAME@ || !@HAVE_DECL_SETHOSTNAME@
+# if !@HAVE_SETHOSTNAME@ || !@HAVE_DECL_SETHOSTNAME@
 _GL_FUNCDECL_SYS (sethostname, int, (const char *name, size_t len)
                                     _GL_ARG_NONNULL ((1)));
-#  endif
+# endif
 /* Need to cast, because on Solaris 11 2011-10, Mac OS X 10.5, IRIX 6.5
    and FreeBSD 6.4 the second parameter is int.  On Solaris 11
    2011-10, the first parameter is not const.  */
 _GL_CXXALIAS_SYS_CAST (sethostname, int, (const char *name, size_t len));
-# endif
-# if __GLIBC__ >= 2
 _GL_CXXALIASWARN (sethostname);
-# endif
 #elif defined GNULIB_POSIXCHECK
 # undef sethostname
 # if HAVE_RAW_DECL_SETHOSTNAME
@@ -2133,7 +2040,7 @@ _GL_CXXALIAS_MDA_CAST (swab, void, (char *from, char *to, int n));
 # else
 #  if defined __hpux /* HP-UX */
 _GL_CXXALIAS_SYS (swab, void, (const char *from, char *to, int n));
-#  elif defined __sun && (defined __SunOS_5_10 || defined __XOPEN_OR_POSIX) && !defined _XPG4 /* Solaris */
+#  elif defined __sun && !defined _XPG4 /* Solaris */
 _GL_CXXALIAS_SYS (swab, void, (const char *from, char *to, ssize_t n));
 #  else
 _GL_CXXALIAS_SYS (swab, void, (const void *from, void *to, ssize_t n));
@@ -2189,9 +2096,7 @@ _GL_FUNCDECL_SYS (symlinkat, int,
 _GL_CXXALIAS_SYS (symlinkat, int,
                   (char const *contents, int fd, char const *file));
 # endif
-# if __GLIBC__ >= 2
 _GL_CXXALIASWARN (symlinkat);
-# endif
 #elif defined GNULIB_POSIXCHECK
 # undef symlinkat
 # if HAVE_RAW_DECL_SYMLINKAT
@@ -2221,9 +2126,7 @@ _GL_FUNCDECL_SYS (truncate, int, (const char *filename, off_t length)
 #  endif
 _GL_CXXALIAS_SYS (truncate, int, (const char *filename, off_t length));
 # endif
-# if __GLIBC__ >= 2
 _GL_CXXALIASWARN (truncate);
-# endif
 #elif defined GNULIB_POSIXCHECK
 # undef truncate
 # if HAVE_RAW_DECL_TRUNCATE
@@ -2253,9 +2156,7 @@ _GL_FUNCDECL_SYS (ttyname_r, int,
 _GL_CXXALIAS_SYS (ttyname_r, int,
                   (int fd, char *buf, size_t buflen));
 # endif
-# if __GLIBC__ >= 2
 _GL_CXXALIASWARN (ttyname_r);
-# endif
 #elif defined GNULIB_POSIXCHECK
 # undef ttyname_r
 # if HAVE_RAW_DECL_TTYNAME_R

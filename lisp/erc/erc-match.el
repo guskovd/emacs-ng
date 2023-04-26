@@ -1,9 +1,9 @@
 ;;; erc-match.el --- Highlight messages matching certain regexps  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2002-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2002-2022 Free Software Foundation, Inc.
 
 ;; Author: Andreas Fuchs <asf@void.at>
-;; Maintainer: Amin Bandali <bandali@gnu.org>, F. Jason Park <jp@neverwas.me>
+;; Maintainer: Amin Bandali <bandali@gnu.org>
 ;; Keywords: comm
 ;; URL: https://www.emacswiki.org/emacs/ErcMatch
 
@@ -52,13 +52,8 @@ they are hidden or highlighted.  This is controlled via the variables
 `erc-current-nick-highlight-type'.  For all these highlighting types,
 you can decide whether the entire message or only the sending nick is
 highlighted."
-  ((add-hook 'erc-insert-modify-hook #'erc-match-message 'append)
-   (add-hook 'erc-mode-hook #'erc-match--modify-invisibility-spec)
-   (erc--modify-local-map t "C-c C-k" #'erc-go-to-log-matches-buffer))
-  ((remove-hook 'erc-insert-modify-hook #'erc-match-message)
-   (remove-hook 'erc-mode-hook #'erc-match--modify-invisibility-spec)
-   (erc-match--modify-invisibility-spec)
-   (erc--modify-local-map nil "C-c C-k" #'erc-go-to-log-matches-buffer)))
+  ((add-hook 'erc-insert-modify-hook #'erc-match-message 'append))
+  ((remove-hook 'erc-insert-modify-hook #'erc-match-message)))
 
 ;; Remaining customizations
 
@@ -245,15 +240,6 @@ server and other miscellaneous functions."
   :version "24.3"
   :type 'boolean)
 
-(defcustom erc-match-quote-when-adding 'ask
-  "Whether to `regexp-quote' when adding to a match list interactively.
-When the value is a boolean, the opposite behavior will be made
-available via universal argument."
-  :package-version '(ERC . "5.5")
-  :type '(choice (const ask)
-                 (const t)
-                 (const nil)))
-
 ;; Internal variables:
 
 ;; This is exactly the same as erc-button-syntax-table.  Should we
@@ -304,7 +290,7 @@ Note that this is the default face to use if
 
 ;; Functions:
 
-(defun erc-add-entry-to-list (list prompt &optional completions alt)
+(defun erc-add-entry-to-list (list prompt &optional completions)
   "Add an entry interactively to a list.
 LIST must be passed as a symbol
 The query happens using PROMPT.
@@ -313,16 +299,7 @@ Completion is performed on the optional alist COMPLETIONS."
 		prompt
 		completions
 		(lambda (x)
-                  (not (erc-member-ignore-case (car x) (symbol-value list))))))
-        quoted)
-    (setq quoted (regexp-quote entry))
-    (when (pcase erc-match-quote-when-adding
-            ('ask (unless (string= quoted entry)
-                    (y-or-n-p
-                     (format "Use regexp-quoted form (%s) instead? " quoted))))
-            ('t (not alt))
-            ('nil alt))
-      (setq entry quoted))
+		  (not (erc-member-ignore-case (car x) (symbol-value list)))))))
     (if (erc-member-ignore-case entry (symbol-value list))
 	(error "\"%s\" is already on the list" entry)
       (set list (cons entry (symbol-value list))))))
@@ -350,11 +327,10 @@ car is the string."
 			(symbol-value list))))))
 
 ;;;###autoload
-(defun erc-add-pal (&optional arg)
+(defun erc-add-pal ()
   "Add pal interactively to `erc-pals'."
-  (interactive "P")
-  (erc-add-entry-to-list 'erc-pals "Add pal: "
-                         (erc-get-server-nickname-alist) arg))
+  (interactive)
+  (erc-add-entry-to-list 'erc-pals "Add pal: " (erc-get-server-nickname-alist)))
 
 ;;;###autoload
 (defun erc-delete-pal ()
@@ -363,11 +339,11 @@ car is the string."
   (erc-remove-entry-from-list 'erc-pals "Delete pal: "))
 
 ;;;###autoload
-(defun erc-add-fool (&optional arg)
+(defun erc-add-fool ()
   "Add fool interactively to `erc-fools'."
-  (interactive "P")
+  (interactive)
   (erc-add-entry-to-list 'erc-fools "Add fool: "
-                         (erc-get-server-nickname-alist) arg))
+			 (erc-get-server-nickname-alist)))
 
 ;;;###autoload
 (defun erc-delete-fool ()
@@ -376,10 +352,10 @@ car is the string."
   (erc-remove-entry-from-list 'erc-fools "Delete fool: "))
 
 ;;;###autoload
-(defun erc-add-keyword (&optional arg)
+(defun erc-add-keyword ()
   "Add keyword interactively to `erc-keywords'."
-  (interactive "P")
-  (erc-add-entry-to-list 'erc-keywords "Add keyword: " nil arg))
+  (interactive)
+  (erc-add-entry-to-list 'erc-keywords "Add keyword: "))
 
 ;;;###autoload
 (defun erc-delete-keyword ()
@@ -388,10 +364,10 @@ car is the string."
   (erc-remove-entry-from-list 'erc-keywords "Delete keyword: "))
 
 ;;;###autoload
-(defun erc-add-dangerous-host (&optional arg)
+(defun erc-add-dangerous-host ()
   "Add dangerous-host interactively to `erc-dangerous-hosts'."
-  (interactive "P")
-  (erc-add-entry-to-list 'erc-dangerous-hosts "Add dangerous-host: " nil arg))
+  (interactive)
+  (erc-add-entry-to-list 'erc-dangerous-hosts "Add dangerous-host: "))
 
 ;;;###autoload
 (defun erc-delete-dangerous-host ()
@@ -412,19 +388,19 @@ NICKUSERHOST will be ignored."
 (defun erc-match-pal-p (nickuserhost _msg)
   "Check whether NICKUSERHOST is in `erc-pals'.
 MSG will be ignored."
-  (and nickuserhost erc-pals
+  (and nickuserhost
        (erc-list-match erc-pals nickuserhost)))
 
 (defun erc-match-fool-p (nickuserhost msg)
   "Check whether NICKUSERHOST is in `erc-fools' or MSG is directed at a fool."
-  (and msg nickuserhost erc-fools
+  (and msg nickuserhost
        (or (erc-list-match erc-fools nickuserhost)
 	   (erc-match-directed-at-fool-p msg))))
 
 (defun erc-match-keyword-p (_nickuserhost msg)
   "Check whether any keyword of `erc-keywords' matches for MSG.
 NICKUSERHOST will be ignored."
-  (and msg erc-keywords
+  (and msg
        (erc-list-match
 	(mapcar (lambda (x)
 		  (if (listp x)
@@ -436,7 +412,7 @@ NICKUSERHOST will be ignored."
 (defun erc-match-dangerous-host-p (nickuserhost _msg)
   "Check whether NICKUSERHOST is in `erc-dangerous-hosts'.
 MSG will be ignored."
-  (and nickuserhost erc-dangerous-hosts
+  (and nickuserhost
        (erc-list-match erc-dangerous-hosts nickuserhost)))
 
 (defun erc-match-directed-at-fool-p (msg)
@@ -652,35 +628,21 @@ See `erc-log-match-format'."
 					(get-buffer (car buffer-cons))))))
     (switch-to-buffer buffer-name)))
 
-(defvar-local erc-match--hide-fools-offset-bounds nil)
+(define-key erc-mode-map "\C-c\C-k" #'erc-go-to-log-matches-buffer)
 
 (defun erc-hide-fools (match-type _nickuserhost _message)
  "Hide foolish comments.
 This function should be called from `erc-text-matched-hook'."
-  (when (eq match-type 'fool)
-    (if erc-match--hide-fools-offset-bounds
-        (let ((beg (point-min))
-              (end (point-max)))
-          (save-restriction
-            (widen)
-            (put-text-property (1- beg) (1- end) 'invisible 'erc-match)))
-      ;; The docs say `intangible' is deprecated, but this has been
-      ;; like this for ages.  Should verify unneeded and remove if so.
-      (erc-put-text-properties (point-min) (point-max)
-                               '(invisible intangible)))))
+ (when (eq match-type 'fool)
+   (erc-put-text-properties (point-min) (point-max)
+			    '(invisible intangible)
+			    (current-buffer))))
 
 (defun erc-beep-on-match (match-type _nickuserhost _message)
   "Beep when text matches.
 This function is meant to be called from `erc-text-matched-hook'."
   (when (member match-type erc-beep-match-types)
     (beep)))
-
-(defun erc-match--modify-invisibility-spec ()
-  "Add an ellipsis property to the local spec."
-  (if erc-match-mode
-      (add-to-invisibility-spec 'erc-match)
-    (erc-with-all-buffers-of-server nil nil
-      (remove-from-invisibility-spec 'erc-match))))
 
 (provide 'erc-match)
 

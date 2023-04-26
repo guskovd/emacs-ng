@@ -1,6 +1,6 @@
 ;;; iswitchb.el --- switch between buffers using substrings  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 1996-1997, 2000-2023 Free Software Foundation, Inc.
+;; Copyright (C) 1996-1997, 2000-2022 Free Software Foundation, Inc.
 
 ;; Author: Stephen Eglen <stephen@gnu.org>
 ;; Keywords: completion convenience
@@ -467,7 +467,9 @@ interfere with other minibuffer usage.")
                  (switch-to-buffer-other-window . iswitchb-buffer-other-window)
                  (switch-to-buffer-other-frame . iswitchb-buffer-other-frame)
                  (display-buffer . iswitchb-display-buffer)))
-      (define-key map (vector 'remap (car b)) (cdr b)))
+      (if (fboundp 'command-remapping)
+          (define-key map (vector 'remap (car b)) (cdr b))
+        (substitute-key-definition (car b) (cdr b) map global-map)))
     map)
   "Global keymap for `iswitchb-mode'.")
 
@@ -975,7 +977,17 @@ Return the modified list with the last element prepended to it."
 	  (set-buffer buf))
 
       (with-output-to-temp-buffer temp-buf
-        (display-completion-list (or iswitchb-matches iswitchb-buflist)))
+	(if (featurep 'xemacs)
+
+	    ;; XEmacs extents are put on by default, doesn't seem to be
+	    ;; any way of switching them off.
+	    (display-completion-list (or iswitchb-matches iswitchb-buflist)
+				     :help-string "iswitchb "
+				     :activate-callback
+				     (lambda (_x _y _z)
+				       (message "doesn't work yet, sorry!")))
+	  ;; else running Emacs
+	  (display-completion-list (or iswitchb-matches iswitchb-buflist))))
       (setq iswitchb-common-match-inserted nil))))
 
 ;;; KILL CURRENT BUFFER
@@ -1064,7 +1076,8 @@ Return the modified list with the last element prepended to it."
 	;; then create a new buffer
 	(progn
 	  (setq newbufcreated (get-buffer-create buf))
-          (set-buffer-major-mode newbufcreated)
+	  (if (fboundp 'set-buffer-major-mode)
+	      (set-buffer-major-mode newbufcreated))
 	  (iswitchb-visit-buffer newbufcreated))
       ;; else won't create new buffer
       (message "no buffer matching `%s'" buf))))
@@ -1313,7 +1326,9 @@ This is an example function which can be hooked on to
   "Return non-nil if we should ignore case when matching.
 See the variable `iswitchb-case' for details."
   (if iswitchb-case
-      (isearch-no-upper-case-p iswitchb-text t)))
+      (if (featurep 'xemacs)
+	  (isearch-no-upper-case-p iswitchb-text)
+	(isearch-no-upper-case-p iswitchb-text t))))
 
 ;;;###autoload
 (define-minor-mode iswitchb-mode

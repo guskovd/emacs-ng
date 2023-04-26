@@ -1,6 +1,6 @@
 ;;; format-spec.el --- format arbitrary formatting strings -*- lexical-binding: t -*-
 
-;; Copyright (C) 1999-2023 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2022 Free Software Foundation, Inc.
 
 ;; Author: Lars Magne Ingebrigtsen <larsi@gnus.org>
 ;; Keywords: tools
@@ -59,18 +59,6 @@ value associated with ?b in SPECIFICATION, either padding it with
 leading zeros or truncating leading characters until it's ten
 characters wide\".
 
-the substitution for a specification character can also be a
-function, taking no arguments and returning a string to be used
-for the replacement.  It will only be called if FORMAT uses that
-character.  For example:
-
-  (format-spec \"%n\"
-               \\=`((?n . ,(lambda ()
-                          (read-number \"Number: \")))))
-
-Note that it is best to make sure the function is not quoted,
-like above, so that it is compiled by the byte-compiler.
-
 Any text properties of FORMAT are copied to the result, with any
 text properties of a %-spec itself copied to its substitution.
 
@@ -106,15 +94,14 @@ is returned, where each format spec is its own element."
                  (width (match-string 2))
                  (trunc (match-string 3))
                  (char (string-to-char (match-string 4)))
-                 (text (let ((res (cdr (assq char specification))))
-                         (if (functionp res) (funcall res) res))))
+                 (text (assq char specification)))
             (when (and split
                        (not (= (1- beg) split-start)))
               (push (buffer-substring split-start (1- beg)) split-result))
             (cond (text
                    ;; Handle flags.
                    (setq text (format-spec--do-flags
-                               (format "%s" text)
+                               (format "%s" (cdr text))
                                (format-spec--parse-flags flags)
                                (and width (string-to-number width))
                                (and trunc (car (read-from-string trunc 1)))))

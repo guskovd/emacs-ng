@@ -1,6 +1,6 @@
 ;;; epg-config.el --- configuration of the EasyPG Library  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2006-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2006-2022 Free Software Foundation, Inc.
 
 ;; Author: Daiki Ueno <ueno@unixuser.org>
 ;; Keywords: PGP, GnuPG
@@ -246,9 +246,9 @@ version requirement is met."
       (goto-char (match-end 0))
       (backward-char)
       (forward-sexp)
-      (skip-syntax-forward "-" (line-end-position))
+      (skip-syntax-forward "-" (point-at-eol))
       (list (cons 'program program)
-            (cons 'version (buffer-substring (point) (line-end-position)))))))
+            (cons 'version (buffer-substring (point) (point-at-eol)))))))
 
 ;;;###autoload
 (defun epg-configuration ()

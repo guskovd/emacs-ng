@@ -1,14 +1,12 @@
-use super::input::InputEvent;
 use emacs::{
     bindings::{event_kind, input_event, scroll_bar_part},
-    globals::{Qnil, Qt},
+    globals::Qnil,
     lisp::LispObject,
 };
 
 pub fn create_emacs_event(kind: event_kind::Type, top_frame: LispObject) -> input_event {
-    InputEvent {
-        kind,
-        part: scroll_bar_part::scroll_bar_nowhere,
+    input_event {
+        _bitfield_1: input_event::new_bitfield_1(kind, scroll_bar_part::scroll_bar_nowhere),
         code: 0,
         modifiers: 0,
         x: 0.into(),
@@ -16,7 +14,5 @@ pub fn create_emacs_event(kind: event_kind::Type, top_frame: LispObject) -> inpu
         timestamp: 0,
         frame_or_window: top_frame,
         arg: Qnil,
-        device: Qt,
     }
-    .into()
 }

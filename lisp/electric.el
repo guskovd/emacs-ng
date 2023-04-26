@@ -1,6 +1,6 @@
 ;;; electric.el --- window maker and Command loop for `electric' modes  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 1985-1986, 1995, 2001-2023 Free Software Foundation,
+;; Copyright (C) 1985-1986, 1995, 2001-2022 Free Software Foundation,
 ;; Inc.
 
 ;; Author: K. Shane Hartman
@@ -340,8 +340,7 @@ use `electric-indent-local-mode'."
 ;;;###autoload
 (define-minor-mode electric-indent-local-mode
   "Toggle `electric-indent-mode' only in this buffer."
-  :variable ( electric-indent-mode .
-              (lambda (val) (setq-local electric-indent-mode val)))
+  :variable (buffer-local-value 'electric-indent-mode (current-buffer))
   (cond
    ((eq electric-indent-mode (default-value 'electric-indent-mode))
     (kill-local-variable 'electric-indent-mode))
@@ -409,7 +408,9 @@ If multiple rules match, only first one is executed.")
                                 (goto-char pos)
                                 (funcall probe last-command-event))))
                          (when res (throw 'done res))))))))))
-    (when rule
+    (when (and rule
+               ;; Not in a string or comment.
+               (not (nth 8 (save-excursion (syntax-ppss pos)))))
       (goto-char pos)
       (when (functionp rule) (setq rule (funcall rule)))
       (dolist (sym (if (symbolp rule) (list rule) rule))
@@ -483,8 +484,7 @@ The variable `electric-layout-rules' says when and how to insert newlines."
 ;;;###autoload
 (define-minor-mode electric-layout-local-mode
   "Toggle `electric-layout-mode' only in this buffer."
-  :variable ( electric-layout-mode .
-              (lambda (val) (setq-local electric-layout-mode val)))
+  :variable (buffer-local-value 'electric-layout-mode (current-buffer))
   (cond
    ((eq electric-layout-mode (default-value 'electric-layout-mode))
     (kill-local-variable 'electric-layout-mode))
@@ -512,11 +512,11 @@ This list's members correspond to left single quote, right single
 quote, left double quote, and right double quote, respectively."
   :version "26.1"
   :type '(list character character character character)
-  :safe (lambda (x)
-          (pcase x
-            (`(,(pred characterp) ,(pred characterp)
-               ,(pred characterp) ,(pred characterp))
-             t)))
+  :safe #'(lambda (x)
+	    (pcase x
+	      (`(,(pred characterp) ,(pred characterp)
+		 ,(pred characterp) ,(pred characterp))
+	       t)))
   :group 'electricity)
 
 (defcustom electric-quote-paragraph t
@@ -539,16 +539,6 @@ break, whitespace, opening parenthesis, or quote, and with a
 closing double quote otherwise."
   :version "26.1"
   :type 'boolean :safe #'booleanp :group 'electricity)
-
-(defcustom electric-quote-replace-consecutive t
-  "Non-nil means to replace a pair of single quotes with a double quote.
-Two single quotes are replaced by the corresponding double quote
-when the second quote of the pair is entered (i.e. by typing ` or
-') by default.  If nil, the single quotes are not altered."
-  :version "29.1"
-  :type 'boolean
-  :safe #'booleanp
-  :group 'electricity)
 
 (defvar electric-quote-inhibit-functions ()
   "List of functions that should inhibit electric quoting.
@@ -602,9 +592,7 @@ This requotes when a quoting key is typed."
                               (memq (char-syntax (char-before))
                                     '(?\s ?\())))
                         (setq backtick ?\')))
-               (cond ((and electric-quote-replace-consecutive
-                           (search-backward
-                            (string q< backtick) (- (point) 2) t))
+               (cond ((search-backward (string q< backtick) (- (point) 2) t)
                       (replace-match (string q<<))
                       (when (and electric-pair-mode
                                  (eq (cdr-safe
@@ -618,8 +606,7 @@ This requotes when a quoting key is typed."
                      ((search-backward "\"" (1- (point)) t)
                       (replace-match (string q<<))
                       (setq last-command-event q<<)))
-             (cond ((and electric-quote-replace-consecutive
-                         (search-backward (string q> ?') (- (point) 2) t))
+             (cond ((search-backward (string q> ?') (- (point) 2) t)
                     (replace-match (string q>>))
                     (setq last-command-event q>>))
                    ((search-backward "'" (1- (point)) t)
@@ -633,14 +620,14 @@ This requotes when a quoting key is typed."
 (define-minor-mode electric-quote-mode
   "Toggle on-the-fly requoting (Electric Quote mode).
 
-When enabled, as you type this replaces \\=` with \\=‘, \\=' with \\=’,
+When enabled, as you type this replaces \\=` with ‘, \\=' with ’,
 \\=`\\=` with “, and \\='\\=' with ”.  This occurs only in comments, strings,
 and text paragraphs, and these are selectively controlled with
 `electric-quote-comment', `electric-quote-string', and
 `electric-quote-paragraph'.
 
 Customize `electric-quote-chars' to use characters other than the
-ones listed here.  Also see `electric-quote-replace-consecutive'.
+ones listed here.
 
 This is a global minor mode.  To toggle the mode in a single buffer,
 use `electric-quote-local-mode'."
@@ -661,8 +648,7 @@ use `electric-quote-local-mode'."
 ;;;###autoload
 (define-minor-mode electric-quote-local-mode
   "Toggle `electric-quote-mode' only in this buffer."
-  :variable ( electric-quote-mode .
-              (lambda (val) (setq-local electric-quote-mode val)))
+  :variable (buffer-local-value 'electric-quote-mode (current-buffer))
   (cond
    ((eq electric-quote-mode (default-value 'electric-quote-mode))
     (kill-local-variable 'electric-quote-mode))

@@ -1,11 +1,10 @@
 ;;; ob-sql.el --- Babel Functions for SQL            -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2009-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2009-2022 Free Software Foundation, Inc.
 
 ;; Author: Eric Schulte
-;; Maintainer: Daniel Kraus <daniel@kraus.my>
 ;; Keywords: literate programming, reproducible research
-;; URL: https://orgmode.org
+;; Homepage: https://orgmode.org
 
 ;; This file is part of GNU Emacs.
 
@@ -70,10 +69,6 @@
 ;;
 
 ;;; Code:
-
-(require 'org-macs)
-(org-assert-version)
-
 (require 'ob)
 
 (declare-function org-table-import "org-table" (file arg))
@@ -223,18 +218,18 @@ then look for the parameter into the corresponding connection
 defined in `sql-connection-alist', otherwise look into PARAMS.
 See `sql-connection-alist' (part of SQL mode) for how to define
 database connections."
-  (or (cdr (assq name params))
-      (and (assq :dbconnection params)
-           (let* ((dbconnection (cdr (assq :dbconnection params)))
-                  (name-mapping '((:dbhost . sql-server)
-                                  (:dbport . sql-port)
-                                  (:dbuser . sql-user)
-                                  (:dbpassword . sql-password)
-                                  (:dbinstance . sql-dbinstance)
-                                  (:database . sql-database)))
-                  (mapped-name (cdr (assq name name-mapping))))
-             (cadr (assq mapped-name
-                         (cdr (assoc-string dbconnection sql-connection-alist t))))))))
+  (if (assq :dbconnection params)
+      (let* ((dbconnection (cdr (assq :dbconnection params)))
+             (name-mapping '((:dbhost . sql-server)
+                             (:dbport . sql-port)
+                             (:dbuser . sql-user)
+                             (:dbpassword . sql-password)
+                             (:dbinstance . sql-dbinstance)
+                             (:database . sql-database)))
+             (mapped-name (cdr (assq name name-mapping))))
+        (cadr (assq mapped-name
+                    (cdr (assoc dbconnection sql-connection-alist)))))
+    (cdr (assq name params))))
 
 (defun org-babel-execute:sql (body params)
   "Execute a block of Sql code with Babel.

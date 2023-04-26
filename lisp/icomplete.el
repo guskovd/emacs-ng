@@ -1,6 +1,7 @@
 ;;; icomplete.el --- minibuffer completion incremental feedback -*- lexical-binding: t -*-
 
-;; Copyright (C) 1992-2023 Free Software Foundation, Inc.
+;; Copyright (C) 1992-1994, 1997, 1999, 2001-2022 Free Software
+;; Foundation, Inc.
 
 ;; Author: Ken Manheimer <ken dot manheimer at gmail...>
 ;; Created: Mar 1993 Ken Manheimer, klm@nist.gov - first release to usenet
@@ -69,19 +70,18 @@ When nil, show candidates in full."
   :type 'boolean
   :version "24.4")
 
-(defcustom icomplete-tidy-shadowed-file-names nil
+(defvar icomplete-tidy-shadowed-file-names nil
   "If non-nil, automatically delete superfluous parts of file names.
 For example, if the user types ~/ after a long path name,
 everything preceding the ~/ is discarded so the interactive
-selection process starts again from the user's $HOME."
-  :type 'boolean)
+selection process starts again from the user's $HOME.")
 
 (defcustom icomplete-show-matches-on-no-input nil
   "When non-nil, show completions when first prompting for input.
 This means to show completions even when the current minibuffer contents
 is the same as was the initial input after minibuffer activation.
 This also means that if you traverse the list of completions with
-commands like \\`C-.' and just hit \\`RET' without typing any
+commands like `C-.' and just hit RET without typing any
 characters, the match under point will be chosen instead of the
 default."
   :type 'boolean
@@ -138,11 +138,8 @@ See `icomplete-delay-completions-threshold'."
   "Maximum number of initial chars to apply `icomplete-compute-delay'."
   :type 'integer)
 
-(defcustom icomplete-in-buffer nil
-  "If non-nil, also use Icomplete when completing in non-mini buffers.
-This affects commands like `completion-in-region', but not commands
-that use their own completions setup."
-  :type 'boolean)
+(defvar icomplete-in-buffer nil
+  "If non-nil, also use Icomplete when completing in non-mini buffers.")
 
 (defcustom icomplete-minibuffer-setup-hook nil
   "Icomplete-specific customization of minibuffer setup.
@@ -156,7 +153,8 @@ with other features and packages.  For instance:
 
 will constrain Emacs to a maximum minibuffer height of 3 lines when
 icompletion is occurring."
-  :type 'hook)
+  :type 'hook
+  :group 'icomplete)
 
 
 ;;;_* Initialization
@@ -174,13 +172,15 @@ Used to implement the option `icomplete-show-matches-on-no-input'.")
   (let ((non-essential t)) ;E.g. don't prompt for password!
     (icomplete-exhibit)))
 
-(defvar-keymap icomplete-minibuffer-map
-  :doc "Keymap used by `icomplete-mode' in the minibuffer."
-  "C-M-i" #'icomplete-force-complete
-  "C-j"   #'icomplete-force-complete-and-exit
-  "C-."   #'icomplete-forward-completions
-  "C-,"   #'icomplete-backward-completions
-  "<remap> <minibuffer-complete-and-exit>" #'icomplete-ret)
+(defvar icomplete-minibuffer-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map [?\M-\t] 'icomplete-force-complete)
+    (define-key map [remap minibuffer-complete-and-exit] 'icomplete-ret)
+    (define-key map [?\C-j]  'icomplete-force-complete-and-exit)
+    (define-key map [?\C-.]  'icomplete-forward-completions)
+    (define-key map [?\C-,]  'icomplete-backward-completions)
+    map)
+  "Keymap used by `icomplete-mode' in the minibuffer.")
 
 (defun icomplete-ret ()
   "Exit minibuffer for icomplete."
@@ -217,34 +217,20 @@ the default otherwise."
        ;; calculated, This causes the first cached completion to
        ;; be taken (i.e. the one that the user sees highlighted)
        completion-all-sorted-completions)
-      (if (window-minibuffer-p)
-          (minibuffer-force-complete-and-exit)
-        (minibuffer-force-complete (icomplete--field-beg)
-                                   (icomplete--field-end)
-                                   'dont-cycle)
-        (completion-in-region-mode -1))
+      (minibuffer-force-complete-and-exit)
     ;; Otherwise take the faster route...
-    (if (window-minibuffer-p)
-        (minibuffer-complete-and-exit)
-      (completion-complete-and-exit
-       (icomplete--field-beg)
-       (icomplete--field-end)
-       (lambda () (completion-in-region-mode -1))))))
+    (minibuffer-complete-and-exit)))
 
 (defun icomplete-force-complete ()
   "Complete the icomplete minibuffer."
   (interactive)
   ;; We're not at all interested in cycling here (bug#34077).
-  (if (window-minibuffer-p)
-      (minibuffer-force-complete nil nil 'dont-cycle)
-    (minibuffer-force-complete (icomplete--field-beg)
-                               (icomplete--field-end)
-                               'dont-cycle)))
+  (minibuffer-force-complete nil nil 'dont-cycle))
 
 ;; Apropos `icomplete-scroll', we implement "scrolling icomplete"
 ;; within classic icomplete, which is "rotating", by contrast.
 ;;
-;; The two variables supporting this are
+;; The two variables supporing this are
 ;; `icomplete--scrolled-completions' and `icomplete--scrolled-past'.
 ;; They come into play when:
 ;;
@@ -268,7 +254,7 @@ the default otherwise."
   "Step forward completions by one entry.
 Second entry becomes the first and can be selected with
 `icomplete-force-complete-and-exit'.
-Return non-nil if something was stepped."
+Return non-nil iff something was stepped."
   (interactive)
   (let* ((beg (icomplete--field-beg))
          (end (icomplete--field-end))
@@ -286,7 +272,7 @@ Return non-nil if something was stepped."
   "Step backward completions by one entry.
 Last entry becomes the first and can be selected with
 `icomplete-force-complete-and-exit'.
-Return non-nil if something was stepped."
+Return non-nil iff something was stepped."
   (interactive)
   (let* ((beg (icomplete--field-beg))
          (end (icomplete--field-end))
@@ -383,7 +369,7 @@ require user confirmation."
 (defun icomplete-fido-exit (force)
   "Attempt to exit minibuffer immediately with current input.
 Unless FORCE is non-nil (interactively with a prefix argument),
-honor a non-nil REQUIRE-MATCH argument to `completing-read' by
+honour a non-nil REQUIRE-MATCH argument to `completing-read' by
 trying to complete as much as possible and disallowing the exit
 if that doesn't produce a completion match."
   (interactive "P")
@@ -394,42 +380,30 @@ if that doesn't produce a completion match."
 (defun icomplete-fido-backward-updir ()
   "Delete char before or go up directory, like `ido-mode'."
   (interactive)
-  (cond ((and (eq (char-before) ?/)
-              (eq (icomplete--category) 'file))
-         (when (string-equal (icomplete--field-string) "~/")
-           (delete-region (icomplete--field-beg) (icomplete--field-end))
-           (insert (expand-file-name "~/"))
-           (goto-char (line-end-position)))
-         (save-excursion
-           (goto-char (1- (point)))
-           (when (search-backward "/" (point-min) t)
-             (delete-region (1+ (point)) (point-max)))))
-        (t (call-interactively 'backward-delete-char))))
+  (if (and (eq (char-before) ?/)
+           (eq (icomplete--category) 'file))
+      (save-excursion
+        (goto-char (1- (point)))
+        (when (search-backward "/" (point-min) t)
+          (delete-region (1+ (point)) (point-max))))
+    (call-interactively 'backward-delete-char)))
 
-(defvar-keymap icomplete-fido-mode-map
-  :doc "Keymap used by `fido-mode' in the minibuffer."
-  "C-k"     #'icomplete-fido-kill
-  "C-d"     #'icomplete-fido-delete-char
-  "RET"     #'icomplete-fido-ret
-  "C-m"     #'icomplete-fido-ret
-  "DEL"     #'icomplete-fido-backward-updir
-  "M-j"     #'icomplete-fido-exit
-  "C-s"     #'icomplete-forward-completions
-  "C-r"     #'icomplete-backward-completions
-  "<right>" #'icomplete-forward-completions
-  "<left>"  #'icomplete-backward-completions
-  "C-."     #'icomplete-forward-completions
-  "C-,"     #'icomplete-backward-completions)
-
-(defun icomplete--fido-ccd ()
-  "Make value for `completion-category-defaults' prioritizing `flex'."
-  (cl-loop
-   for (cat . alist) in completion-category-defaults collect
-   `(,cat . ,(cl-loop
-              for entry in alist for (prop . val) = entry
-              if (eq prop 'styles)
-              collect `(,prop . (flex ,@(delq 'flex val)))
-              else collect entry))))
+(defvar icomplete-fido-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "C-k") 'icomplete-fido-kill)
+    (define-key map (kbd "C-d") 'icomplete-fido-delete-char)
+    (define-key map (kbd "RET") 'icomplete-fido-ret)
+    (define-key map (kbd "C-m") 'icomplete-fido-ret)
+    (define-key map (kbd "DEL") 'icomplete-fido-backward-updir)
+    (define-key map (kbd "M-j") 'icomplete-fido-exit)
+    (define-key map (kbd "C-s") 'icomplete-forward-completions)
+    (define-key map (kbd "C-r") 'icomplete-backward-completions)
+    (define-key map (kbd "<right>") 'icomplete-forward-completions)
+    (define-key map (kbd "<left>") 'icomplete-backward-completions)
+    (define-key map (kbd "C-.") 'icomplete-forward-completions)
+    (define-key map (kbd "C-,") 'icomplete-backward-completions)
+    map)
+  "Keymap used by `fido-mode' in the minibuffer.")
 
 (defun icomplete--fido-mode-setup ()
   "Setup `fido-mode''s minibuffer."
@@ -442,7 +416,7 @@ if that doesn't produce a completion match."
                 icomplete-scroll (not (null icomplete-vertical-mode))
                 completion-styles '(flex)
                 completion-flex-nospace nil
-                completion-category-defaults (icomplete--fido-ccd)
+                completion-category-defaults nil
                 completion-ignore-case t
                 read-buffer-completion-ignore-case t
                 read-file-name-completion-ignore-case t)))
@@ -453,15 +427,12 @@ if that doesn't produce a completion match."
 
 This global minor mode makes minibuffer completion behave
 more like `ido-mode' than regular `icomplete-mode'."
-  :global t
+  :global t :group 'icomplete
   (remove-hook 'minibuffer-setup-hook #'icomplete-minibuffer-setup)
   (remove-hook 'minibuffer-setup-hook #'icomplete--fido-mode-setup)
-  (remove-hook 'completion-in-region-mode-hook #'icomplete--in-region-setup)
   (when fido-mode
     (icomplete-mode -1)
     (setq icomplete-mode t)
-    (when icomplete-in-buffer
-      (add-hook 'completion-in-region-mode-hook #'icomplete--in-region-setup))
     (add-hook 'minibuffer-setup-hook #'icomplete-minibuffer-setup)
     (add-hook 'minibuffer-setup-hook #'icomplete--fido-mode-setup)))
 
@@ -482,7 +453,7 @@ You can use the following key bindings to navigate and select
 completions:
 
 \\{icomplete-minibuffer-map}"
-  :global t
+  :global t :group 'icomplete
   (remove-hook 'minibuffer-setup-hook #'icomplete-minibuffer-setup)
   (remove-hook 'completion-in-region-mode-hook #'icomplete--in-region-setup)
   (when icomplete-mode
@@ -557,7 +528,7 @@ Usually run by inclusion in `minibuffer-setup-hook'."
       (setq icomplete--in-region-buffer nil)
       (delete-overlay icomplete-overlay)
       (kill-local-variable 'completion-show-inline-help)
-      (remove-hook 'post-command-hook #'icomplete-post-command-hook t)
+      (remove-hook 'post-command-hook 'icomplete-post-command-hook t)
       (message nil)))
   (when (and completion-in-region-mode
 	     icomplete-mode (icomplete-simple-completing-p))
@@ -568,7 +539,7 @@ Usually run by inclusion in `minibuffer-setup-hook'."
       (unless (memq icomplete-minibuffer-map (cdr tem))
 	(setcdr tem (make-composed-keymap icomplete-minibuffer-map
 					  (cdr tem)))))
-    (add-hook 'post-command-hook #'icomplete-post-command-hook nil t)))
+    (add-hook 'post-command-hook 'icomplete-post-command-hook nil t)))
 
 (defun icomplete--sorted-completions ()
   (or completion-all-sorted-completions
@@ -583,8 +554,7 @@ Usually run by inclusion in `minibuffer-setup-hook'."
        ;; predicates" which may vary depending on specific
        ;; `completing-read' invocations, described below:
        for fn in (cond ((and minibuffer-default
-                             (stringp (or (car-safe minibuffer-default)
-                                          minibuffer-default)) ; bug#38992 bug#55800
+                             (stringp minibuffer-default) ; bug#38992
                              (equal (icomplete--field-string) icomplete--initial-input))
                         ;; Here, we have a non-nil string default and
                         ;; no input whatsoever.  We want to make sure
@@ -602,9 +572,7 @@ Usually run by inclusion in `minibuffer-setup-hook'."
                           ;; Has "bar" at the top, so RET will select
                           ;; it, as desired.
                           ,(lambda (comp)
-                             (equal (or (car-safe minibuffer-default)
-                                        minibuffer-default)
-                                    comp))
+                             (equal minibuffer-default comp))
                           ;; Why do we need this second predicate?
                           ;; Because that'll make things like M-x man
                           ;; RET RET, when invoked with point on the
@@ -619,16 +587,14 @@ Usually run by inclusion in `minibuffer-setup-hook'."
                           ;; select it -- again, as desired.
                           ;;
                           ;; FIXME: it's arguable that this second
-                          ;; behavior should be a property of the
+                          ;; behaviour should be a property of the
                           ;; completion table and not the completion
                           ;; frontend such as we have done
                           ;; here. However, it seems generically
                           ;; useful for a very broad spectrum of
                           ;; cases.
                           ,(lambda (comp)
-                             (string-prefix-p (or (car-safe minibuffer-default)
-                                                  minibuffer-default)
-                                              comp))))
+                             (string-prefix-p minibuffer-default comp))))
                        ((and fido-mode
                              (not minibuffer-default)
                              (eq (icomplete--category) 'file))
@@ -658,14 +624,16 @@ Usually run by inclusion in `minibuffer-setup-hook'."
                  (completion--cache-all-sorted-completions beg end (cons comp all))))
        finally return all)))
 
-(defvar-keymap icomplete-vertical-mode-minibuffer-map
-  :doc "Keymap used by `icomplete-vertical-mode' in the minibuffer."
-  "C-n"    #'icomplete-forward-completions
-  "C-p"    #'icomplete-backward-completions
-  "<down>" #'icomplete-forward-completions
-  "<up>"   #'icomplete-backward-completions
-  "M-<"    #'icomplete-vertical-goto-first
-  "M->"    #'icomplete-vertical-goto-last)
+(defvar icomplete-vertical-mode-minibuffer-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "C-n") 'icomplete-forward-completions)
+    (define-key map (kbd "C-p") 'icomplete-backward-completions)
+    (define-key map (kbd "<down>") 'icomplete-forward-completions)
+    (define-key map (kbd "<up>") 'icomplete-backward-completions)
+    (define-key map (kbd "M-<") 'icomplete-vertical-goto-first)
+    (define-key map (kbd "M->") 'icomplete-vertical-goto-last)
+    map)
+  "Keymap used by `icomplete-vertical-mode' in the minibuffer.")
 
 (defun icomplete--vertical-minibuffer-setup ()
   "Setup the minibuffer for vertical display of completion candidates."
@@ -716,13 +684,11 @@ If it's on, just add the vertical display."
 Should be run via minibuffer `post-command-hook'.
 See `icomplete-mode' and `minibuffer-setup-hook'."
   (when (and icomplete-mode
-             ;; Check if still in the right buffer (bug#61308)
-             (or (window-minibuffer-p) completion-in-region--data)
              (icomplete-simple-completing-p)) ;Shouldn't be necessary.
     (let ((saved-point (point)))
       (save-excursion
-        (goto-char (icomplete--field-end))
-        ;; Insert the match-status information:
+        (goto-char (point-max))
+                                        ; Insert the match-status information:
         (when (and (or icomplete-show-matches-on-no-input
                        (not (equal (icomplete--field-string)
                                    icomplete--initial-input)))
@@ -750,6 +716,11 @@ See `icomplete-mode' and `minibuffer-setup-hook'."
             (delete-region (overlay-start rfn-eshadow-overlay)
                            (overlay-end rfn-eshadow-overlay)))
           (let* ((field-string (icomplete--field-string))
+                 ;; Not sure why, but such requests seem to come
+                 ;; every once in a while.  It's not fully
+                 ;; deterministic but `C-x C-f M-DEL M-DEL ...'
+                 ;; seems to trigger it fairly often!
+                 (while-no-input-ignore-events '(selection-request))
                  (text (while-no-input
                          (icomplete-completions
                           field-string
@@ -864,13 +835,13 @@ by `group-function''s second \"transformation\" protocol."
                                           while (listp r)
                                           count 1))
            repeat total-space
-           for neighbor = nil
+           for neighbour = nil
            if (and preds (> space-above 0)) do
-           (push (setq neighbor (pop preds)) scroll-above)
+           (push (setq neighbour (pop preds)) scroll-above)
            (cl-decf space-above)
            else if (consp succs) collect
-           (setq neighbor (pop succs)) into scroll-below-aux
-           while neighbor
+           (setq neighbour (pop succs)) into scroll-below-aux
+           while neighbour
            finally (setq scroll-below scroll-below-aux))
   ;; Halfway there...
   (let* ((selected (propertize (car comps) 'icomplete-selected t))
@@ -1073,7 +1044,7 @@ matches exist."
                     (push first prospects)))
                 (concat determ
                         "{"
-                        (mapconcat #'identity prospects icomplete-separator)
+                        (mapconcat 'identity prospects icomplete-separator)
                         (concat (and limit (concat icomplete-separator ellipsis))
                                 "}")))
             ;; Restore the base-size info, since completion-all-sorted-completions

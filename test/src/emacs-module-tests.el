@@ -1,6 +1,6 @@
 ;;; emacs-module-tests.el --- Test GNU Emacs modules.  -*- lexical-binding: t; -*-
 
-;; Copyright 2015-2023 Free Software Foundation, Inc.
+;; Copyright 2015-2022 Free Software Foundation, Inc.
 
 ;; This file is part of GNU Emacs.
 
@@ -31,11 +31,6 @@
 (require 'ert-x)
 (require 'help-fns)
 (require 'subr-x)
-
-;; Catch information for bug#50902.
-(when (getenv "EMACS_EMBA_CI")
-  (start-process-shell-command
-   "*timeout*" nil (format "sleep 60; kill -ABRT %d" (emacs-pid))))
 
 (defconst mod-test-emacs
   (expand-file-name invocation-name invocation-directory)
@@ -211,6 +206,20 @@ changes."
   (should (equal (help-function-arglist #'mod-test-sum)
                  '(arg1 arg2))))
 
+(defmacro module--with-temp-directory (name &rest body)
+  "Bind NAME to the name of a temporary directory and evaluate BODY.
+NAME must be a symbol.  Delete the temporary directory after BODY
+exits normally or non-locally.  NAME will be bound to the
+directory name (not the directory file name) of the temporary
+directory."
+  (declare (indent 1))
+  (cl-check-type name symbol)
+  `(let ((,name (file-name-as-directory
+                 (make-temp-file "emacs-module-test" :directory))))
+     (unwind-protect
+         (progn ,@body)
+       (delete-directory ,name :recursive))))
+
 (defmacro module--test-assertion (pattern &rest body)
   "Test that PATTERN matches the assertion triggered by BODY.
 Run Emacs as a subprocess, load the test module `mod-test-file',
@@ -219,7 +228,7 @@ assertion message that matches PATTERN.  PATTERN is evaluated and
 must evaluate to a regular expression string."
   (declare (indent 1))
   ;; To contain any core dumps.
-  `(ert-with-temp-directory tempdir
+  `(module--with-temp-directory tempdir
      (with-temp-buffer
        (let* ((default-directory tempdir)
               (status (call-process mod-test-emacs nil t nil
@@ -247,7 +256,6 @@ must evaluate to a regular expression string."
 
 (ert-deftest module--test-assertions--load-non-live-object ()
   "Check that -module-assertions verify that non-live objects aren't accessed."
-  :tags (if (getenv "EMACS_EMBA_CI") '(:unstable))
   (skip-unless (or (file-executable-p mod-test-emacs)
                    (and (eq system-type 'windows-nt)
                         (file-executable-p (concat mod-test-emacs ".exe")))))
@@ -263,10 +271,9 @@ must evaluate to a regular expression string."
 
 (ert-deftest module--test-assertions--load-non-live-object-with-global-copy ()
   "Check that -module-assertions verify that non-live objects aren't accessed.
-This differs from `module--test-assertions--load-non-live-object'
+This differs from `module--test-assertions-load-non-live-object'
 in that it stows away a global reference.  The module assertions
 should nevertheless detect the invalid load."
-  :tags (if (getenv "EMACS_EMBA_CI") '(:unstable))
   (skip-unless (or (file-executable-p mod-test-emacs)
                    (and (eq system-type 'windows-nt)
                         (file-executable-p (concat mod-test-emacs ".exe")))))
@@ -283,7 +290,6 @@ should nevertheless detect the invalid load."
 (ert-deftest module--test-assertions--call-emacs-from-gc ()
   "Check that -module-assertions prevents calling Emacs functions
 during garbage collection."
-  :tags (if (getenv "EMACS_EMBA_CI") '(:unstable))
   (skip-unless (or (file-executable-p mod-test-emacs)
                    (and (eq system-type 'windows-nt)
                         (file-executable-p (concat mod-test-emacs ".exe")))))
@@ -295,8 +301,7 @@ during garbage collection."
 (ert-deftest module--test-assertions--globref-invalid-free ()
   "Check that -module-assertions detects invalid freeing of a
 local reference."
-  :tags (if (getenv "EMACS_EMBA_CI") '(:unstable))
-  (skip-unless (or (file-executable-p mod-test-emacs)
+    (skip-unless (or (file-executable-p mod-test-emacs)
                    (and (eq system-type 'windows-nt)
                         (file-executable-p (concat mod-test-emacs ".exe")))))
   (module--test-assertion
@@ -308,8 +313,7 @@ local reference."
   "Check that Bug#30163 is fixed."
   (with-temp-buffer
     (let ((standard-output (current-buffer))
-          (text-quoting-style 'grave)
-          (fill-column 200))            ; prevent line breaks when filling
+          (text-quoting-style 'grave))
       (describe-function-1 #'mod-test-sum)
       (goto-char (point-min))
       (while (re-search-forward "`[^']*/src/emacs-module-resources/" nil t)
@@ -336,7 +340,6 @@ Return A + B
 (ert-deftest mod-test-sleep-until ()
   "Check that `mod-test-sleep-until' either returns normally or quits.
 Interactively, you can try hitting \\[keyboard-quit] to quit."
-  (skip-unless (fboundp 'mod-test-sleep-until))
   (dolist (arg '(nil t))
     ;; Guard against some caller setting `inhibit-quit'.
     (with-local-quit
@@ -391,7 +394,6 @@ Interactively, you can try hitting \\[keyboard-quit] to quit."
 
 (ert-deftest mod-test-nanoseconds ()
   "Test truncation when converting to `struct timespec'."
-  (skip-unless (fboundp 'mod-test-nanoseconds))
   (dolist (test-case '((0 . 0)
                        (-1 . -1000000000)
                        ((1 . 1000000000) . 1)
@@ -410,7 +412,6 @@ Interactively, you can try hitting \\[keyboard-quit] to quit."
         (should (= (mod-test-nanoseconds input) expected))))))
 
 (ert-deftest mod-test-double ()
-  (skip-unless (fboundp 'mod-test-double))
   (dolist (input (list 0 1 2 -1 42 12345678901234567890
                        most-positive-fixnum (1+ most-positive-fixnum)
                        most-negative-fixnum (1- most-negative-fixnum)))

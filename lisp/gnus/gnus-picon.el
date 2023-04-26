@@ -1,6 +1,6 @@
 ;;; gnus-picon.el --- displaying pretty icons in Gnus  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 1996-2023 Free Software Foundation, Inc.
+;; Copyright (C) 1996-2022 Free Software Foundation, Inc.
 
 ;; Author: Lars Magne Ingebrigtsen <larsi@gnus.org>
 ;; Keywords: news xpm annotation glyph faces
@@ -220,13 +220,13 @@ replacement is added."
 						   (error 0)))
 					       spec)))
 		  (when (> len 0)
-                    (goto-char (line-end-position))
+		    (goto-char (point-at-eol))
 		    (insert (propertize
 			     " " 'display
 			     (cons 'space
 				   (list :align-to (- (window-width) 1 len))))))
-                  (goto-char (line-end-position))
-                  (setq point (line-end-position))
+		  (goto-char (point-at-eol))
+		  (setq point (point-at-eol))
 		  (dolist (image spec)
 		    (unless (stringp image)
 		      (goto-char point)

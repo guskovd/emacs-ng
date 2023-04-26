@@ -1,6 +1,6 @@
 ;;; srecode/compile --- Compilation of srecode template files.  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2005, 2007-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2005, 2007-2022 Free Software Foundation, Inc.
 
 ;; Author: Eric M. Ludlam <zappo@gnu.org>
 ;; Keywords: codegeneration
@@ -37,6 +37,9 @@
 (require 'eieio-base)
 (require 'srecode/table)
 (require 'srecode/dictionary)
+
+(declare-function srecode-template-inserter-newline-child-p "srecode/insert"
+		  t t)
 
 ;;; Code:
 
@@ -375,11 +378,8 @@ It is hard if the previous inserter is a newline object."
   (while (and comp (stringp (car comp)))
     (setq comp (cdr comp)))
   (or (not comp)
-      (srecord-compile-inserter-newline-p (car comp))))
-
-(cl-defgeneric srecord-compile-inserter-newline-p (_obj)
-  "Non-nil if OBJ is a newline inserter object."
-  nil)
+      (progn (require 'srecode/insert)
+	     (srecode-template-inserter-newline-child-p (car comp)))))
 
 (defun srecode-compile-split-code (tag str STATE
 				       &optional end-name)

@@ -1,5 +1,5 @@
 /* Lisp functions for making directory listings.
-   Copyright (C) 1985-1986, 1993-1994, 1999-2023 Free Software
+   Copyright (C) 1985-1986, 1993-1994, 1999-2022 Free Software
    Foundation, Inc.
 
 This file is part of GNU Emacs.
@@ -195,7 +195,7 @@ directory_files_internal (Lisp_Object directory, Lisp_Object full,
   /* Unfortunately, we can now invoke expand-file-name and
      file-attributes on filenames, both of which can throw, so we must
      do a proper unwind-protect.  */
-  specpdl_ref count = SPECPDL_INDEX ();
+  ptrdiff_t count = SPECPDL_INDEX ();
   record_unwind_protect_ptr (directory_files_internal_unwind, d);
 
 #ifdef WINDOWSNT
@@ -218,13 +218,6 @@ directory_files_internal (Lisp_Object directory, Lisp_Object full,
 	}
     }
 #endif
-
-  if (!NILP (full) && !STRING_MULTIBYTE (directory))
-    { /* We will be concatenating 'directory' with local file name.
-         We always decode local file names, so in order to safely concatenate
-         them we need 'directory' to be decoded as well (bug#56469).  */
-      directory = DECODE_FILE (directory);
-    }
 
   ptrdiff_t directory_nbytes = SBYTES (directory);
   re_match_object = Qt;
@@ -270,20 +263,9 @@ directory_files_internal (Lisp_Object directory, Lisp_Object full,
 	  ptrdiff_t name_nbytes = SBYTES (name);
 	  ptrdiff_t nbytes = directory_nbytes + needsep + name_nbytes;
 	  ptrdiff_t nchars = SCHARS (directory) + needsep + SCHARS (name);
-	  /* DECODE_FILE may return non-ASCII unibyte strings (e.g. when
-             file-name-coding-system is 'binary'), so we don't know for sure
-             that the bytes we have follow our internal utf-8 representation
-             for multibyte strings.  If nchars == nbytes we don't need to
-             care and just return a unibyte string; and if not, that means
-             one of 'name' or 'directory' is multibyte, in which case we
-             presume that the other one would also be multibyte if it
-             contained non-ASCII.
-             FIXME: This last presumption is broken when 'directory' is
-             multibyte (with non-ASCII), and 'name' is unibyte with non-ASCII
-             (because file-name-coding-system is 'binary').  */
-	  finalname = (nchars == nbytes)
-	              ? make_uninit_string (nbytes)
-	              : make_uninit_multibyte_string (nchars, nbytes);
+	  finalname = make_uninit_multibyte_string (nchars, nbytes);
+	  if (nchars == nbytes)
+	    STRING_SET_UNIBYTE (finalname);
 	  memcpy (SDATA (finalname), SDATA (directory), directory_nbytes);
 	  if (needsep)
 	    SSET (finalname, directory_nbytes, DIRECTORY_SEP);
@@ -307,7 +289,7 @@ directory_files_internal (Lisp_Object directory, Lisp_Object full,
 #endif
 
   /* Discard the unwind protect.  */
-  specpdl_ptr = specpdl_ref_to_ptr (count);
+  specpdl_ptr = specpdl + count;
 
   if (NILP (nosort))
     list = Fsort (Fnreverse (list),
@@ -473,7 +455,7 @@ file_name_completion (Lisp_Object file, Lisp_Object dirname, bool all_flag,
      anything.  */
   bool includeall = 1;
   bool check_decoded = false;
-  specpdl_ref count = SPECPDL_INDEX ();
+  ptrdiff_t count = SPECPDL_INDEX ();
 
   elt = Qnil;
 
@@ -500,8 +482,8 @@ file_name_completion (Lisp_Object file, Lisp_Object dirname, bool all_flag,
      decoded names in order to filter false positives, such as "a"
      falsely matching "a-ring".  */
   if (!NILP (file_encoding)
-      && !NILP (plist_get (Fcoding_system_plist (file_encoding),
-			   Qdecomposed_characters)))
+      && !NILP (Fplist_get (Fcoding_system_plist (file_encoding),
+			    Qdecomposed_characters)))
     {
       check_decoded = true;
       if (STRING_MULTIBYTE (file))
@@ -539,9 +521,9 @@ file_name_completion (Lisp_Object file, Lisp_Object dirname, bool all_flag,
       name = DECODE_FILE (name);
       ptrdiff_t name_blen = SBYTES (name), name_len = SCHARS (name);
       if (completion_ignore_case
-	  && !BASE_EQ (Fcompare_strings (name, zero, file_len, file, zero,
-					 file_len, Qt),
-		       Qt))
+	  && !EQ (Fcompare_strings (name, zero, file_len, file, zero, file_len,
+				    Qt),
+		  Qt))
 	    continue;
 
       switch (dirent_type (dp))
@@ -621,12 +603,10 @@ file_name_completion (Lisp_Object file, Lisp_Object dirname, bool all_flag,
 			skip = name_len - elt_len;
 			cmp_len = make_fixnum (elt_len);
 			if (skip < 0
-			    || !BASE_EQ (Fcompare_strings (name,
-							   make_fixnum (skip),
-							   Qnil,
-							   elt, zero, cmp_len,
-							   Qt),
-					 Qt))
+			    || !EQ (Fcompare_strings (name, make_fixnum (skip),
+						      Qnil,
+						      elt, zero, cmp_len, Qt),
+				    Qt))
 			  continue;
 		      }
 		    break;
@@ -657,12 +637,10 @@ file_name_completion (Lisp_Object file, Lisp_Object dirname, bool all_flag,
 			skip = name_len - elt_len;
 			cmp_len = make_fixnum (elt_len);
 			if (skip < 0
-			    || !BASE_EQ (Fcompare_strings (name,
-							   make_fixnum (skip),
-							   Qnil,
-							   elt, zero, cmp_len,
-							   Qt),
-					 Qt))
+			    || !EQ (Fcompare_strings (name, make_fixnum (skip),
+						      Qnil,
+						      elt, zero, cmp_len, Qt),
+				    Qt))
 			  continue;
 		      }
 		    break;
@@ -721,7 +699,7 @@ file_name_completion (Lisp_Object file, Lisp_Object dirname, bool all_flag,
 	    = Fcompare_strings (name, zero, make_fixnum (compare),
 				file, zero, make_fixnum (compare),
 				completion_ignore_case ? Qt : Qnil);
-	  if (!BASE_EQ (cmp, Qt))
+	  if (!EQ (cmp, Qt))
 	    continue;
 	}
 
@@ -744,8 +722,7 @@ file_name_completion (Lisp_Object file, Lisp_Object dirname, bool all_flag,
 	    = Fcompare_strings (bestmatch, zero, make_fixnum (compare),
 				name, zero, make_fixnum (compare),
 				completion_ignore_case ? Qt : Qnil);
-	  ptrdiff_t matchsize = BASE_EQ (cmp, Qt)
-	                        ? compare : eabs (XFIXNUM (cmp)) - 1;
+	  ptrdiff_t matchsize = EQ (cmp, Qt) ? compare : eabs (XFIXNUM (cmp)) - 1;
 
 	  if (completion_ignore_case)
 	    {
@@ -774,13 +751,13 @@ file_name_completion (Lisp_Object file, Lisp_Object dirname, bool all_flag,
 					       file, zero,
 					       Qnil,
 					       Qnil),
-		       BASE_EQ (Qt, cmp))
+		       EQ (Qt, cmp))
 		   && (cmp = Fcompare_strings (bestmatch, zero,
 					       make_fixnum (SCHARS (file)),
 					       file, zero,
 					       Qnil,
 					       Qnil),
-		       ! BASE_EQ (Qt, cmp))))
+		       ! EQ (Qt, cmp))))
 		bestmatch = name;
 	    }
 	  bestmatchsize = matchsize;
@@ -923,12 +900,11 @@ Elements of the attribute list are:
  8. File modes, as a string of ten letters or dashes as in ls -l.
  9. An unspecified value, present only for backward compatibility.
 10. inode number, as a nonnegative integer.
-11. Filesystem device identifier, as an integer or a cons cell of integers.
+11. Filesystem device number, as an integer.
 
 Large integers are bignums, so `eq' might not work on them.
 On most filesystems, the combination of the inode and the device
-identifier uniquely identifies the file.  This unique file identification
-is provided by the access function `file-attribute-file-identifier'.
+number uniquely identifies the file.
 
 On MS-Windows, performance depends on `w32-get-true-file-attributes',
 which see.
@@ -968,7 +944,7 @@ file_attributes (int fd, char const *name,
 		 Lisp_Object dirname, Lisp_Object filename,
 		 Lisp_Object id_format)
 {
-  specpdl_ref count = SPECPDL_INDEX ();
+  ptrdiff_t count = SPECPDL_INDEX ();
   struct stat s;
 
   /* An array to hold the mode string generated by filemodestring,

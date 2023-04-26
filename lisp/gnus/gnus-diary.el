@@ -1,6 +1,6 @@
 ;;; gnus-diary.el --- Wrapper around the NNDiary Gnus back end  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 1999-2023 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2022 Free Software Foundation, Inc.
 
 ;; Author:        Didier Verna <didier@didierverna.net>
 ;; Created:       Tue Jul 20 10:42:55 1999
@@ -65,9 +65,8 @@ There are currently two built-in format functions:
 		 (const  :tag "french"  gnus-diary-delay-format-french)
 		 (symbol :tag "other")))
 
-(defconst gnus-diary-version "0.2-b14"
+(defconst gnus-diary-version nndiary-version
   "Current Diary back end version.")
-(make-obsolete-variable 'gnus-diary-version 'emacs-version "29.1")
 
 
 ;; Compatibility functions ==================================================
@@ -327,7 +326,7 @@ If ARG (or prefix) is non-nil, force prompting for all fields."
 	   (when (re-search-forward (concat "^" header ":") nil t)
 	     (unless (eq (char-after) ? )
 	       (insert " "))
-             (setq value (buffer-substring (point) (line-end-position)))
+	     (setq value (buffer-substring (point) (point-at-eol)))
 	     (and (string-match "[ \t]*\\([^ \t]+\\)[ \t]*" value)
 		  (setq value (match-string 1 value)))
 	     (condition-case ()
@@ -378,9 +377,8 @@ If ARG (or prefix) is non-nil, force prompting for all fields."
 
 (defun gnus-diary-version ()
   "Current Diary back end version."
-  (declare (obsolete emacs-version "29.1"))
   (interactive)
-  (message "NNDiary version %s" gnus-diary-version))
+  (message "NNDiary version %s" nndiary-version))
 
 (provide 'gnus-diary)
 

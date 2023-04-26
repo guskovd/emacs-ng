@@ -1,6 +1,6 @@
 ;;; cl-lib.el --- Common Lisp extensions for Emacs  -*- lexical-binding: t -*-
 
-;; Copyright (C) 1993, 2001-2023 Free Software Foundation, Inc.
+;; Copyright (C) 1993, 2001-2022 Free Software Foundation, Inc.
 
 ;; Author: Dave Gillespie <daveg@synaptics.com>
 ;; Version: 1.0
@@ -90,6 +90,12 @@
 (defvar cl--optimize-safety 1)
 
 ;;;###autoload
+(define-obsolete-variable-alias
+  ;; This alias is needed for compatibility with .elc files that use defstruct
+  ;; and were compiled with Emacs<24.3.
+  'custom-print-functions 'cl-custom-print-functions "24.3")
+
+;;;###autoload
 (defvar cl-custom-print-functions nil
   "This is a list of functions that format user objects for printing.
 Each function is called in turn with three arguments: the object, the
@@ -108,10 +114,7 @@ a future Emacs interpreter will be able to use it.")
 (defmacro cl-incf (place &optional x)
   "Increment PLACE by X (1 by default).
 PLACE may be a symbol, or any generalized variable allowed by `setf'.
-The return value is the incremented value of PLACE.
-
-If X is specified, it should be an expression that should
-evaluate to a number."
+The return value is the incremented value of PLACE."
   (declare (debug (place &optional form)))
   (if (symbolp place)
       (list 'setq place (if x (list '+ place x) (list '1+ place)))
@@ -120,10 +123,7 @@ evaluate to a number."
 (defmacro cl-decf (place &optional x)
   "Decrement PLACE by X (1 by default).
 PLACE may be a symbol, or any generalized variable allowed by `setf'.
-The return value is the decremented value of PLACE.
-
-If X is specified, it should be an expression that should
-evaluate to a number."
+The return value is the decremented value of PLACE."
   (declare (debug cl-incf))
   (if (symbolp place)
       (list 'setq place (if x (list '- place x) (list '1- place)))
@@ -201,7 +201,7 @@ should return.
 Note that Emacs Lisp doesn't really support multiple values, so
 all this function does is return LIST."
   (unless (listp list)
-    (signal 'wrong-type-argument (list list)))
+    (signal 'wrong-type-argument list))
   list)
 
 (defsubst cl-multiple-value-list (expression)
@@ -366,8 +366,8 @@ SEQ, this is like `mapcar'.  With several, it is like the Common Lisp
 (cl--defalias 'cl-second 'cadr)
 (cl--defalias 'cl-rest 'cdr)
 
-(cl--defalias 'cl-third #'caddr "Return the third element of the list X.")
-(cl--defalias 'cl-fourth #'cadddr "Return the fourth element of the list X.")
+(cl--defalias 'cl-third 'cl-caddr "Return the third element of the list X.")
+(cl--defalias 'cl-fourth 'cl-cadddr "Return the fourth element of the list X.")
 
 (defsubst cl-fifth (x)
   "Return the fifth element of the list X."
@@ -459,7 +459,6 @@ Thus, `(cl-list* A B C D)' is equivalent to `(nconc (list A B C) D)', or to
 (defun cl-copy-list (list)
   "Return a copy of LIST, which may be a dotted list.
 The elements of LIST are not copied, just the list structure itself."
-  (declare (side-effect-free error-free))
   (if (consp list)
       (let ((res nil))
 	(while (consp list) (push (pop list) res))
@@ -560,10 +559,5 @@ of record objects."
     (advice-add 'type-of :around #'cl--old-struct-type-of))
    (t
     (advice-remove 'type-of #'cl--old-struct-type-of))))
-
-(defun cl-constantly (value)
-  "Return a function that takes any number of arguments, but returns VALUE."
-  (lambda (&rest _)
-    value))
 
 ;;; cl-lib.el ends here

@@ -1,6 +1,6 @@
 ;;; secrets-tests.el --- Tests of Secret Service API -*- lexical-binding: t -*-
 
-;; Copyright (C) 2018-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2018-2022 Free Software Foundation, Inc.
 
 ;; Author: Michael Albinus <michael.albinus@gmx.de>
 
@@ -57,11 +57,8 @@
 
 (defun secrets--test-delete-all-session-items ()
   "Delete all items of collection \"session\" bound to this Emacs."
-  ;; If the "session" collection does not exist, a `dbus-error' is
-  ;; fired, which we ignore.
-  (dbus-ignore-errors
-    (dolist (item (secrets-list-items "session"))
-      (secrets-delete-item "session" item))))
+  (dolist (item (secrets-list-items "session"))
+    (secrets-delete-item "session" item)))
 
 (ert-deftest secrets-test01-sessions ()
   "Test opening / closing a secrets session."
@@ -96,7 +93,7 @@
   (unwind-protect
       (progn
 	(should (secrets-open-session))
-	(skip-unless (member "session" (secrets-list-collections)))
+	(should (member "session" (secrets-list-collections)))
 
 	;; Create a random collection.  This asks for a password
 	;; outside our control, so we make it in the interactive case
@@ -156,7 +153,6 @@
   (unwind-protect
       (let (item-path)
 	(should (secrets-open-session))
-	(skip-unless (member "session" (secrets-list-collections)))
 
         ;; Cleanup.  There could be items in the "session" collection.
         (secrets--test-delete-all-session-items)
@@ -218,7 +214,6 @@
   (unwind-protect
       (progn
 	(should (secrets-open-session))
-	(skip-unless (member "session" (secrets-list-collections)))
 
         ;; Cleanup.  There could be items in the "session" collection.
         (secrets--test-delete-all-session-items)

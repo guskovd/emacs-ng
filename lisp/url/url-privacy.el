@@ -1,6 +1,6 @@
 ;;; url-privacy.el --- Global history tracking for URL package  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 1996-1999, 2004-2023 Free Software Foundation, Inc.
+;; Copyright (C) 1996-1999, 2004-2022 Free Software Foundation, Inc.
 
 ;; Keywords: comm, data, processes, hypermedia
 
@@ -41,22 +41,13 @@
 	  nil)
 	 ;; First, we handle the inseparable OS/Windowing system
 	 ;; combinations
-	 ((memq system-type '(windows-nt cygwin))
-          (concat "MS-Windows; "
-                  (if (string-match-p "\\`x86_64" system-configuration)
-                      "64bit"
-                    "32bit")
-                  "; "
-                  (cond ((eq window-system 'w32) "w32")
-                        ((eq window-system 'x) "X11")
-                        (t "TTY"))))
+	 ((eq system-type 'windows-nt) "Windows-NT; 32bit")
 	 ((eq system-type 'ms-dos) "MS-DOS; 32bit")
+	 ((memq (or window-system 'tty) '(win32 w32)) "Windows; 32bit")
 	 (t
 	  (pcase (or window-system 'tty)
 	    ('x "X11")
 	    ('ns "OpenStep")
-            ('pgtk "PureGTK")
-            ('wr "WebRender")
 	    ('tty "TTY")
 	    (_ nil)))))
 

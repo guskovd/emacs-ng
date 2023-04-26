@@ -1,6 +1,6 @@
 ;;; vc-hg.el --- VC backend for the mercurial version control system  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2006-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2006-2022 Free Software Foundation, Inc.
 
 ;; Author: Ivan Kanis
 ;; Maintainer: emacs-devel@gnu.org
@@ -51,7 +51,6 @@
 ;; - receive-file (file rev)                   ?? PROBABLY NOT NEEDED
 ;; - unregister (file)                         OK
 ;; * checkin (files rev comment)               OK
-;; - checkin-patch (patch-string comment)      OK
 ;; * find-revision (file rev buffer)           OK
 ;; * checkout (file &optional rev)             OK
 ;; * revert (file &optional contents-done)     OK
@@ -81,7 +80,6 @@
 ;; - delete-file (file)                        TEST IT
 ;; - rename-file (old new)                     OK
 ;; - find-file-hook ()                         added for bug#10709
-;; - prepare-patch (rev)                       OK
 
 ;; 2) Implement Stefan Monnier's advice:
 ;; vc-hg-registered and vc-hg-state
@@ -674,6 +672,7 @@ Return the byte's value as an integer."
     (let* ((result nil)
            (flen (length fname))
            (case-fold-search nil)
+           (inhibit-changing-match-data t)
            ;; Find a conservative bound for the loop below by using
            ;; Boyer-Moore on the raw dirstate without parsing it; we
            ;; know we can't possibly find fname _after_ the last place
@@ -909,7 +908,7 @@ if we don't understand a construct, we signal
         ;; should cover the common cases.  Remember that we fall back
         ;; to regular hg commands if we see something we don't like.
         (save-restriction
-          (narrow-to-region (point) (line-end-position))
+          (narrow-to-region (point) (point-at-eol))
           (cond ((looking-at "[ \t]*\\(?:#.*\\)?$"))
                 ((looking-at "syntax:[ \t]*re[ \t]*$")
                  (setf default-syntax 'vc-hg--hgignore-add-pcre))
@@ -968,7 +967,7 @@ REPO must be the directory name of an hg repository."
              (attr (file-attributes (nth 0 fs)))
              (current-mtime (file-attribute-modification-time attr))
              (current-size (file-attribute-size attr)))
-	(unless (and (time-equal-p saved-mtime current-mtime)
+        (unless (and (equal saved-mtime current-mtime)
                      (equal saved-size current-size))
           (setf valid nil))))
     valid))
@@ -977,9 +976,10 @@ REPO must be the directory name of an hg repository."
   "Test whether the ignore pattern set HGIP says to ignore FILENAME.
 FILENAME must be the file's true absolute name."
   (let ((patterns (vc-hg--ignore-patterns-ignore-patterns hgip))
+        (inhibit-changing-match-data t)
         (ignored nil))
     (while (and patterns (not ignored))
-      (setf ignored (string-match-p (pop patterns) filename)))
+      (setf ignored (string-match (pop patterns) filename)))
     ignored))
 
 (defvar vc-hg--cached-ignore-patterns nil
@@ -1039,12 +1039,11 @@ Avoids the need to repeatedly scan dirstate on repeated calls to
          )
     (if (and cache
              (equal dirstate (pop cache))
-	     (time-equal-p mtime (pop cache))
+             (equal mtime (pop cache))
              (equal size (pop cache))
              (equal ascii-fname (pop cache)))
         (pop cache)
-      (let ((result (save-match-data
-                      (vc-hg--raw-dirstate-search dirstate ascii-fname))))
+      (let ((result (vc-hg--raw-dirstate-search dirstate ascii-fname)))
         (setf vc-hg--dirstate-scan-cache
               (list dirstate mtime size ascii-fname result))
         result))))
@@ -1179,9 +1178,10 @@ If toggling on, also insert its message into the buffer."
         standard-output 1 nil
         "log" "--limit=1" "--template" "{desc}")))))
 
-(defvar-keymap vc-hg-log-edit-mode-map
-  :name "Hg-Log-Edit"
-  "C-c C-e" #'vc-hg-log-edit-toggle-amend)
+(defvar vc-hg-log-edit-mode-map
+  (let ((map (make-sparse-keymap "Hg-Log-Edit")))
+    (define-key map "\C-c\C-e" #'vc-hg-log-edit-toggle-amend)
+    map))
 
 (define-derived-mode vc-hg-log-edit-mode log-edit-mode "Log-Edit/hg"
   "Major mode for editing Hg log messages.
@@ -1190,31 +1190,16 @@ It is based on `log-edit-mode', and has Hg-specific extensions.")
 (defun vc-hg-checkin (files comment &optional _rev)
   "Hg-specific version of `vc-backend-checkin'.
 REV is ignored."
-  (apply #'vc-hg-command nil 0 files
-         (nconc (list "commit" "-m")
-                (vc-hg--extract-headers comment))))
-
-(defun vc-hg-checkin-patch (patch-string comment)
-  (let ((patch-file (make-temp-file "hg-patch")))
-    (write-region patch-string nil patch-file)
-    (unwind-protect
-        (progn
-          (apply #'vc-hg-command nil 0 nil
-                 (nconc (list "import" "--bypass" patch-file "-m")
-                        (vc-hg--extract-headers comment)))
-          (vc-hg-command nil 0 nil
-                         "update"
-                         "--merge" "--tool" "internal:local"
-                         "tip"))
-      (delete-file patch-file))))
-
-(defun vc-hg--extract-headers (comment)
-  (log-edit-extract-headers `(("Author" . "--user")
-                              ("Date" . "--date")
-                              ("Amend" . (lambda (value)
-                                           (when (equal value "yes")
-                                             (list "--amend")))))
-                            comment))
+  (let ((amend-extract-fn
+         (lambda (value)
+           (when (equal value "yes")
+             (list "--amend")))))
+    (apply #'vc-hg-command nil 0 files
+           (nconc (list "commit" "-m")
+                  (log-edit-extract-headers `(("Author" . "--user")
+                                              ("Date" . "--date")
+                                              ("Amend" . ,amend-extract-fn))
+                                            comment)))))
 
 (defun vc-hg-find-revision (file rev buffer)
   (let ((coding-system-for-read 'binary)
@@ -1266,12 +1251,6 @@ REV is the revision to check out into WORKFILE."
     (add-hook 'after-save-hook #'vc-hg-resolve-when-done nil t)
     (vc-message-unresolved-conflicts buffer-file-name)))
 
-(defun vc-hg-clone (remote directory rev)
-  (if rev
-      (vc-hg-command nil 0 '() "clone" "--rev" rev remote directory)
-    (vc-hg-command nil 0 '() "clone" remote directory))
-
-  directory)
 
 ;; Modeled after the similar function in vc-bzr.el
 (defun vc-hg-revert (file &optional contents-done)
@@ -1284,7 +1263,9 @@ REV is the revision to check out into WORKFILE."
 
 ;;; Hg specific functionality.
 
-(defvar-keymap vc-hg-extra-menu-map)
+(defvar vc-hg-extra-menu-map
+  (let ((map (make-sparse-keymap)))
+    map))
 
 (defun vc-hg-extra-menu () vc-hg-extra-menu-map)
 
@@ -1368,7 +1349,7 @@ REV is the revision to check out into WORKFILE."
 
 ;; Follows vc-hg-command (or vc-do-async-command), which uses vc-do-command
 ;; from vc-dispatcher.
-(declare-function vc-exec-after "vc-dispatcher" (code &optional success))
+(declare-function vc-exec-after "vc-dispatcher" (code))
 ;; Follows vc-exec-after.
 (declare-function vc-set-async-update "vc-dispatcher" (process-buffer))
 
@@ -1529,17 +1510,6 @@ This runs the command \"hg merge\"."
                    (unless (string= branch "") (list branch))))
     (with-current-buffer buffer (vc-run-delayed (vc-compilation-mode 'hg)))
     (vc-set-async-update buffer)))
-
-(defun vc-hg-prepare-patch (rev)
-  (with-current-buffer (generate-new-buffer " *vc-hg-prepare-patch*")
-    (vc-hg-command t 0 '() "export" "--rev" rev)
-    (let (subject)
-      ;; Extract the subject line
-      (goto-char (point-min))
-      (search-forward-regexp "^[^#].*")
-      (setq subject (match-string 0))
-      ;; Return the extracted data
-      (list :subject subject :buffer (current-buffer)))))
 
 ;;; Internal functions
 

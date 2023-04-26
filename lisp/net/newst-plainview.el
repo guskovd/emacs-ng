@@ -1,6 +1,6 @@
 ;;; newst-plainview.el --- Single buffer frontend for newsticker.  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2003-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2003-2022 Free Software Foundation, Inc.
 
 ;; Author:      Ulf Jasper <ulf.jasper@web.de>
 ;; Filename:    newst-plainview.el
@@ -37,6 +37,7 @@
 (require 'xml)
 
 ;; Silence warnings
+(defvar w3-mode-map)
 (defvar w3m-minor-mode-map)
 
 ;; ======================================================================
@@ -588,7 +589,7 @@ calls `w3m-toggle-inline-image'.  It works only if
 (defun newsticker-close-buffer ()
   "Close the newsticker buffer."
   (interactive)
-  (newsticker--cache-save)
+  (newsticker--cache-update t)
   (bury-buffer))
 
 (defun newsticker-next-new-item (&optional do-not-wrap-at-eob)
@@ -747,7 +748,7 @@ Return new buffer position."
       (newsticker--cache-replace-age newsticker--cache feed 'new 'old)
       (newsticker--cache-replace-age newsticker--cache feed 'obsolete
                                      'old)
-      (newsticker--cache-save)
+      (newsticker--cache-update)
       (newsticker--buffer-set-uptodate nil)
       (newsticker--ticker-text-setup)
       (newsticker-buffer-update)
@@ -878,7 +879,7 @@ not get changed."
     (newsticker--cache-replace-age newsticker--cache 'any 'new 'old)
     (newsticker--buffer-set-uptodate nil)
     (newsticker--ticker-text-setup)
-    (newsticker--cache-save)
+    (newsticker--cache-update)
     (newsticker-buffer-update)))
 
 (defun newsticker-hide-extra ()
@@ -1231,6 +1232,7 @@ item-retrieval time is added as well."
   (newsticker--buffer-do-insert-text item 'desc feed-name-symbol))
 
 (defvar w3m-fill-column)
+(defvar w3-maximum-line-length)
 
 (defun newsticker--buffer-do-insert-text (item type feed-name-symbol)
   "Actually insert contents of news item, format it, render it and all that.
@@ -1364,14 +1366,19 @@ FEED-NAME-SYMBOL tells to which feed this item belongs."
                             "</?[A-Za-z1-6]*\\|&#?[A-Za-z0-9]+;" pos-text-end t)
                        ;; (message "%s" (newsticker--title item))
                        (let ((w3m-fill-column (if newsticker-use-full-width
-                                                  -1 fill-column)))
+                                                  -1 fill-column))
+                             (w3-maximum-line-length
+                              (if newsticker-use-full-width nil fill-column)))
                          (save-excursion
                            (funcall newsticker-html-renderer pos-text-start
                                     pos-text-end)))
-                       (when (eq newsticker-html-renderer 'w3m-region)
-                         (add-text-properties pos (point-max)
-                                              (list 'keymap
-                                                    w3m-minor-mode-map)))
+                       (cond ((eq newsticker-html-renderer 'w3m-region)
+                              (add-text-properties pos (point-max)
+                                                   (list 'keymap
+                                                         w3m-minor-mode-map)))
+                             ((eq newsticker-html-renderer 'w3-region)
+                              (add-text-properties pos (point-max)
+                                                   (list 'keymap w3-mode-map))))
                        (setq is-rendered-HTML t)))
                  (error
                   (message "Error: HTML rendering failed: %s, %s"

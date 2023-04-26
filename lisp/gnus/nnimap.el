@@ -1,6 +1,6 @@
 ;;; nnimap.el --- IMAP interface for Gnus  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2010-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2010-2022 Free Software Foundation, Inc.
 
 ;; Author: Lars Magne Ingebrigtsen <larsi@gnus.org>
 ;;         Simon Josefsson <simon@josefsson.org>
@@ -34,12 +34,12 @@
 (require 'gnus-util)
 (require 'gnus)
 (require 'nnoo)
+(require 'netrc)
 (require 'utf7)
 (require 'nnmail)
 
 (autoload 'auth-source-forget+ "auth-source")
 (autoload 'auth-source-search "auth-source")
-(autoload 'auth-info-password "auth-source")
 
 (nnoo-declare nnimap)
 
@@ -93,6 +93,9 @@ Uses the same syntax as `nnmail-split-methods'.")
 
 (defvoo nnimap-unsplittable-articles '(%Deleted %Seen)
   "Articles with the flags in the list will not be considered when splitting.")
+
+(make-obsolete-variable 'nnimap-split-rule "see `nnimap-split-methods'."
+                        "24.1")
 
 (defvoo nnimap-authenticator nil
   "How nnimap authenticate itself to the server.
@@ -229,30 +232,20 @@ during splitting, which may be slow."
 	  params)
     (format "%s" (nreverse params))))
 
-(defvar nnimap--max-retrieve-headers 200)
-
 (deffoo nnimap-retrieve-headers (articles &optional group server _fetch-old)
   (with-current-buffer nntp-server-buffer
     (erase-buffer)
     (when (nnimap-change-group group server)
       (with-current-buffer (nnimap-buffer)
 	(erase-buffer)
-        ;; If we have a lot of ranges, split them up to avoid
-        ;; generating too-long lines.  (The limit is 8192 octets,
-        ;; and this should guarantee that it's (much) shorter than
-        ;; that.)  We don't stream the requests, since the server
-        ;; may respond to the requests out-of-order:
-        ;; https://datatracker.ietf.org/doc/html/rfc3501#section-5.5
-        (dolist (ranges (seq-split (gnus-compress-sequence articles t)
-                                   nnimap--max-retrieve-headers))
-          (nnimap-wait-for-response
-	   (nnimap-send-command
-	    "UID FETCH %s %s"
-	    (nnimap-article-ranges ranges)
-	    (nnimap-header-parameters))
-           t))
+	(nnimap-wait-for-response
+	 (nnimap-send-command
+	  "UID FETCH %s %s"
+	  (nnimap-article-ranges (gnus-compress-sequence articles))
+	  (nnimap-header-parameters))
+	 t)
 	(unless (process-live-p (get-buffer-process (current-buffer)))
-	  (error "IMAP server %S closed connection" nnimap-address))
+	  (error "Server closed connection"))
 	(nnimap-transform-headers)
 	(nnheader-remove-cr-followed-by-lf))
       (insert-buffer-substring
@@ -414,7 +407,10 @@ during splitting, which may be slow."
                                            :create t))))
     (if found
         (list (plist-get found :user)
-	      (auth-info-password found)
+	      (let ((secret (plist-get found :secret)))
+		(if (functionp secret)
+		    (funcall secret)
+		  secret))
 	      (plist-get found :save-function))
       nil)))
 
@@ -433,18 +429,8 @@ during splitting, which may be slow."
 		       now
 		       (nnimap-last-command-time nnimap-object))))
             (with-local-quit
-              (ignore-errors        ;E.g. "buffer foo has no process".
-                (nnimap-send-command "NOOP"))
-              ;; If our connection has died in the meantime, clean it
-              ;; and its buffer up.
-              (unless (process-live-p (get-buffer-process buffer))
-	        (setq nnimap-process-buffers
-		      (delq buffer nnimap-process-buffers))
-	        (setq nnimap-connection-alist
-		      (seq-filter (lambda (elt)
-				    (null (eq buffer (cdr elt))))
-				  nnimap-connection-alist))
-	        (kill-buffer buffer)))))))))
+              (ignore-errors          ;E.g. "buffer foo has no process".
+                (nnimap-send-command "NOOP")))))))))
 
 (defun nnimap-open-connection (buffer)
   ;; Be backwards-compatible -- the earlier value of nnimap-stream was
@@ -555,7 +541,7 @@ during splitting, which may be slow."
                                ;; Look for the credentials based on
                                ;; the virtual server name and the address
                                (nnimap-credentials
-                                (seq-uniq
+				(gnus-delete-duplicates
 				 (list server nnimap-address))
                                 ports
                                 nnimap-user))))
@@ -676,17 +662,10 @@ during splitting, which may be slow."
 
 (deffoo nnimap-close-server (&optional server defs)
   (when (nnoo-change-server 'nnimap server defs)
-    (let ((buf (nnimap-buffer)))
-      (ignore-errors
-        (delete-process (get-buffer-process buf)))
-      (setq nnimap-process-buffers
-            (delq buf nnimap-process-buffers)
-            nnimap-connection-alist
-	    (seq-filter (lambda (elt)
-			  (null (eq buf (cdr elt))))
-			nnimap-connection-alist))
-      (nnoo-close-server 'nnimap server)
-      t)))
+    (ignore-errors
+      (delete-process (get-buffer-process (nnimap-buffer))))
+    (nnoo-close-server 'nnimap server)
+    t))
 
 (deffoo nnimap-request-close ()
   t)
@@ -1666,13 +1645,13 @@ If LIMIT, first try to limit the search to the N last articles."
 			(cdr (assoc '%Seen flags))
 			(cdr (assoc '%Deleted flags))))
 		      (cdr (assoc '%Flagged flags)))))
-		   (read (range-difference
+		   (read (gnus-range-difference
 			  (cons start-article high) unread)))
 	      (when (> start-article 1)
 		(setq read
 		      (gnus-range-nconcat
 		       (if (> start-article 1)
-			   (range-intersection
+			   (gnus-sorted-range-intersection
 			    (cons 1 (1- start-article))
 			    (gnus-info-read info))
 			 (gnus-info-read info))
@@ -1697,7 +1676,7 @@ If LIMIT, first try to limit the search to the N last articles."
 		    (pop old-marks)
 		    (when (and old-marks
 			       (> start-article 1))
-		      (setq old-marks (range-difference
+		      (setq old-marks (gnus-range-difference
 				       old-marks
 				       (cons start-article high)))
 		      (setq new-marks (gnus-range-nconcat old-marks new-marks)))
@@ -1708,15 +1687,15 @@ If LIMIT, first try to limit the search to the N last articles."
 		     (active (gnus-active group))
 		     (unexists
 		      (if completep
-			  (range-difference
+			  (gnus-range-difference
 			   active
 			   (gnus-compress-sequence existing))
-			(range-add-list
+			(gnus-add-to-range
 			 (cdr old-unexists)
-			 (range-list-difference
+			 (gnus-list-range-difference
 			  existing (gnus-active group))))))
 		(when (> (car active) 1)
-		  (setq unexists (range-concat
+		  (setq unexists (gnus-range-add
 				  (cons 1 (1- (car active)))
 				  unexists)))
 		(if old-unexists
@@ -1739,9 +1718,10 @@ If LIMIT, first try to limit the search to the N last articles."
 (defun nnimap-update-qresync-info (info existing vanished flags)
   ;; Add all the vanished articles to the list of read articles.
   (setf (gnus-info-read info)
-        (range-add-list
-         (range-add-list
-          (range-concat (gnus-info-read info) vanished)
+        (gnus-add-to-range
+         (gnus-add-to-range
+          (gnus-range-add (gnus-info-read info)
+			  vanished)
 	  (cdr (assq '%Flagged flags)))
 	 (cdr (assq '%Seen flags))))
   (let ((marks (gnus-info-marks info)))
@@ -1755,9 +1735,9 @@ If LIMIT, first try to limit the search to the N last articles."
 	  (setq marks (delq ticks marks))
 	  (pop ticks)
 	  ;; Add the new marks we got.
-	  (setq ticks (range-add-list ticks new-marks))
+	  (setq ticks (gnus-add-to-range ticks new-marks))
 	  ;; Remove the marks from messages that don't have them.
-	  (setq ticks (range-remove
+	  (setq ticks (gnus-remove-from-range
 		       ticks
 		       (gnus-compress-sequence
 			(gnus-sorted-complement existing new-marks))))
@@ -1767,7 +1747,7 @@ If LIMIT, first try to limit the search to the N last articles."
     ;; Add vanished to the list of unexisting articles.
     (when vanished
       (let* ((old-unexists (assq 'unexist marks))
-	     (unexists (range-concat (cdr old-unexists) vanished)))
+	     (unexists (gnus-range-add (cdr old-unexists) vanished)))
 	(if old-unexists
 	    (setcdr old-unexists unexists)
 	  (push (cons 'unexist unexists) marks)))
@@ -1908,7 +1888,19 @@ If LIMIT, first try to limit the search to the N last articles."
 
 (autoload 'nnselect-search-thread "nnselect")
 
-(make-obsolete 'nnimap-request-thread 'gnus-search-thread "29.1")
+(deffoo nnimap-request-thread (header &optional group server)
+  (if gnus-refer-thread-use-search
+      (nnselect-search-thread header)
+    (when (nnimap-change-group group server)
+      (let* ((cmd (nnimap-make-thread-query header))
+             (result (with-current-buffer (nnimap-buffer)
+                       (nnimap-command  "UID SEARCH %s" cmd))))
+        (when result
+          (gnus-fetch-headers
+           (and (car result)
+		(delete 0 (mapcar #'string-to-number
+				  (cdr (assoc "SEARCH" (cdr result))))))
+           nil t))))))
 
 (defun nnimap-change-group (group &optional server no-reconnect read-only)
   "Change group to GROUP if non-nil.
@@ -1945,13 +1937,10 @@ Return the server's response to the SELECT or EXAMINE command."
     (when entry
       (if (and (buffer-live-p (cadr entry))
 	       (get-buffer-process (cadr entry))
-	       (process-live-p (get-buffer-process (cadr entry))))
+	       (memq (process-status (get-buffer-process (cadr entry)))
+		     '(open run)))
 	  (get-buffer-process (cadr entry))
-	(setq nnimap-connection-alist (delq entry nnimap-connection-alist)
-              nnimap-process-buffers
-	      (delq (cadr entry) nnimap-process-buffers))
-	(when (buffer-live-p (cadr entry))
-	  (kill-buffer (cadr entry)))
+	(setq nnimap-connection-alist (delq entry nnimap-connection-alist))
 	nil))))
 
 ;; Leave room for `open-network-stream' to issue a couple of IMAP
@@ -2235,7 +2224,7 @@ Return the server's response to the SELECT or EXAMINE command."
     (while (re-search-forward "^\\([0-9]+\\) OK\\b" nil t)
       (setq sequence (string-to-number (match-string 1)))
       (when (setq range (cadr (assq sequence sequences)))
-	(push (range-uncompress range) copied)))
+	(push (gnus-uncompress-range range) copied)))
     (gnus-compress-sequence (sort (apply #'nconc copied) #'<))))
 
 (defun nnimap-new-articles (flags)

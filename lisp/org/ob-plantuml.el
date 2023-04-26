@@ -1,10 +1,10 @@
 ;;; ob-plantuml.el --- Babel Functions for Plantuml  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2010-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2010-2022 Free Software Foundation, Inc.
 
 ;; Author: Zhang Weize
 ;; Keywords: literate programming, reproducible research
-;; URL: https://orgmode.org
+;; Homepage: https://orgmode.org
 
 ;; This file is part of GNU Emacs.
 
@@ -30,14 +30,10 @@
 
 ;;; Requirements:
 
-;; plantuml     | https://plantuml.com/
+;; plantuml     | http://plantuml.sourceforge.net/
 ;; plantuml.jar | `org-plantuml-jar-path' should point to the jar file (when exec mode is `jar')
 
 ;;; Code:
-
-(require 'org-macs)
-(org-assert-version)
-
 (require 'ob)
 
 (defvar org-babel-default-header-args:plantuml
@@ -69,8 +65,8 @@ You can also configure extra arguments via `org-plantuml-executable-args'."
   :package-version '(Org . "9.4")
   :type 'string)
 
-(defcustom org-plantuml-args (list "-headless")
-  "The arguments passed to plantuml when executing PlantUML."
+(defcustom org-plantuml-executable-args (list "-headless")
+  "The arguments passed to plantuml executable when executing PlantUML."
   :group 'org-babel
   :package-version '(Org . "9.4")
   :type '(repeat string))
@@ -113,25 +109,21 @@ If BODY does not contain @startXXX ... @endXXX clauses, @startuml
 (defun org-babel-execute:plantuml (body params)
   "Execute a block of plantuml code with org-babel.
 This function is called by `org-babel-execute-src-block'."
-  (let* ((do-export (member "file" (cdr (assq :result-params params))))
-         (out-file (if do-export
-                       (or (cdr (assq :file params))
-                           (error "No :file provided but :results set to file. For plain text output, set :results to verbatim"))
-		     (org-babel-temp-file "plantuml-" ".txt")))
+  (let* ((out-file (or (cdr (assq :file params))
+		       (error "PlantUML requires a \":file\" header argument")))
 	 (cmdline (cdr (assq :cmdline params)))
 	 (in-file (org-babel-temp-file "plantuml-"))
 	 (java (or (cdr (assq :java params)) ""))
 	 (executable (cond ((eq org-plantuml-exec-mode 'plantuml) org-plantuml-executable-path)
 			   (t "java")))
-	 (executable-args (cond ((eq org-plantuml-exec-mode 'plantuml) org-plantuml-args)
+	 (executable-args (cond ((eq org-plantuml-exec-mode 'plantuml) org-plantuml-executable-args)
 				((string= "" org-plantuml-jar-path)
 				 (error "`org-plantuml-jar-path' is not set"))
 				((not (file-exists-p org-plantuml-jar-path))
 				 (error "Could not find plantuml.jar at %s" org-plantuml-jar-path))
-				(t `(,java
-				     "-jar"
-				     ,(shell-quote-argument (expand-file-name org-plantuml-jar-path))
-                                     ,@org-plantuml-args))))
+				(t (list java
+					 "-jar"
+					 (shell-quote-argument (expand-file-name org-plantuml-jar-path))))))
 	 (full-body (org-babel-plantuml-make-body body params))
 	 (cmd (mapconcat #'identity
 			 (append
@@ -162,10 +154,7 @@ This function is called by `org-babel-execute-src-block'."
     (if (and (string= (file-name-extension out-file) "svg")
              org-babel-plantuml-svg-text-to-path)
         (org-babel-eval (format "inkscape %s -T -l %s" out-file out-file) ""))
-    (unless do-export (with-temp-buffer
-                        (insert-file-contents out-file)
-                        (buffer-substring-no-properties
-                         (point-min) (point-max))))))
+    nil)) ;; signal that output has already been written to file
 
 (defun org-babel-prep-session:plantuml (_session _params)
   "Return an error because plantuml does not support sessions."

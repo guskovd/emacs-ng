@@ -1,11 +1,11 @@
 ;;; ob-calc.el --- Babel Functions for Calc          -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2010-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2010-2022 Free Software Foundation, Inc.
 
 ;; Author: Eric Schulte
 ;; Maintainer: Tom Gillespie <tgbugs@gmail.com>
 ;; Keywords: literate programming, reproducible research
-;; URL: https://orgmode.org
+;; Homepage: https://orgmode.org
 
 ;; This file is part of GNU Emacs.
 
@@ -27,10 +27,6 @@
 ;; Org-Babel support for evaluating calc code
 
 ;;; Code:
-
-(require 'org-macs)
-(org-assert-version)
-
 (require 'ob)
 (require 'org-macs)
 (require 'calc)

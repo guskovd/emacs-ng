@@ -1,8 +1,9 @@
 ;;; ange-ftp.el --- transparent FTP support for GNU Emacs  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1989-2023 Free Software Foundation, Inc.
+;; Copyright (C) 1989-1996, 1998, 2000-2022 Free Software Foundation,
+;; Inc.
 
-;; Author: Andy Norman <ange@hplb.hpl.hp.com>
+;; Author: Andy Norman (ange@hplb.hpl.hp.com)
 ;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: comm
 
@@ -218,7 +219,7 @@
 ;; ange-ftp-smart-gateway and ange-ftp-smart-gateway-port.
 ;;
 ;; Otherwise, if there is an alternate ftp program that implements proxy in
-;; a transparent way (i.e. without specifying the proxy host), that will
+;; a transparent way (i.e. w/o specifying the proxy host), that will
 ;; connect you directly to the desired destination host:
 ;; Set ange-ftp-gateway-ftp-program-name to that program's name.
 ;; Set ange-ftp-local-host-regexp to a value as stated earlier on.
@@ -869,10 +870,13 @@ Both telnet and rlogin do something like this."
 (defcustom ange-ftp-gateway-program remote-shell-program
   "Name of program to spawn a shell on the gateway machine.
 
+Valid candidates are rsh (remsh on some systems), telnet and rlogin.
 See also the gateway variable above."
   :group 'ange-ftp
-  :type 'string
-  :version "29.1")
+  :type '(choice (const "rsh")
+		 (const "telnet")
+		 (const "rlogin")
+		 string))
 
 (defcustom ange-ftp-gateway-prompt-pattern "^[^#$%>;\n]*[#$%>;] *"
   "Regexp matching prompt after complete login sequence on gateway machine.
@@ -1226,9 +1230,8 @@ only return the directory part of FILE."
 			    ;; found another machine with the same user.
 			    ;; Try that account.
 			    (read-passwd
-                             (format-prompt "passwd for %s@%s"
-                                            (format "same as %s@%s" user other)
-                                            user host)
+			     (format "passwd for %s@%s (default same as %s@%s): "
+				     user host user other)
 			     nil
 			     (ange-ftp-lookup-passwd other user))
 
@@ -2543,16 +2546,13 @@ can parse the output from a DIR listing for a host of type TYPE.")
 (defvar ange-ftp-after-parse-ls-hook nil
   "Normal hook run after parsing the text of an FTP directory listing.")
 
-(declare-function ls-lisp--sanitize-switches "ls-lisp" (switches))
-
 (defun ange-ftp-ls (file lsargs parse &optional no-error wildcard)
   "Return the output of a `DIR' or `ls' command done over FTP.
 FILE is the full name of the remote file, LSARGS is any args to pass to the
 `ls' command, and PARSE specifies that the output should be parsed and stored
 away in the internal cache."
-  (while (string-match "--" lsargs)
-    (require 'ls-lisp)
-    (setq lsargs (ls-lisp--sanitize-switches lsargs)))
+  (while (string-match "^--dired\\s-+" lsargs)
+    (setq lsargs (replace-match "" nil t lsargs)))
   ;; If parse is t, we assume that file is a directory. i.e. we only parse
   ;; full directory listings.
   (let* ((ange-ftp-this-file (ange-ftp-expand-file-name file))
@@ -3534,8 +3534,7 @@ system TYPE.")
   (setq file (expand-file-name file))
   (let ((parsed (ange-ftp-ftp-name file)))
     (if parsed
-        (if (and delete-by-moving-to-trash trash
-	         (not remote-file-name-inhibit-delete-by-moving-to-trash))
+        (if (and delete-by-moving-to-trash trash)
 	    (move-file-to-trash file)
 	  (let* ((host (nth 0 parsed))
 	         (user (nth 1 parsed))
@@ -4100,11 +4099,11 @@ E.g.,
 ;; Put these lines uncommented in your .emacs if you want C-r to refresh
 ;; ange-ftp's cache whilst doing filename completion.
 ;;
-;;(define-key minibuffer-local-completion-map "\C-r" 'ange-ftp-reread-dir)
-;;(define-key minibuffer-local-must-match-map "\C-r" 'ange-ftp-reread-dir)
+;;(define-key minibuffer-local-completion-map "\C-r" 'ange-ftp-re-read-dir)
+;;(define-key minibuffer-local-must-match-map "\C-r" 'ange-ftp-re-read-dir)
 
 ;;;###autoload
-(define-obsolete-function-alias 'ange-ftp-re-read-dir #'ange-ftp-reread-dir "29.1")
+(defalias 'ange-ftp-re-read-dir 'ange-ftp-reread-dir)
 
 ;;;###autoload
 (defun ange-ftp-reread-dir (&optional dir)
@@ -4130,7 +4129,7 @@ directory, so that Emacs will know its current contents."
 	(or (file-exists-p parent)
 	    (ange-ftp-make-directory parent parents))))
   (if (file-exists-p dir)
-      (if parents t
+      (unless parents
 	(signal
          'file-already-exists
          (list "Cannot make directory: file already exists" dir)))
@@ -4159,8 +4158,7 @@ directory, so that Emacs will know its current contents."
 				(format "Could not make directory %s: %s"
 					dir
 					(cdr result))))
-	    (ange-ftp-add-file-entry dir t)
-            nil)
+	    (ange-ftp-add-file-entry dir t))
 	(ange-ftp-real-make-directory dir)))))
 
 (defun ange-ftp-delete-directory (dir &optional recursive trash)
@@ -4244,7 +4242,7 @@ directory, so that Emacs will know its current contents."
 	  ((eq identification 'localname) localname)
 	  (t (ange-ftp-replace-name-component file ""))))))
 
-(defun ange-ftp-load (file &optional noerror nomessage nosuffix must-suffix)
+(defun ange-ftp-load (file &optional noerror nomessage nosuffix)
   (if (ange-ftp-ftp-name file)
       (let ((tryfiles (if nosuffix
 			  (list file)
@@ -4266,7 +4264,7 @@ directory, so that Emacs will know its current contents."
 	  (or noerror
 	      (signal 'file-error (list "Cannot open load file" file)))
 	  nil))
-    (ange-ftp-real-load file noerror nomessage nosuffix must-suffix)))
+    (ange-ftp-real-load file noerror nomessage nosuffix)))
 
 ;; Calculate default-unhandled-directory for a given ange-ftp buffer.
 (defun ange-ftp-unhandled-file-name-directory (_filename)
@@ -4379,10 +4377,6 @@ NEWNAME should be the name to give the new compressed or uncompressed file.")
   ;; or return nil meaning don't make a backup.
   (if ange-ftp-make-backup-files
       (ange-ftp-real-find-backup-file-name fn)))
-
-(defun ange-ftp-file-user-uid ()
-  ;; Return "don't  know" value.
-  -1)
 
 ;;; Define the handler for special file names
 ;;; that causes ange-ftp to be invoked.
@@ -4504,28 +4498,6 @@ NEWNAME should be the name to give the new compressed or uncompressed file.")
 (put 'process-file 'ange-ftp 'ange-ftp-process-file)
 (put 'start-file-process 'ange-ftp 'ignore)
 (put 'shell-command 'ange-ftp 'ange-ftp-shell-command)
-
-;; Do not execute system information functions.
-(put 'file-system-info 'ange-ftp 'ignore)
-(put 'list-system-processes 'ange-ftp 'ignore)
-(put 'memory-info 'ange-ftp 'ignore)
-(put 'process-attributes 'ange-ftp 'ignore)
-
-;; There aren't ACLs.  `file-selinux-context' shall return '(nil nil
-;; nil nil) if the file is nonexistent, so we let the default file
-;; name handler do the job.
-(put 'file-acl 'ange-ftp 'ignore)
-;; (put 'file-selinux-context 'ange-ftp 'ignore)
-(put 'set-file-acl 'ange-ftp 'ignore)
-(put 'set-file-selinux-context 'ange-ftp 'ignore)
-
-;; There aren't file notifications.
-(put 'file-notify-add-watch 'ange-ftp 'ignore)
-(put 'file-notify-rm-watch 'ange-ftp 'ignore)
-(put 'file-notify-valid-p 'ange-ftp 'ignore)
-
-;; Return the "don't know' value for remote user uid.
-(put 'file-user-uid 'ange-ftp 'ange-ftp-file-user-uid)
 
 ;;; Define ways of getting at unmodified Emacs primitives,
 ;;; turning off our handler.

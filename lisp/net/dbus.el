@@ -1,6 +1,6 @@
 ;;; dbus.el --- Elisp bindings for D-Bus. -*- lexical-binding: t -*-
 
-;; Copyright (C) 2007-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2007-2022 Free Software Foundation, Inc.
 
 ;; Author: Michael Albinus <michael.albinus@gmx.de>
 ;; Keywords: comm, hardware
@@ -36,8 +36,6 @@
 ;; Declare used subroutines and variables.
 (declare-function dbus-message-internal "dbusbind.c")
 (declare-function dbus--init-bus "dbusbind.c")
-(declare-function libxml-parse-xml-region "xml.c")
-(defvar dbus-debug)
 (defvar dbus-message-type-invalid)
 (defvar dbus-message-type-method-call)
 (defvar dbus-message-type-method-return)
@@ -371,11 +369,7 @@ object is returned instead of a list containing this single Lisp object.
 	 (apply
           #'dbus-message-internal dbus-message-type-method-call
           bus service path interface method #'dbus-call-method-handler args))
-        (result (unless executing-kbd-macro (cons :pending nil))))
-
-    ;; While executing a keyboard macro, we run into an infinite loop,
-    ;; receiving the event -1.  So we don't try to get the result.
-    ;; (Bug#62018)
+        (result (cons :pending nil)))
 
     ;; Wait until `dbus-call-method-handler' has put the result into
     ;; `dbus-return-values-table'.  If no timeout is given, use the
@@ -946,7 +940,9 @@ association to the service from D-Bus."
 
     ;; Loop over the registered functions.
     (dolist (elt entry)
-      (when (equal value (take (length value) (cdr elt)))
+      (when (equal
+	     value
+	     (butlast (cdr elt) (- (length (cdr elt)) (length value))))
 	(setq ret t)
 	;; Compute new hash value.  If it is empty, remove it from the
 	;; hash table.
@@ -1874,7 +1870,13 @@ name and cdr is the list of properties as returned by
 
 \(dbus-get-all-managed-objects :session \"org.gnome.SettingsDaemon\" \"/\")
 
-  => ((\"/org/gnome/SettingsDaemon/Power\"
+  => ((\"/org/gnome/SettingsDaemon/MediaKeys\"
+       (\"org.gnome.SettingsDaemon.MediaKeys\")
+       (\"org.freedesktop.DBus.Peer\")
+       (\"org.freedesktop.DBus.Introspectable\")
+       (\"org.freedesktop.DBus.Properties\")
+       (\"org.freedesktop.DBus.ObjectManager\"))
+      (\"/org/gnome/SettingsDaemon/Power\"
        (\"org.gnome.SettingsDaemon.Power.Keyboard\")
        (\"org.gnome.SettingsDaemon.Power.Screen\")
        (\"org.gnome.SettingsDaemon.Power\"
@@ -2100,7 +2102,7 @@ has been handled by this function."
 	   (interface (dbus-event-interface-name event))
 	   (member (dbus-event-member-name event))
            (arguments (dbus-event-arguments event))
-	   (time (float-time)))
+           (time (time-to-seconds (current-time))))
       (save-excursion
         ;; Check for matching method-call.
         (goto-char (point-max))
@@ -2250,19 +2252,15 @@ keywords `:system-private' or `:session-private', respectively."
      bus nil dbus-path-local dbus-interface-local
      "Disconnected" #'dbus-handle-bus-disconnect)))
 
-
-(defun dbus--init ()
-  ;; Initialize `:system' and `:session' buses.  This adds their file
-  ;; descriptors to input_wait_mask, in order to detect incoming
-  ;; messages immediately.
-  (when (featurep 'dbusbind)
-    (dbus-ignore-errors
-      (dbus-init-bus :system))
-    (dbus-ignore-errors
-      (dbus-init-bus :session))))
-
-(add-hook 'after-pdump-load-hook #'dbus--init)
-(dbus--init)
+ 
+;; Initialize `:system' and `:session' buses.  This adds their file
+;; descriptors to input_wait_mask, in order to detect incoming
+;; messages immediately.
+(when (featurep 'dbusbind)
+  (dbus-ignore-errors
+    (dbus-init-bus :system))
+  (dbus-ignore-errors
+    (dbus-init-bus :session)))
 
 (provide 'dbus)
 

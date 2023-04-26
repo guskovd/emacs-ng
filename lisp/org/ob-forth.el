@@ -1,10 +1,10 @@
 ;;; ob-forth.el --- Babel Functions for Forth        -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2014-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2014-2022 Free Software Foundation, Inc.
 
 ;; Author: Eric Schulte
 ;; Keywords: literate programming, reproducible research, forth
-;; URL: https://orgmode.org
+;; Homepage: https://orgmode.org
 
 ;; This file is part of GNU Emacs.
 
@@ -32,10 +32,6 @@
 ;; `forth-mode' which is distributed with gforth (in gforth.el).
 
 ;;; Code:
-
-(require 'org-macs)
-(org-assert-version)
-
 (require 'ob)
 (require 'org-macs)
 

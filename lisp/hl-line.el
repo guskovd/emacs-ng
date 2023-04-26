@@ -1,6 +1,6 @@
 ;;; hl-line.el --- highlight the current line  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1998, 2000-2023 Free Software Foundation, Inc.
+;; Copyright (C) 1998, 2000-2022 Free Software Foundation, Inc.
 
 ;; Author: Dave Love <fx@gnu.org>
 ;; Maintainer: emacs-devel@gnu.org
@@ -102,16 +102,7 @@ This variable has no effect in Global Highlight Line mode.
 For that, use `global-hl-line-sticky-flag'."
   :type 'boolean
   :version "22.1"
-  :group 'hl-line
-  :set (lambda (symbol value)
-         (set-default symbol value)
-         (when (featurep 'hl-line)
-           (unless value
-             (let ((selected (window-buffer (selected-window))))
-               (dolist (buffer (buffer-list))
-                 (unless (eq buffer selected)
-                   (with-current-buffer buffer
-                     (hl-line-unhighlight)))))))))
+  :group 'hl-line)
 
 (defcustom global-hl-line-sticky-flag nil
   "Non-nil means the Global HL-Line mode highlight appears in all windows.
@@ -134,11 +125,8 @@ This variable is expected to be made buffer-local by modes.")
 (defvar hl-line-overlay-buffer nil
   "Most recently visited buffer in which Hl-Line mode is enabled.")
 
-(defcustom hl-line-overlay-priority -50
-  "Priority used on the overlay used by hl-line."
-  :type 'integer
-  :version "28.1"
-  :group 'hl-line)
+(defvar hl-line-overlay-priority -50
+  "Priority used on the overlay used by hl-line.")
 
 ;;;###autoload
 (define-minor-mode hl-line-mode
@@ -154,13 +142,6 @@ non-selected window.  Hl-Line mode uses the function
 When `hl-line-sticky-flag' is nil, Hl-Line mode highlights the
 line about point in the selected window only."
   :group 'hl-line
-  ;; If the global mode is switched on, then `M-x hl-line-mode' should
-  ;; switch the mode off in this buffer.
-  (when (and global-hl-line-mode
-             (eq arg 'toggle))
-    (setq hl-line-mode nil)
-    (setq-local global-hl-line-mode nil)
-    (global-hl-line-unhighlight))
   (if hl-line-mode
       (progn
         ;; In case `kill-all-local-variables' is called.

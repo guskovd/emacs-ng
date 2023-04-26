@@ -1,6 +1,6 @@
 ;;; url-cookie.el --- URL cookie support  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1996-1999, 2004-2023 Free Software Foundation, Inc.
+;; Copyright (C) 1996-1999, 2004-2022 Free Software Foundation, Inc.
 
 ;; Keywords: comm, data, processes, hypermedia
 
@@ -26,7 +26,6 @@
 (require 'url-util)
 (require 'url-parse)
 (require 'url-domsuf)
-(require 'generate-lisp-file)
 
 (eval-when-compile (require 'cl-lib))
 
@@ -159,7 +158,10 @@ i.e. 1970-1-1) are loaded as expiring one year from now instead."
 	(insert ")\n(setq url-cookie-secure-storage\n '")
 	(pp url-cookie-secure-storage (current-buffer)))
       (insert ")\n")
-      (generate-lisp-file-trailer fname :inhibit-provide t :autoloads t)
+      (insert "\n;; Local Variables:\n"
+              ";; version-control: never\n"
+              ";; no-byte-compile: t\n"
+              ";; End:\n")
       (setq-local version-control 'never)
       (write-file fname))
     (setq url-cookies-changed-since-last-save nil))))
@@ -360,7 +362,7 @@ to run the `url-cookie-setup-save-timer' function manually."
          (set-default var val)
          (if (bound-and-true-p url-setup-done)
              (url-cookie-setup-save-timer)))
-  :type 'natnum
+  :type 'integer
   :group 'url-cookie)
 
 (defun url-cookie-setup-save-timer ()
@@ -492,10 +494,12 @@ Use \\<url-cookie-mode-map>\\[url-cookie-delete] to remove cookies."
       (url-cookie--generate-buffer)
       (goto-char point))))
 
-(defvar-keymap url-cookie-mode-map
-  "<delete>" #'url-cookie-delete
-  "C-k"      #'url-cookie-delete
-  "C-_"      #'url-cookie-undo)
+(defvar url-cookie-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map [delete] 'url-cookie-delete)
+    (define-key map [(control k)] 'url-cookie-delete)
+    (define-key map [(control _)] 'url-cookie-undo)
+    map))
 
 (define-derived-mode url-cookie-mode special-mode "URL Cookie"
   "Mode for listing cookies.

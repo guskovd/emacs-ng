@@ -1,9 +1,9 @@
 ;;; ox-ascii.el --- ASCII Back-End for Org Export Engine -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2012-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2012-2022 Free Software Foundation, Inc.
 
 ;; Author: Nicolas Goaziou <n.goaziou at gmail dot com>
-;; Maintainer: Nicolas Goaziou <mail@nicolasgoaziou.fr>
+;; Maintainer: Nicolas Goaziou <n.goaziou at gmail dot com>
 ;; Keywords: outlines, hypermedia, calendar, wp
 
 ;; This file is part of GNU Emacs.
@@ -28,9 +28,6 @@
 
 ;;; Code:
 
-(require 'org-macs)
-(org-assert-version)
-
 (require 'ox)
 (require 'ox-publish)
 (require 'cl-lib)
@@ -38,9 +35,6 @@
 ;;; Function Declarations
 
 (declare-function aa2u "ext:ascii-art-to-unicode" ())
-(declare-function org-at-heading-p "org" (&optional _))
-(declare-function org-back-to-heading "org" (&optional invisible-ok))
-(declare-function org-next-visible-heading "org" (arg))
 
 ;;; Define Back-End
 ;;
@@ -462,7 +456,7 @@ Optional argument JUSTIFY can specify any type of justification
 among `left', `center', `right' or `full'.  A nil value is
 equivalent to `left'.  For a justification that doesn't also fill
 string, see `org-ascii--justify-lines' and
-`org-ascii--justify-element'.
+`org-ascii--justify-block'.
 
 Return nil if S isn't a string."
   (when (stringp s)
@@ -954,18 +948,12 @@ channel."
 	 (when description
 	   (let ((dest (if (equal type "fuzzy")
 			   (org-export-resolve-fuzzy-link link info)
-                         ;; Ignore broken links.  On broken link,
-                         ;; `org-export-resolve-id-link' will throw an
-                         ;; error and we will return nil.
-			 (condition-case nil
-                             (org-export-resolve-id-link link info)
-                           (org-link-broken nil)))))
-             (when dest
-	       (concat
-	        (org-ascii--fill-string
-	         (format "[%s] %s" anchor (org-ascii--describe-datum dest info))
-	         width info)
-	        "\n\n")))))
+			 (org-export-resolve-id-link link info))))
+	     (concat
+	      (org-ascii--fill-string
+	       (format "[%s] %s" anchor (org-ascii--describe-datum dest info))
+	       width info)
+	      "\n\n"))))
 	;; Do not add a link that cannot be resolved and doesn't have
 	;; any description: destination is already visible in the
 	;; paragraph.
@@ -1549,7 +1537,7 @@ information."
        keyword info)))))
 
 
-;;;; LaTeX Environment
+;;;; Latex Environment
 
 (defun org-ascii-latex-environment (latex-environment _contents info)
   "Transcode a LATEX-ENVIRONMENT element from Org to ASCII.
@@ -1561,7 +1549,7 @@ information."
      latex-environment info)))
 
 
-;;;; LaTeX Fragment
+;;;; Latex Fragment
 
 (defun org-ascii-latex-fragment (latex-fragment _contents info)
   "Transcode a LATEX-FRAGMENT object from Org to ASCII.

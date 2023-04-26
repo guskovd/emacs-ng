@@ -1,6 +1,6 @@
 ;;; mm-util.el --- Utility functions for Mule and low level things  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1998-2023 Free Software Foundation, Inc.
+;; Copyright (C) 1998-2022 Free Software Foundation, Inc.
 
 ;; Author: Lars Magne Ingebrigtsen <larsi@gnus.org>
 ;;	MORIOKA Tomohiko <morioka@jaist.ac.jp>
@@ -31,7 +31,7 @@
 
 (defun mm-ucs-to-char (codepoint)
   "Convert Unicode codepoint to character."
-  (or codepoint ?#))
+  (or (decode-char 'ucs codepoint) ?#))
 
 (defvar mm-coding-system-list nil)
 (defun mm-get-coding-system-list ()
@@ -101,9 +101,9 @@ version, you could use `autoload-coding-system' here."
   :type '(list (repeat :inline t
 		       :tag "Other options"
 		       (cons (symbol :tag "charset")
-                             (symbol :tag "form"))))
-  :risky t
+			     (symbol :tag "form"))))
   :group 'mime)
+(put 'mm-charset-eval-alist 'risky-local-variable t)
 
 (defvar mm-charset-override-alist)
 
@@ -315,7 +315,8 @@ Valid elements include:
   "ISO-8859-15 exchangeable coding systems and inconvertible characters.")
 
 (defvar mm-iso-8859-x-to-15-table
-  (and (mm-coding-system-p 'iso-8859-15)
+  (and (fboundp 'coding-system-p)
+       (mm-coding-system-p 'iso-8859-15)
        (mapcar
 	(lambda (cs)
 	  (if (mm-coding-system-p (car cs))
@@ -673,6 +674,7 @@ If INHIBIT is non-nil, inhibit `mm-inhibit-file-name-handlers'."
 	   inhibit-file-name-handlers)))
     (write-region start end filename append visit lockname)))
 
+(defalias 'mm-make-temp-file 'make-temp-file)
 (define-obsolete-function-alias 'mm-make-temp-file 'make-temp-file "26.1")
 
 (defvar mm-image-load-path-cache nil)

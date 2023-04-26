@@ -1,6 +1,6 @@
 ;;; semantic/java.el --- Semantic functions for Java  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 1999-2023 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2022 Free Software Foundation, Inc.
 
 ;; Author: David Ponce <david@dponce.com>
 
@@ -37,24 +37,25 @@
 ;;; Lexical analysis
 ;;
 (defconst semantic-java-number-regexp
-  (concat "\\("
-          "\\<[0-9]+[.][0-9]+\\([eE][-+]?[0-9]+\\)?[fFdD]?\\>"
-          "\\|"
-          "\\<[0-9]+[.][eE][-+]?[0-9]+[fFdD]?\\>"
-          "\\|"
-          "\\<[0-9]+[.][fFdD]\\>"
-          "\\|"
-          "\\<[0-9]+[.]"
-          "\\|"
-          "[.][0-9]+\\([eE][-+]?[0-9]+\\)?[fFdD]?\\>"
-          "\\|"
-          "\\<[0-9]+[eE][-+]?[0-9]+[fFdD]?\\>"
-          "\\|"
-          "\\<0[xX][[:xdigit:]]+[lL]?\\>"
-          "\\|"
-          "\\<[0-9]+[lLfFdD]?\\>"
-          "\\)"
-          )
+  (eval-when-compile
+    (concat "\\("
+            "\\<[0-9]+[.][0-9]+\\([eE][-+]?[0-9]+\\)?[fFdD]?\\>"
+            "\\|"
+            "\\<[0-9]+[.][eE][-+]?[0-9]+[fFdD]?\\>"
+            "\\|"
+            "\\<[0-9]+[.][fFdD]\\>"
+            "\\|"
+            "\\<[0-9]+[.]"
+            "\\|"
+            "[.][0-9]+\\([eE][-+]?[0-9]+\\)?[fFdD]?\\>"
+            "\\|"
+            "\\<[0-9]+[eE][-+]?[0-9]+[fFdD]?\\>"
+            "\\|"
+            "\\<0[xX][[:xdigit:]]+[lL]?\\>"
+            "\\|"
+            "\\<[0-9]+[lLfFdD]?\\>"
+            "\\)"
+            ))
   "Lexer regexp to match Java number terminals.
 Following is the specification of Java number literals.
 
@@ -390,7 +391,7 @@ That is TAG `symbol-name' without the leading `@'."
 Return the list of FUN results.  If optional PROPERTY is non-nil only
 call FUN for javadoc keywords which have a value for PROPERTY.  FUN
 receives two arguments: the javadoc keyword and its associated
-`javadoc' property list.  It can return any value.  All nil values are
+'javadoc property list.  It can return any value.  All nil values are
 removed from the result list."
   (delq nil
         (mapcar

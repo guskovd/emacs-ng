@@ -1,5 +1,5 @@
 /* systime.h - System-dependent definitions for time manipulations.
-   Copyright (C) 1993-1994, 2002-2023 Free Software Foundation, Inc.
+   Copyright (C) 1993-1994, 2002-2022 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -26,9 +26,6 @@ INLINE_HEADER_BEGIN
 
 #ifdef HAVE_X_WINDOWS
 # include <X11/X.h>
-#elif defined HAVE_HAIKU
-# include <support/SupportDefs.h>
-typedef int64 Time;
 #else
 typedef unsigned long Time;
 #endif
@@ -83,7 +80,8 @@ struct lisp_time
   /* Clock count as a Lisp integer.  */
   Lisp_Object ticks;
 
-  /* Clock frequency (ticks per second) as a positive Lisp integer.  */
+  /* Clock frequency (ticks per second) as a positive Lisp integer.
+     (TICKS . HZ) is a valid Lisp timestamp unless HZ < 65536.  */
   Lisp_Object hz;
 };
 
@@ -94,7 +92,7 @@ extern Lisp_Object timespec_to_lisp (struct timespec);
 extern bool list4_to_timespec (Lisp_Object, Lisp_Object, Lisp_Object,
 			       Lisp_Object, struct timespec *);
 extern struct timespec lisp_time_argument (Lisp_Object);
-extern double float_time (Lisp_Object);
+extern AVOID time_overflow (void);
 extern void init_timefns (void);
 extern void syms_of_timefns (void);
 

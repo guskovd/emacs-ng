@@ -1,6 +1,6 @@
 ;;; org-attach-git.el --- Automatic git commit extension to org-attach -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2019-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2019-2022 Free Software Foundation, Inc.
 
 ;; Original Author: John Wiegley <johnw@newartisans.com>
 ;; Restructurer: Gustav Wikström <gustav@whil.se>
@@ -29,9 +29,6 @@
 
 ;;; Code:
 
-(require 'org-macs)
-(org-assert-version)
-
 (require 'org-attach)
 (require 'vc-git)
 
@@ -46,8 +43,7 @@
 
 (defcustom org-attach-git-annex-auto-get 'ask
   "Confirmation preference for automatically getting annex files.
-If this is the symbol `ask', prompt using `y-or-n-p'.
-If t, always get.  If nil, never get."
+If \\='ask, prompt using `y-or-n-p'.  If t, always get.  If nil, never get."
   :group 'org-attach
   :package-version '(Org . "9.0")
   :version "26.1"

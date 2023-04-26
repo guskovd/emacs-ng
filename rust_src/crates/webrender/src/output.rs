@@ -1,79 +1,111 @@
-use super::display_info::DisplayInfoRef;
-use super::font::FontRef;
-use super::image_cache::ImageHash;
-use crate::font_db::FontDB;
-use crate::frame::LispFrameWindowSystemExt;
-use crate::gl::context::GLContextTrait;
-use crate::window_system::output::output;
-use crate::window_system::output::OutputInner;
-use crate::window_system::output::OutputInnerRef;
-use emacs::bindings::Emacs_Pixmap;
-use emacs::lisp::ExternalPtr;
-use std::fmt;
-use std::ptr;
-use std::{cell::RefCell, rc::Rc, sync::Arc};
+use std::{cell::RefCell, mem::MaybeUninit, rc::Rc, sync::Arc};
 
-use crate::frame::LispFrameExt;
-use crate::WRFontRef;
-use gleam::gl;
-use webrender::FastHashMap;
+use gleam::gl::{self, Gl};
+use glutin::{
+    self,
+    dpi::PhysicalSize,
+    window::{CursorIcon, Window},
+    ContextWrapper, PossiblyCurrent,
+};
+use std::{
+    ops::{Deref, DerefMut},
+    ptr,
+};
+
+#[cfg(not(any(target_os = "macos", windows)))]
+use glutin::platform::unix::WindowBuilderExtUnix;
 
 use webrender::{self, api::units::*, api::*, RenderApi, Renderer, Transaction};
 
-use emacs::frame::LispFrameRef;
+use emacs::{
+    bindings::{wr_output, Emacs_Cursor},
+    frame::LispFrameRef,
+};
+
+use crate::event_loop::WrEventLoop;
 
 use super::texture::TextureResourceManager;
+use super::util::HandyDandyRectBuilder;
+use super::{cursor::emacs_to_winit_cursor, display_info::DisplayInfoRef};
+use super::{cursor::winit_to_emacs_cursor, font::FontRef};
 
-pub struct Canvas {
-    fonts: FastHashMap<fontdb::ID, FontKey>,
-    font_instances: FastHashMap<
-        (
-            FontKey,
-            FontSize,
-            FontInstanceFlags,
-            Option<ColorU>,
-            SyntheticItalics,
-        ),
-        FontInstanceKey,
-    >,
-    images: FastHashMap<ImageHash, (ImageKey, ImageDescriptor)>,
-    font_render_mode: Option<FontRenderMode>,
-    allow_mipmaps: bool,
+#[cfg(all(feature = "wayland", not(any(target_os = "macos", windows))))]
+use emacs::{bindings::globals, multibyte::LispStringRef};
+
+pub struct Output {
+    // Extend `wr_output` struct defined in `wrterm.h`
+    pub output: wr_output,
+
+    pub font: FontRef,
+    pub fontset: i32,
+
     pub render_api: RenderApi,
     pub document_id: DocumentId,
-    pipeline_id: PipelineId,
-    epoch: Epoch,
+
     display_list_builder: Option<DisplayListBuilder>,
     previous_frame_image: Option<ImageKey>,
+
+    pub background_color: ColorF,
+    pub cursor_color: ColorF,
+    pub cursor_foreground_color: ColorF,
+
+    color_bits: u8,
+
+    // The drop order is important here.
+
+    // Need to dropped before window context
     texture_resources: Rc<RefCell<TextureResourceManager>>,
+
+    // Need to droppend before window context
     renderer: Renderer,
-    gl_context: crate::gl::context::GLContext,
-    gl: Rc<dyn gl::Gl>,
+
+    window_context: ContextWrapper<PossiblyCurrent, Window>,
+
     frame: LispFrameRef,
 }
 
-impl fmt::Debug for Canvas {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "canvas")
-    }
-}
+impl Output {
+    pub fn build(event_loop: &mut WrEventLoop, frame: LispFrameRef) -> Self {
+        let window_builder = glutin::window::WindowBuilder::new()
+            .with_visible(true)
+            .with_maximized(true);
 
-impl Canvas {
-    pub fn build(frame: LispFrameRef) -> Self {
-        let mut gl_context = frame.create_gl_context();
-        let gl = gl_context.load_gl();
-        gl_context.ensure_is_current();
+        #[cfg(all(feature = "wayland", not(any(target_os = "macos", windows))))]
+        let window_builder = {
+            let invocation_name: LispStringRef = unsafe { globals.Vinvocation_name.into() };
+            let invocation_name = invocation_name.to_utf8();
+            window_builder.with_app_id(invocation_name)
+        };
 
-        // webrender
-        let webrender_opts = webrender::WebRenderOptions {
-            clear_color: ColorF::new(1.0, 1.0, 1.0, 1.0),
-            ..webrender::WebRenderOptions::default()
+        let context_builder = glutin::ContextBuilder::new();
+
+        let window_context = event_loop
+            .build_window(window_builder, context_builder)
+            .unwrap();
+
+        let window_id = window_context.window().id();
+
+        event_loop.wait_for_window_resize(window_id);
+
+        let window_context = unsafe { window_context.make_current() }.unwrap();
+
+        let window = window_context.window();
+
+        window_context.resize(window.inner_size());
+
+        let gl = Self::get_gl_api(&window_context);
+
+        let webrender_opts = webrender::RendererOptions {
+            clear_color: None,
+            ..webrender::RendererOptions::default()
         };
 
         let notifier = Box::new(Notifier::new());
+
         let (mut renderer, sender) =
-            webrender::create_webrender_instance(gl.clone(), notifier, webrender_opts, None)
-                .unwrap();
+            webrender::Renderer::new(gl.clone(), notifier, webrender_opts, None).unwrap();
+
+        let color_bits = window_context.get_pixel_format().color_bits;
 
         let texture_resources = Rc::new(RefCell::new(TextureResourceManager::new(
             gl.clone(),
@@ -84,42 +116,47 @@ impl Canvas {
 
         renderer.set_external_image_handler(external_image_handler);
 
-        let epoch = Epoch(0);
         let pipeline_id = PipelineId(0, 0);
-
-        // Some thing to do with Wayland?
         let mut txn = Transaction::new();
         txn.set_root_pipeline(pipeline_id);
+
+        let device_size = {
+            let size = window.inner_size();
+            DeviceIntSize::new(size.width as i32, size.height as i32)
+        };
+
         let mut api = sender.create_api();
-        let device_size = frame.physical_size();
-        gl_context.resize(&device_size);
+
         let document_id = api.add_document(device_size);
         api.send_transaction(document_id, txn);
 
-        Self {
-            fonts: FastHashMap::default(),
-            font_instances: FastHashMap::default(),
-            images: FastHashMap::default(),
-            font_render_mode: None,
-            allow_mipmaps: false,
+        let mut output = Self {
+            output: wr_output::default(),
+            font: FontRef::new(ptr::null_mut()),
+            fontset: 0,
             render_api: api,
             document_id,
-            pipeline_id,
-            epoch,
             display_list_builder: None,
             previous_frame_image: None,
+            background_color: ColorF::WHITE,
+            cursor_color: ColorF::BLACK,
+            cursor_foreground_color: ColorF::WHITE,
+            color_bits,
             renderer,
-            gl_context,
-            gl,
+            window_context,
             texture_resources,
             frame,
-        }
+        };
+
+        Self::build_mouse_cursors(&mut output);
+
+        output
     }
 
     fn copy_framebuffer_to_texture(&self, device_rect: DeviceIntRect) -> ImageKey {
         let mut origin = device_rect.min;
 
-        let device_size = self.device_size();
+        let device_size = self.get_deivce_size();
 
         if !self.renderer.device.surface_origin_is_top_left() {
             origin.y = device_size.height - origin.y - device_rect.height();
@@ -138,7 +175,7 @@ impl Canvas {
             need_flip,
         );
 
-        let gl = &self.gl;
+        let gl = Self::get_gl_api(&self.window_context);
         gl.bind_texture(gl::TEXTURE_2D, texture_id);
 
         gl.copy_tex_sub_image_2d(
@@ -157,26 +194,34 @@ impl Canvas {
         image_key
     }
 
-    pub fn scale(&self) -> f32 {
-        self.frame.scale_factor() as f32
+    fn get_gl_api(window_context: &ContextWrapper<PossiblyCurrent, Window>) -> Rc<dyn Gl> {
+        match window_context.get_api() {
+            glutin::Api::OpenGl => unsafe {
+                gl::GlFns::load_with(|symbol| window_context.get_proc_address(symbol) as *const _)
+            },
+            glutin::Api::OpenGlEs => unsafe {
+                gl::GlesFns::load_with(|symbol| window_context.get_proc_address(symbol) as *const _)
+            },
+            glutin::Api::WebGl => unimplemented!(),
+        }
     }
 
-    fn layout_size(&self) -> LayoutSize {
-        let device_size = self.device_size();
-        LayoutSize::new(device_size.width as f32, device_size.height as f32)
+    fn get_size(window: &Window) -> LayoutSize {
+        let physical_size = window.inner_size();
+        let device_size = LayoutSize::new(physical_size.width as f32, physical_size.height as f32);
+        device_size
     }
 
     fn new_builder(&mut self, image: Option<(ImageKey, LayoutRect)>) -> DisplayListBuilder {
-        let pipeline_id = self.pipeline_id;
+        let pipeline_id = PipelineId(0, 0);
 
-        let layout_size = self.layout_size();
+        let layout_size = Self::get_size(&self.get_window());
         let mut builder = DisplayListBuilder::new(pipeline_id);
-        builder.begin();
 
         if let Some((image_key, image_rect)) = image {
             let space_and_clip = SpaceAndClipInfo::root_scroll(pipeline_id);
 
-            let bounds = LayoutRect::from_size(layout_size);
+            let bounds = (0, 0).by(layout_size.width as i32, layout_size.height as i32);
 
             builder.push_image(
                 &CommonItemProperties::new(bounds, space_and_clip),
@@ -191,16 +236,48 @@ impl Canvas {
         builder
     }
 
-    pub fn device_size(&self) -> DeviceIntSize {
-        self.frame.physical_size()
+    pub fn show_window(&self) {
+        self.get_window().set_visible(true);
+    }
+    pub fn hide_window(&self) {
+        self.get_window().set_visible(false);
+    }
+
+    pub fn maximize(&self) {
+        self.get_window().set_maximized(true);
+    }
+
+    pub fn set_title(&self, title: &str) {
+        self.get_window().set_title(title);
+    }
+
+    pub fn set_display_info(&mut self, mut dpyinfo: DisplayInfoRef) {
+        self.output.display_info = dpyinfo.get_raw().as_mut();
+    }
+
+    pub fn get_frame(&self) -> LispFrameRef {
+        self.frame
+    }
+
+    pub fn display_info(&self) -> DisplayInfoRef {
+        DisplayInfoRef::new(self.output.display_info as *mut _)
+    }
+
+    pub fn get_inner_size(&self) -> PhysicalSize<u32> {
+        self.get_window().inner_size()
+    }
+
+    fn get_deivce_size(&self) -> DeviceIntSize {
+        let size = self.get_window().inner_size();
+        DeviceIntSize::new(size.width as i32, size.height as i32)
     }
 
     pub fn display<F>(&mut self, f: F)
     where
-        F: Fn(&mut DisplayListBuilder, SpaceAndClipInfo, f32),
+        F: Fn(&mut DisplayListBuilder, SpaceAndClipInfo),
     {
         if self.display_list_builder.is_none() {
-            let layout_size = self.layout_size();
+            let layout_size = Self::get_size(&self.get_window());
 
             let image_and_pos = self
                 .previous_frame_image
@@ -210,66 +287,56 @@ impl Canvas {
         }
 
         let pipeline_id = PipelineId(0, 0);
-        let scale = self.scale();
 
         if let Some(builder) = &mut self.display_list_builder {
             let space_and_clip = SpaceAndClipInfo::root_scroll(pipeline_id);
 
-            f(builder, space_and_clip, scale);
+            f(builder, space_and_clip);
         }
-
-        self.assert_no_gl_error();
     }
 
     fn ensure_context_is_current(&mut self) {
-        self.gl_context.ensure_is_current();
-        self.assert_no_gl_error();
-    }
+        let window_context = std::mem::replace(&mut self.window_context, unsafe {
+            MaybeUninit::uninit().assume_init()
+        });
+        let window_context = unsafe { window_context.make_current() }.unwrap();
 
-    #[track_caller]
-    fn assert_no_gl_error(&self) {
-        debug_assert_eq!(self.gl.get_error(), gleam::gl::NO_ERROR);
+        let temp_context = std::mem::replace(&mut self.window_context, window_context);
+        std::mem::forget(temp_context);
     }
 
     pub fn flush(&mut self) {
-        self.assert_no_gl_error();
-        self.ensure_context_is_current();
-
         let builder = std::mem::replace(&mut self.display_list_builder, None);
 
-        if let Some(mut builder) = builder {
-            let layout_size = self.layout_size();
+        if let Some(builder) = builder {
+            let layout_size = Self::get_size(&self.get_window());
 
-            let epoch = self.epoch;
+            let epoch = Epoch(0);
             let mut txn = Transaction::new();
 
-            txn.set_display_list(epoch, None, layout_size.to_f32(), builder.end());
-            txn.set_root_pipeline(self.pipeline_id);
-            txn.generate_frame(0, RenderReasons::NONE);
+            txn.set_display_list(epoch, None, layout_size.to_f32(), builder.finalize(), true);
 
-            self.display_list_builder = None;
+            txn.generate_frame(0);
 
             self.render_api.send_transaction(self.document_id, txn);
 
             self.render_api.flush_scene_builder();
 
-            let device_size = self.device_size();
-
-            self.gl_context.bind_framebuffer(&mut self.gl);
+            let device_size = self.get_deivce_size();
 
             self.renderer.update();
 
-            self.assert_no_gl_error();
+            self.ensure_context_is_current();
 
             self.renderer.render(device_size, 0).unwrap();
             let _ = self.renderer.flush_pipeline_info();
+
+            self.window_context.swap_buffers().ok();
 
             self.texture_resources.borrow_mut().clear();
 
             let image_key = self.copy_framebuffer_to_texture(DeviceIntRect::from_size(device_size));
             self.previous_frame_image = Some(image_key);
-
-            self.gl_context.swap_buffers();
         }
     }
 
@@ -281,189 +348,100 @@ impl Canvas {
         let _ = std::mem::replace(&mut self.display_list_builder, None);
     }
 
-    pub fn wr_add_font_instance(
-        &mut self,
-        font_key: FontKey,
-        size: f32,
-        flags: FontInstanceFlags,
-        render_mode: Option<FontRenderMode>,
-        bg_color: Option<ColorU>,
-        synthetic_italics: SyntheticItalics,
-    ) -> FontInstanceKey {
-        #[cfg(not(target_arch = "wasm32"))]
-        let now = std::time::Instant::now();
-
-        let key = self.render_api.generate_font_instance_key();
+    pub fn add_font_instance(&mut self, font_key: FontKey, pixel_size: i32) -> FontInstanceKey {
         let mut txn = Transaction::new();
-        let mut options: FontInstanceOptions = Default::default();
-        options.flags |= flags;
-        if let Some(render_mode) = render_mode {
-            options.render_mode = render_mode;
-        }
-        if let Some(bg_color) = bg_color {
-            options.bg_color = bg_color;
-        }
-        options.synthetic_italics = synthetic_italics;
-        txn.add_font_instance(key, font_key, size, Some(options), None, Vec::new());
+
+        let font_instance_key = self.render_api.generate_font_instance_key();
+
+        txn.add_font_instance(
+            font_instance_key,
+            font_key,
+            pixel_size as f32,
+            None,
+            None,
+            vec![],
+        );
+
         self.render_api.send_transaction(self.document_id, txn);
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            let elapsed = now.elapsed();
-            log::trace!("wr add font instance in {:?}", elapsed);
-        }
-        key
+        font_instance_key
     }
 
-    #[allow(dead_code)]
-    pub fn wr_delete_font_instance(&mut self, key: FontInstanceKey) {
+    pub fn add_font(&mut self, font_bytes: Rc<Vec<u8>>, font_index: u32) -> FontKey {
         let mut txn = Transaction::new();
-        txn.delete_font_instance(key);
-        self.render_api.send_transaction(self.document_id, txn);
-    }
 
-    pub fn wr_add_font(&mut self, data: FontTemplate) -> FontKey {
-        #[cfg(not(target_arch = "wasm32"))]
-        let now = std::time::Instant::now();
         let font_key = self.render_api.generate_font_key();
-        let mut txn = Transaction::new();
-        match data {
-            FontTemplate::Raw(ref bytes, index) => {
-                txn.add_raw_font(font_key, bytes.to_vec(), index)
-            }
-            FontTemplate::Native(native_font) => txn.add_native_font(font_key, native_font),
-        }
+
+        txn.add_raw_font(font_key, font_bytes.to_vec(), font_index);
 
         self.render_api.send_transaction(self.document_id, txn);
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            let elapsed = now.elapsed();
-            log::trace!("wr add font in {:?}", elapsed);
-        }
+
         font_key
     }
 
-    pub fn allow_mipmaps(&mut self, allow_mipmaps: bool) {
-        self.allow_mipmaps = allow_mipmaps;
+    pub fn get_color_bits(&self) -> u8 {
+        self.color_bits
     }
 
-    pub fn set_font_render_mode(&mut self, render_mode: Option<FontRenderMode>) {
-        self.font_render_mode = render_mode;
+    pub fn get_window(&self) -> &Window {
+        self.window_context.window()
     }
 
-    pub fn get_or_create_font(&mut self, font: WRFontRef) -> Option<FontKey> {
-        #[cfg(not(target_arch = "wasm32"))]
-        let now = std::time::Instant::now();
-        let font_id = font.face_id;
-        let wr_font_key = self.fonts.get(&font_id);
+    fn build_mouse_cursors(output: &mut Output) {
+        output.output.text_cursor = winit_to_emacs_cursor(CursorIcon::Text);
+        output.output.nontext_cursor = winit_to_emacs_cursor(CursorIcon::Arrow);
+        output.output.modeline_cursor = winit_to_emacs_cursor(CursorIcon::Hand);
+        output.output.hand_cursor = winit_to_emacs_cursor(CursorIcon::Hand);
+        output.output.hourglass_cursor = winit_to_emacs_cursor(CursorIcon::Progress);
 
-        if let Some(key) = wr_font_key {
-            return Some(*key);
-        }
+        output.output.horizontal_drag_cursor = winit_to_emacs_cursor(CursorIcon::ColResize);
+        output.output.vertical_drag_cursor = winit_to_emacs_cursor(CursorIcon::RowResize);
 
-        let wr_font_key = {
-            #[cfg(macos_platform)]
-            {
-                let app_locale = fontdb::Language::English_UnitedStates;
-                let face_info = FontDB::global()
-                    .db()
-                    .face(font.face_id)
-                    .expect("Failed to find face info");
-                let family = face_info
-                    .families
-                    .iter()
-                    .find(|family| family.1 == app_locale);
+        output.output.left_edge_cursor = winit_to_emacs_cursor(CursorIcon::WResize);
+        output.output.right_edge_cursor = winit_to_emacs_cursor(CursorIcon::EResize);
+        output.output.top_edge_cursor = winit_to_emacs_cursor(CursorIcon::NResize);
+        output.output.bottom_edge_cursor = winit_to_emacs_cursor(CursorIcon::SResize);
 
-                if let Some((name, _)) = family {
-                    let key = self.wr_add_font(FontTemplate::Native(NativeFontHandle {
-                        name: name.to_owned(),
-                    }));
-                    Some(key)
-                } else {
-                    None
-                }
-            }
+        output.output.top_left_corner_cursor = winit_to_emacs_cursor(CursorIcon::NwResize);
+        output.output.top_right_corner_cursor = winit_to_emacs_cursor(CursorIcon::NeResize);
 
-            #[cfg(not(macos_platform))]
-            {
-                let font_result = FontDB::global().get_font(font.face_id);
-
-                if font_result.is_none() {
-                    return None;
-                }
-
-                let font_result = font_result.unwrap();
-                let (font_bytes, face_index) = (font_result.data, font_result.info.index);
-                Some(self.wr_add_font(FontTemplate::Raw(
-                    Arc::new(font_bytes.to_vec()),
-                    face_index.try_into().unwrap(),
-                )))
-            }
-        };
-
-        if let Some(key) = wr_font_key {
-            self.fonts.insert(font_id, key);
-            return Some(key);
-        };
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            let elapsed = now.elapsed();
-            log::trace!("get_or_create_font in {:?}", elapsed);
-        }
-
-        None
+        output.output.bottom_left_corner_cursor = winit_to_emacs_cursor(CursorIcon::SwResize);
+        output.output.bottom_right_corner_cursor = winit_to_emacs_cursor(CursorIcon::SeResize);
     }
 
-    // Create font instance with scaled size
-    pub fn get_or_create_font_instance(&mut self, font: WRFontRef, size: f32) -> FontInstanceKey {
-        #[cfg(not(target_arch = "wasm32"))]
-        let now = std::time::Instant::now();
-        let font_key = self
-            .get_or_create_font(font)
-            .expect("Failed to obtain wr fontkey");
-        let bg_color = None;
-        let flags = FontInstanceFlags::empty();
-        let synthetic_italics = SyntheticItalics::disabled();
-        let font_render_mode = self.font_render_mode;
-        let hash_map_key = (font_key, size.into(), flags, bg_color, synthetic_italics);
-        let font_instance_key = self.font_instances.get(&hash_map_key);
-        let key = match font_instance_key {
-            Some(instance_key) => *instance_key,
-            None => {
-                let instance_key = self.wr_add_font_instance(
-                    font_key,
-                    size,
-                    flags,
-                    font_render_mode,
-                    bg_color,
-                    synthetic_italics,
-                );
-                self.font_instances.insert(hash_map_key, instance_key);
-                instance_key
-            }
-        };
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            let elapsed = now.elapsed();
-            log::trace!("get_or_create_font_instance in {:?}", elapsed);
-        }
-        key
+    pub fn set_mouse_cursor(&self, cursor: Emacs_Cursor) {
+        let cursor = emacs_to_winit_cursor(cursor);
+
+        self.get_window().set_cursor_icon(cursor)
     }
 
-    pub fn add_image(&mut self, descriptor: ImageDescriptor, data: ImageData) -> ImageKey {
+    pub fn add_image(&mut self, width: i32, height: i32, image_data: Arc<Vec<u8>>) -> ImageKey {
         let image_key = self.render_api.generate_image_key();
-        let mut txn = Transaction::new();
 
-        txn.add_image(image_key, descriptor, data, None);
-
-        self.render_api.send_transaction(self.document_id, txn);
+        self.update_image(image_key, width, height, image_data);
 
         image_key
     }
 
-    pub fn update_image(&mut self, key: ImageKey, descriptor: ImageDescriptor, data: ImageData) {
+    pub fn update_image(
+        &mut self,
+        image_key: ImageKey,
+        width: i32,
+        height: i32,
+        image_data: Arc<Vec<u8>>,
+    ) {
         let mut txn = Transaction::new();
 
-        txn.update_image(key, descriptor, data, &DirtyRect::All);
+        txn.add_image(
+            image_key,
+            ImageDescriptor::new(
+                width,
+                height,
+                ImageFormat::RGBA8,
+                ImageDescriptorFlags::empty(),
+            ),
+            ImageData::Raw(image_data),
+            None,
+        );
 
         self.render_api.send_transaction(self.document_id, txn);
     }
@@ -476,145 +454,87 @@ impl Canvas {
         self.render_api.send_transaction(self.document_id, txn);
     }
 
-    pub fn delete_image_by_pixmap(&mut self, _pixmap: Emacs_Pixmap) {
-        // We cache image by source from image_cache.rs
-        // transform(rotate, resize(scale)) on the fly
-        // loop images, compare pixmap,find image_key
-        log::warn!("TODO free pixmap");
-    }
+    pub fn resize(&mut self, size: &PhysicalSize<u32>) {
+        let device_size = DeviceIntSize::new(size.width as i32, size.height as i32);
 
-    // Create glyph raster image instance with scaled size
-    pub fn add_or_update_image(
-        &mut self,
-        hash: &ImageHash,
-        descriptor: ImageDescriptor,
-        data: ImageData,
-    ) -> ImageKey {
-        let image_key = self.image_key(&hash).map(|c| c.0);
-
-        if let Some(key) = image_key {
-            self.update_image(key, descriptor, data);
-            return key;
-        }
-
-        let key = self.add_image(descriptor, data);
-        self.images.insert(*hash, (key, descriptor));
-        key
-    }
-
-    pub fn image_key(&self, hash: &ImageHash) -> Option<(ImageKey, ImageDescriptor)> {
-        self.images.get(hash).copied()
-    }
-
-    pub fn update(&mut self) {
-        let size = self.device_size();
         let device_rect =
-            DeviceIntRect::from_origin_and_size(DeviceIntPoint::new(0, 0), size.clone());
-        log::debug!("resize {size:?} rect {device_rect:?}");
+            DeviceIntRect::from_origin_and_size(DeviceIntPoint::new(0, 0), device_size);
+
         let mut txn = Transaction::new();
         txn.set_document_view(device_rect);
         self.render_api.send_transaction(self.document_id, txn);
 
-        self.gl_context.resize(&size);
-    }
-
-    pub fn deinit(mut self) {
-        self.ensure_context_is_current();
-        self.renderer.deinit();
+        self.window_context.resize(size.clone());
     }
 }
 
-pub type CanvasRef = ExternalPtr<Canvas>;
-
-#[derive(Default)]
+#[derive(PartialEq)]
 #[repr(transparent)]
-pub struct Output(output);
-pub type OutputRef = ExternalPtr<Output>;
+pub struct OutputRef(*mut Output);
 
-impl Output {
-    pub fn new() -> Self {
-        let ret = Output::default();
-        ret
-    }
+impl Copy for OutputRef {}
 
-    pub fn empty_inner(&mut self) {
-        let _ = unsafe { Box::from_raw(self.inner().as_mut()) };
-        self.0.inner = ptr::null_mut();
-    }
-
-    pub fn set_inner(&mut self, inner: Box<OutputInner>) {
-        self.0.inner = Box::into_raw(inner) as *mut libc::c_void;
-    }
-
-    pub fn set_font(&mut self, mut font: FontRef) {
-        self.0.font = font.as_mut();
-    }
-
-    pub fn set_fontset(&mut self, fontset: i32) {
-        self.0.fontset = fontset;
-    }
-
-    pub fn display_info(&self) -> DisplayInfoRef {
-        DisplayInfoRef::new(self.0.display_info as *mut _)
-    }
-
-    pub fn canvas(&mut self) -> CanvasRef {
-        self.inner().canvas
-    }
-
-    pub fn inner(&mut self) -> OutputInnerRef {
-        if self.0.inner.is_null() {
-            self.set_inner(Box::new(OutputInner::default()));
-        }
-
-        OutputInnerRef::new(self.0.inner as *mut OutputInner)
-    }
-
-    pub fn as_raw(&mut self) -> ExternalPtr<output> {
-        (&mut self.0 as *mut output).into()
+// Derive fails for this type so do it manually
+impl Clone for OutputRef {
+    fn clone(&self) -> Self {
+        Self(self.0)
     }
 }
 
-impl Drop for Output {
-    fn drop(&mut self) {
-        if self.0.inner != ptr::null_mut() {
-            if OutputInnerRef::new(self.0.inner as *mut OutputInner)
-                .canvas
-                .as_mut()
-                != ptr::null_mut()
-            {
-                unsafe {
-                    let _ = Box::from_raw(
-                        OutputInnerRef::new(self.0.inner as *mut OutputInner)
-                            .canvas
-                            .as_mut(),
-                    );
-                }
-            }
+impl OutputRef {
+    pub const fn new(p: *mut Output) -> Self {
+        Self(p)
+    }
 
-            unsafe {
-                let _ = Box::from_raw(self.0.inner as *mut OutputInner);
-            }
-        }
+    pub fn as_mut(&mut self) -> *mut wr_output {
+        self.0 as *mut wr_output
+    }
+
+    pub fn as_rust_ptr(&mut self) -> *mut Output {
+        self.0 as *mut Output
     }
 }
 
-struct Notifier {}
+impl Deref for OutputRef {
+    type Target = Output;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.0 }
+    }
+}
+
+impl DerefMut for OutputRef {
+    fn deref_mut(&mut self) -> &mut Output {
+        unsafe { &mut *self.0 }
+    }
+}
+
+impl From<*mut wr_output> for OutputRef {
+    fn from(o: *mut wr_output) -> Self {
+        Self::new(o as *mut Output)
+    }
+}
+
+struct Notifier;
 
 impl Notifier {
     fn new() -> Notifier {
-        Notifier {}
+        Notifier
     }
 }
 
 impl RenderNotifier for Notifier {
     fn clone(&self) -> Box<dyn RenderNotifier> {
-        Box::new(Notifier {})
+        Box::new(Notifier)
     }
 
     fn wake_up(&self, _composite_needed: bool) {}
 
-    fn new_frame_ready(&self, _: DocumentId, _scrolled: bool, composite_needed: bool) {
-        self.wake_up(composite_needed);
+    fn new_frame_ready(
+        &self,
+        _: DocumentId,
+        _scrolled: bool,
+        _composite_needed: bool,
+        _render_time: Option<u64>,
+    ) {
     }
 }

@@ -1,6 +1,6 @@
 /* Detect the number of processors.
 
-   Copyright (C) 2009-2023 Free Software Foundation, Inc.
+   Copyright (C) 2009-2022 Free Software Foundation, Inc.
 
    This file is free software: you can redistribute it and/or modify
    it under the terms of the GNU Lesser General Public License as
@@ -307,11 +307,10 @@ num_processors_ignoring_omp (enum nproc_query query)
      NPROC_CURRENT and NPROC_ALL.  */
 
 #if HAVE_SYSCTL && ! defined __GLIBC__ && defined HW_NCPU
-  { /* This works on macOS, FreeBSD, NetBSD, OpenBSD.
-       macOS 10.14 does not allow mib to be const.  */
+  { /* This works on Mac OS X, FreeBSD, NetBSD, OpenBSD.  */
     int nprocs;
     size_t len = sizeof (nprocs);
-    static int mib[][2] = {
+    static int const mib[][2] = {
 # ifdef HW_NCPUONLINE
       { CTL_HW, HW_NCPUONLINE },
 # endif

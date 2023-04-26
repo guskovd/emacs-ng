@@ -1,6 +1,6 @@
 ;;; f90-tests.el --- tests for progmodes/f90.el  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2011-2023 Free Software Foundation, Inc.
+;; Copyright (C) 2011-2022 Free Software Foundation, Inc.
 
 ;; Author: Glenn Morris <rgm@gnu.org>
 ;; Maintainer: emacs-devel@gnu.org
@@ -285,14 +285,14 @@ real :: x
 end")
     (f90-indent-line)
     (should (equal " function foo"
-                   (buffer-substring (point) (pos-eol))))
+                   (buffer-substring (point) (line-end-position))))
     (goto-char (point-max))
     (insert "\nmodule subroutine bar(x)
 real :: x
 end")
     (f90-indent-line)
     (should (equal " subroutine bar"
-                   (buffer-substring (point) (pos-eol))))))
+                   (buffer-substring (point) (line-end-position))))))
 
 
 ;;; f90-tests.el ends here
